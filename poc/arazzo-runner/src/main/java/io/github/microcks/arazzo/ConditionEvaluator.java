@@ -27,8 +27,8 @@ import java.util.regex.Pattern;
 
 /**
  * Evaluates success criteria. Simple conditions support literals (numbers, quoted strings, booleans, null), runtime
- * expressions, the comparison operators {@code == != < <= > >=} and their combination with {@code &&} and
- * {@code ||}. Regex criteria apply their pattern to the value of their context expression.
+ * expressions, the comparison operators {@code == != < <= > >=} and their combination with {@code &&} and {@code ||}.
+ * Regex criteria apply their pattern to the value of their context expression.
  */
 public final class ConditionEvaluator {
 

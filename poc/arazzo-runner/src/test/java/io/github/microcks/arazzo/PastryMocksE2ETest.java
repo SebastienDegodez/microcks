@@ -57,7 +57,7 @@ public class PastryMocksE2ETest {
       ByteArrayOutputStream body = new ByteArrayOutputStream();
       body.writeBytes(("--" + boundary + "\r\nContent-Disposition: form-data; name=\"file\"; "
             + "filename=\"APIPastry-openapi.yaml\"\r\nContent-Type: application/octet-stream\r\n\r\n")
-            .getBytes(StandardCharsets.UTF_8));
+                  .getBytes(StandardCharsets.UTF_8));
       body.writeBytes(Files.readAllBytes(PASTRY_OPENAPI));
       body.writeBytes(("\r\n--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
       HttpRequest upload = HttpRequest.newBuilder(URI.create(MICROCKS_URL + "/api/artifact/upload?mainArtifact=true"))

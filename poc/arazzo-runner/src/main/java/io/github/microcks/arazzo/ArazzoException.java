@@ -16,8 +16,8 @@
 package io.github.microcks.arazzo;
 
 /**
- * Raised when an Arazzo document is invalid, uses a feature this runner does not support, or when a workflow cannot
- * be executed.
+ * Raised when an Arazzo document is invalid, uses a feature this runner does not support, or when a workflow cannot be
+ * executed.
  */
 public class ArazzoException extends RuntimeException {
 

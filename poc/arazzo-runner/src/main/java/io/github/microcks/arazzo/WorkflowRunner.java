@@ -60,8 +60,8 @@ public final class WorkflowRunner {
    private final ExpressionEvaluator expressions = new ExpressionEvaluator();
    private final ConditionEvaluator conditions = new ConditionEvaluator(expressions);
 
-   private WorkflowRunner(ArazzoDocument document, Map<String, OpenApiOperations> sources,
-         Map<String, String> baseUrls, HttpTransport transport) {
+   private WorkflowRunner(ArazzoDocument document, Map<String, OpenApiOperations> sources, Map<String, String> baseUrls,
+         HttpTransport transport) {
       this.document = document;
       this.sources = sources;
       this.baseUrls = baseUrls;
@@ -166,8 +166,7 @@ public final class WorkflowRunner {
          }
          return parts[0];
       }
-      List<String> candidates = sources.keySet().stream().filter(name -> sources.get(name).has(operationId))
-            .toList();
+      List<String> candidates = sources.keySet().stream().filter(name -> sources.get(name).has(operationId)).toList();
       if (candidates.size() != 1) {
          throw new ArazzoException("Operation " + operationId + " must be defined by exactly one source description, "
                + "found: " + candidates);

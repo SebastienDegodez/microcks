@@ -29,8 +29,8 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Reads an Arazzo 1.x document. Features outside the scope of this proof of concept are rejected explicitly rather
- * than silently ignored.
+ * Reads an Arazzo 1.x document. Features outside the scope of this proof of concept are rejected explicitly rather than
+ * silently ignored.
  */
 public final class ArazzoParser {
 

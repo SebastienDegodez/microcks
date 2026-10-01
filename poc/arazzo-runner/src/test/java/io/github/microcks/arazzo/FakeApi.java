@@ -34,8 +34,8 @@ final class FakeApi implements AutoCloseable {
    record Received(String method, String uri, Map<String, List<String>> headers, String body) {
 
       String header(String name) {
-         return headers.entrySet().stream().filter(e -> e.getKey().equalsIgnoreCase(name))
-               .map(e -> e.getValue().get(0)).findFirst().orElse(null);
+         return headers.entrySet().stream().filter(e -> e.getKey().equalsIgnoreCase(name)).map(e -> e.getValue().get(0))
+               .findFirst().orElse(null);
       }
    }
 
@@ -80,8 +80,7 @@ final class FakeApi implements AutoCloseable {
 
    private void handle(HttpExchange exchange) throws IOException {
       Received request = new Received(exchange.getRequestMethod(), exchange.getRequestURI().toString(),
-            exchange.getRequestHeaders(),
-            new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            exchange.getRequestHeaders(), new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
       received.add(request);
       Reply reply = routes.getOrDefault(request.method() + " " + exchange.getRequestURI().getRawPath(),
             r -> new Reply(404, Map.of(), "")).apply(request);

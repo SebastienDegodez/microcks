@@ -66,8 +66,7 @@ public class WorkflowRunnerIntegrationTest {
       WorkflowRunner runner = WorkflowRunner.load(PLACE_ORDER, new JdkHttpTransport(),
             Map.of("customerApi", api.baseUrl() + "/crm", "orderApi", api.baseUrl()));
 
-      WorkflowResult result = runner.run("placeOrder",
-            Map.of("customerId", "jane doe", "token", "t0k", "quantity", 3));
+      WorkflowResult result = runner.run("placeOrder", Map.of("customerId", "jane doe", "token", "t0k", "quantity", 3));
 
       assertTrue(result.success());
       assertNull(result.error());
@@ -191,8 +190,8 @@ public class WorkflowRunnerIntegrationTest {
       assertEquals("No base URL for source description statusApi", missing.getMessage());
 
       api.on("GET", "/status", Reply.json(200, "{\"up\":true}"));
-      WorkflowResult result = WorkflowRunner
-            .load(noServer, new JdkHttpTransport(), Map.of("statusApi", api.baseUrl())).run("readStatus", Map.of());
+      WorkflowResult result = WorkflowRunner.load(noServer, new JdkHttpTransport(), Map.of("statusApi", api.baseUrl()))
+            .run("readStatus", Map.of());
 
       assertTrue(result.success());
       assertEquals(Map.of("status", 200), result.steps().get(0).outputs());
@@ -203,11 +202,14 @@ public class WorkflowRunnerIntegrationTest {
       WorkflowRunner runner = runner();
       assertEquals("Unknown workflow: nope",
             assertThrows(ArazzoException.class, () -> runner.run("nope", Map.of())).getMessage());
-      assertEquals("Cannot read " + resource("none.arazzo.yaml"), assertThrows(ArazzoException.class,
-            () -> WorkflowRunner.load(resource("none.arazzo.yaml"), new JdkHttpTransport(), Map.of())).getMessage());
+      assertEquals("Cannot read " + resource("none.arazzo.yaml"),
+            assertThrows(ArazzoException.class,
+                  () -> WorkflowRunner.load(resource("none.arazzo.yaml"), new JdkHttpTransport(), Map.of()))
+                        .getMessage());
       assertEquals("Cannot read " + resource("ghost.openapi.yaml"),
-            assertThrows(ArazzoException.class, () -> WorkflowRunner.load(resource("missing-source.arazzo.yaml"),
-                  new JdkHttpTransport(), Map.of())).getMessage());
+            assertThrows(ArazzoException.class,
+                  () -> WorkflowRunner.load(resource("missing-source.arazzo.yaml"), new JdkHttpTransport(), Map.of()))
+                        .getMessage());
    }
 
    private void assertStepError(String workflowId, String error) {

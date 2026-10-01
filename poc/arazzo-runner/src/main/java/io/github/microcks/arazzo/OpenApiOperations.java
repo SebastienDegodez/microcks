@@ -40,8 +40,7 @@ public final class OpenApiOperations {
    public static OpenApiOperations parse(String content) {
       Map<String, Object> root = Yamls.load(content, "OpenAPI document");
       List<Map<String, Object>> servers = Yamls.optionalMaps(root, "servers");
-      OpenApiOperations index = new OpenApiOperations(
-            servers.isEmpty() ? "" : Yamls.string(servers.get(0), "url"));
+      OpenApiOperations index = new OpenApiOperations(servers.isEmpty() ? "" : Yamls.string(servers.get(0), "url"));
       Yamls.optionalMap(root, "paths").forEach((path, item) -> {
          Map<String, Object> pathItem = Yamls.map(item, "Path item " + path);
          for (String method : METHODS) {

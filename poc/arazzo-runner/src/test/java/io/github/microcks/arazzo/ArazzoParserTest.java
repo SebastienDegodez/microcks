@@ -129,8 +129,8 @@ public class ArazzoParserTest {
       assertRejected("Unsupported source description type: asyncapi",
             "arazzo: 1.1.0\nsourceDescriptions: [{name: a, url: a.yaml, type: asyncapi}]");
       for (String field : List.of("dependsOn", "successActions", "failureActions")) {
-         assertRejected("Unsupported workflow field: " + field, HEADER + "- {workflowId: w, steps: [], " + field
-               + ": []}");
+         assertRejected("Unsupported workflow field: " + field,
+               HEADER + "- {workflowId: w, steps: [], " + field + ": []}");
       }
       for (String field : List.of("workflowId", "operationPath", "onSuccess", "onFailure")) {
          assertRejected("Unsupported step field: " + field,

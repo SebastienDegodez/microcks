@@ -49,7 +49,8 @@ public class OpenApiOperationsTest {
 
    @Test
    public void rejectsPathItemsThatAreNotObjects() {
-      assertEquals("Path item /items must be an object", assertThrows(ArazzoException.class,
-            () -> OpenApiOperations.parse("openapi: 3.0.3\npaths:\n  /items: []")).getMessage());
+      assertEquals("Path item /items must be an object",
+            assertThrows(ArazzoException.class, () -> OpenApiOperations.parse("openapi: 3.0.3\npaths:\n  /items: []"))
+                  .getMessage());
    }
 }

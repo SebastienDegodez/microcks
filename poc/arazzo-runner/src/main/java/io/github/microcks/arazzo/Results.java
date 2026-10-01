@@ -25,8 +25,8 @@ public final class Results {
    }
 
    /**
-    * Outcome of a step. The status code is null when no response was received; error explains why the step could
-    * not be evaluated, and failedCriteria lists the conditions that did not hold.
+    * Outcome of a step. The status code is null when no response was received; error explains why the step could not be
+    * evaluated, and failedCriteria lists the conditions that did not hold.
     */
    public record StepResult(String stepId, Integer statusCode, boolean success, List<String> failedCriteria,
          Map<String, Object> outputs, String error) {
@@ -41,8 +41,8 @@ public final class Results {
    }
 
    /** Outcome of a workflow: the executed steps, in order, and the workflow outputs when it succeeded. */
-   public record WorkflowResult(String workflowId, boolean success, List<StepResult> steps,
-         Map<String, Object> outputs, String error) {
+   public record WorkflowResult(String workflowId, boolean success, List<StepResult> steps, Map<String, Object> outputs,
+         String error) {
 
       static WorkflowResult succeeded(String workflowId, List<StepResult> steps, Map<String, Object> outputs) {
          return new WorkflowResult(workflowId, true, steps, outputs, null);

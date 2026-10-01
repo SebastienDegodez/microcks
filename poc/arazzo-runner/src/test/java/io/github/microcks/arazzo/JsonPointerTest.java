@@ -28,8 +28,8 @@ import static org.junit.Assert.assertThrows;
 
 public class JsonPointerTest {
 
-   private static final Map<String, Object> DOCUMENT = Map.of("a/b", 1, "m~n", 2, "list", List.of("x", "y"),
-         "nested", Map.of("deep", "value"));
+   private static final Map<String, Object> DOCUMENT = Map.of("a/b", 1, "m~n", 2, "list", List.of("x", "y"), "nested",
+         Map.of("deep", "value"));
 
    @Test
    public void readsValuesThroughObjectsAndArrays() {
@@ -68,8 +68,8 @@ public class JsonPointerTest {
    public void refusesToWriteWhereThereIsNoContainer() {
       Map<String, Object> payload = new LinkedHashMap<>(Map.of("name", "Eclair", "list", new ArrayList<>()));
       for (String pointer : List.of("/name/first", "/missing/first", "/list/0")) {
-         assertEquals("No value at JSON pointer: " + pointer, assertThrows(pointer, ArazzoException.class,
-               () -> JsonPointer.set(payload, pointer, "x")).getMessage());
+         assertEquals("No value at JSON pointer: " + pointer,
+               assertThrows(pointer, ArazzoException.class, () -> JsonPointer.set(payload, pointer, "x")).getMessage());
       }
    }
 }

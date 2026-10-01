@@ -95,8 +95,8 @@ public class ConditionEvaluatorTest {
 
    @Test
    public void rejectsMalformedConditions() {
-      for (String condition : List.of("$statusCode = 200", "$statusCode ==", "$statusCode == 200 &&",
-            "true false", "200 == abc", "&& true", "'open == 'open'")) {
+      for (String condition : List.of("$statusCode = 200", "$statusCode ==", "$statusCode == 200 &&", "true false",
+            "200 == abc", "&& true", "'open == 'open'")) {
          assertEquals("Invalid condition: " + condition,
                assertThrows(condition, ArazzoException.class, () -> evaluate(condition)).getMessage());
       }
