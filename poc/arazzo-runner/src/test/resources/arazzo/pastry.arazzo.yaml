@@ -16,6 +16,9 @@ workflows:
           - name: name
             in: path
             value: $inputs.pastry
+          - name: Accept
+            in: header
+            value: application/json
         successCriteria:
           - condition: $statusCode == 200 && $response.body#/status == 'available'
         outputs:
@@ -27,6 +30,9 @@ workflows:
           - name: name
             in: path
             value: $steps.readPastry.outputs.name
+          - name: Accept
+            in: header
+            value: application/json
         requestBody:
           payload:
             price: 0
