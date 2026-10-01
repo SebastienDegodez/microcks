@@ -1,0 +1,160 @@
+arazzo: 1.0.1
+info:
+  title: Place an order for a known customer
+  version: 1.0.0
+sourceDescriptions:
+  - name: customerApi
+    url: customer-api.openapi.yaml
+    type: openapi
+  - name: orderApi
+    url: order-api.openapi.yaml
+workflows:
+  - workflowId: placeOrder
+    summary: Reads a customer from one API, then creates and reads back an order on another API.
+    steps:
+      - stepId: getCustomer
+        operationId: $sourceDescriptions.customerApi.getCustomer
+        parameters:
+          - name: customerId
+            in: path
+            value: $inputs.customerId
+          - name: Authorization
+            in: header
+            value: Bearer {$inputs.token}
+        successCriteria:
+          - condition: $statusCode == 200
+          - context: $response.header.Content-Type
+            condition: ^application/json
+            type: regex
+        outputs:
+          name: $response.body#/name
+          tier: $response.body#/loyalty/tier
+      - stepId: createOrder
+        operationId: createOrder
+        requestBody:
+          payload:
+            customer: "{$steps.getCustomer.outputs.name}"
+            items:
+              - sku: ABC-1
+                quantity: 1
+            channel: web
+          replacements:
+            - target: /pricingTier
+              value: $steps.getCustomer.outputs.tier
+            - target: /items/0/quantity
+              value: $inputs.quantity
+        successCriteria:
+          - condition: $statusCode == 201 && $response.body#/status == 'CREATED'
+        outputs:
+          orderId: $response.body#/id
+          location: $response.header.location
+      - stepId: getOrder
+        operationId: $sourceDescriptions.orderApi.getOrder
+        parameters:
+          - name: orderId
+            in: path
+            value: $steps.createOrder.outputs.orderId
+          - name: expand
+            in: query
+            value: items & totals
+          - name: currency
+            in: query
+            value: EUR
+        successCriteria:
+          - condition: $response.body#/total >= 10 || $response.body#/vip == true
+        outputs:
+          total: $response.body#/total
+          url: $url
+          method: $method
+    outputs:
+      orderId: $steps.createOrder.outputs.orderId
+      total: $steps.getOrder.outputs.total
+      summary: Order {$steps.createOrder.outputs.orderId} placed by {$steps.getCustomer.outputs.name}
+
+  - workflowId: searchThenRead
+    steps:
+      - stepId: search
+        operationId: searchCustomers
+        parameters:
+          - name: q
+            in: query
+            value: $inputs.query
+        successCriteria:
+          - condition: $statusCode == 200
+          - condition: $response.body#/count > 0
+        outputs:
+          firstId: $response.body#/ids/0
+      - stepId: read
+        operationId: getCustomer
+        parameters:
+          - name: customerId
+            in: path
+            value: $steps.search.outputs.firstId
+
+  - workflowId: readMissingField
+    steps:
+      - stepId: getCustomer
+        operationId: getCustomer
+        parameters:
+          - name: customerId
+            in: path
+            value: $inputs.customerId
+        outputs:
+          nickname: $response.body#/nickname
+
+  - workflowId: brokenWorkflowOutput
+    steps:
+      - stepId: getCustomer
+        operationId: getCustomer
+        parameters:
+          - name: customerId
+            in: path
+            value: $inputs.customerId
+    outputs:
+      name: $steps.unknownStep.outputs.name
+
+  - workflowId: storeNote
+    steps:
+      - stepId: putNote
+        operationId: putNote
+        parameters:
+          - name: orderId
+            in: path
+            value: 42
+        requestBody:
+          contentType: application/xml
+          payload: <note>{$inputs.text}</note>
+        successCriteria:
+          - condition: $response.body == 'stored'
+    outputs:
+      stored: true
+
+  - workflowId: ambiguousOperation
+    steps:
+      - stepId: ping
+        operationId: ping
+
+  - workflowId: unknownOperation
+    steps:
+      - stepId: missing
+        operationId: deleteEverything
+
+  - workflowId: unknownSource
+    steps:
+      - stepId: invoice
+        operationId: $sourceDescriptions.billingApi.getInvoice
+
+  - workflowId: incompleteReference
+    steps:
+      - stepId: incomplete
+        operationId: $sourceDescriptions.customerApi
+
+  - workflowId: operationOfAnotherSource
+    steps:
+      - stepId: wrongSource
+        operationId: $sourceDescriptions.orderApi.getCustomer
+
+  - workflowId: explicitPing
+    steps:
+      - stepId: ping
+        operationId: $sourceDescriptions.orderApi.ping

@@ -1,0 +1,75 @@
+name: POC Arazzo runner
+
+on:
+  push:
+    branches:
+      - poc/arazzo-runner
+    paths:
+      - 'poc/arazzo-runner/**'
+      - 'samples/APIPastry-openapi.yaml'
+      - '.github/workflows/poc-arazzo-runner.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # Static checks, unit and integration tests, then mutation testing with a 100% threshold.
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: poc/arazzo-runner
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+      - name: Apply the Microcks formatting rules
+        run: |
+          mvn -B -q spotless:apply
+          if ! git diff --quiet -- .; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -am "style: apply spotless formatting to the Arazzo POC"
+            git push
+          fi
+      - name: Build, test and mutation testing
+        run: mvn -B verify | tee build.log; exit ${PIPESTATUS[0]}
+      - name: Annotate results
+        if: always()
+        run: python3 ci/annotate.py
+
+  # Workflows played against the mocks of a real Microcks.
+  e2e:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: poc/arazzo-runner
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+      - name: Start Microcks
+        run: |
+          docker run -d --name microcks -p 8585:8080 quay.io/microcks/microcks-uber:latest
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:8585/api/health && exit 0
+            sleep 3
+          done
+          docker logs microcks | tail -50
+          exit 1
+      - name: End-to-end tests
+        env:
+          MICROCKS_URL: http://localhost:8585
+        run: mvn -B test -Dtest='*E2ETest' -Dspotless.check.skip=true | tee build.log; exit ${PIPESTATUS[0]}
+      - name: Annotate results
+        if: always()
+        run: python3 ci/annotate.py

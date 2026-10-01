@@ -1,0 +1,16 @@
+arazzo: 1.1.0
+info:
+  title: Read the status of an API with no declared server
+  version: 1.0.0
+sourceDescriptions:
+  - name: statusApi
+    url: no-server.openapi.yaml
+workflows:
+  - workflowId: readStatus
+    steps:
+      - stepId: status
+        operationId: getStatus
+        successCriteria:
+          - condition: $response.body#/up
+        outputs:
+          status: $statusCode

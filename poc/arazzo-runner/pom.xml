@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <!-- Proof of concept: an Arazzo workflow runner for Microcks. Standalone on purpose (not a module of the root
+       build) so that it does not change anything in the existing Microcks build. -->
+  <groupId>io.github.microcks</groupId>
+  <artifactId>microcks-arazzo-poc</artifactId>
+  <version>0.1.0-SNAPSHOT</version>
+  <name>Microcks Arazzo POC</name>
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <maven.compiler.release>21</maven.compiler.release>
+    <multi-project.rootdir>${project.basedir}/../..</multi-project.rootdir>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>com.fasterxml.jackson</groupId>
+        <artifactId>jackson-bom</artifactId>
+        <version>2.21.5</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.yaml</groupId>
+      <artifactId>snakeyaml</artifactId>
+      <version>2.2</version>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <version>4.13.2</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <!-- Static layer of the test trophy: every javac lint warning breaks the build. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.15.0</version>
+        <configuration>
+          <compilerArgs>
+            <arg>-Xlint:all</arg>
+            <arg>-Werror</arg>
+          </compilerArgs>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.2.5</version>
+      </plugin>
+      <!-- Same formatting rules as the rest of Microcks. -->
+      <plugin>
+        <groupId>com.diffplug.spotless</groupId>
+        <artifactId>spotless-maven-plugin</artifactId>
+        <version>2.39.0</version>
+        <configuration>
+          <java>
+            <toggleOffOn />
+            <eclipse>
+              <file>${multi-project.rootdir}/eclipse-formatter.xml</file>
+            </eclipse>
+            <indent>
+              <spaces>true</spaces>
+              <spacesPerTab>3</spacesPerTab>
+            </indent>
+          </java>
+        </configuration>
+        <executions>
+          <execution>
+            <goals>
+              <goal>check</goal>
+            </goals>
+            <phase>compile</phase>
+          </execution>
+        </executions>
+      </plugin>
+      <!-- Mutation testing: the build fails below 100% killed mutants. E2E tests need a running Microcks and are
+           not part of the mutation analysis. -->
+      <plugin>
+        <groupId>org.pitest</groupId>
+        <artifactId>pitest-maven</artifactId>
+        <version>1.17.0</version>
+        <configuration>
+          <targetClasses>
+            <param>io.github.microcks.arazzo.*</param>
+          </targetClasses>
+          <targetTests>
+            <param>io.github.microcks.arazzo.*</param>
+          </targetTests>
+          <excludedTestClasses>
+            <param>io.github.microcks.arazzo.*E2ETest</param>
+          </excludedTestClasses>
+          <mutators>
+            <mutator>DEFAULTS</mutator>
+          </mutators>
+          <mutationThreshold>100</mutationThreshold>
+          <timestampedReports>false</timestampedReports>
+          <outputFormats>
+            <param>XML</param>
+            <param>HTML</param>
+          </outputFormats>
+        </configuration>
+        <executions>
+          <execution>
+            <id>mutation-coverage</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>mutationCoverage</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

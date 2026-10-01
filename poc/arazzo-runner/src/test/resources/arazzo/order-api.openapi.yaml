@@ -1,0 +1,32 @@
+openapi: 3.0.3
+info:
+  title: Order API
+  version: 1.0.0
+servers:
+  - url: http://localhost:1/order-api
+  - url: http://localhost:2/ignored
+paths:
+  /orders:
+    post:
+      operationId: createOrder
+      responses:
+        "201":
+          description: Created
+  /orders/{orderId}:
+    get:
+      operationId: getOrder
+      responses:
+        "200":
+          description: The order
+  /orders/{orderId}/notes:
+    put:
+      operationId: putNote
+      responses:
+        "200":
+          description: Stored
+  /ping:
+    head:
+      operationId: ping
+      responses:
+        "200":
+          description: Alive

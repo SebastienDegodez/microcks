@@ -1,0 +1,37 @@
+openapi: 3.0.3
+info:
+  title: Customer API
+  version: 1.0.0
+servers:
+  - url: http://localhost:1/customer-api
+paths:
+  /customers:
+    get:
+      operationId: searchCustomers
+      responses:
+        "200":
+          description: Matching customers
+  /customers/{customerId}:
+    parameters:
+      - name: customerId
+        in: path
+        required: true
+        schema:
+          type: string
+    summary: A customer
+    get:
+      operationId: getCustomer
+      responses:
+        "200":
+          description: The customer
+    delete:
+      description: An operation without operationId is not addressable by a workflow.
+      responses:
+        "204":
+          description: Deleted
+  /ping:
+    get:
+      operationId: ping
+      responses:
+        "200":
+          description: Alive

@@ -1,0 +1,61 @@
+arazzo: 1.0.1
+info:
+  title: Browse and update pastries, played against the Microcks mocks of the API Pastry sample
+  version: 1.0.0
+sourceDescriptions:
+  - name: pastryApi
+    # The unmodified sample shipped with Microcks.
+    url: ../../../../../../samples/APIPastry-openapi.yaml
+workflows:
+  - workflowId: readThenReprice
+    summary: Reads a pastry, then changes its price using the name returned by the first call.
+    steps:
+      - stepId: readPastry
+        operationId: GetPastryByName
+        parameters:
+          - name: name
+            in: path
+            value: $inputs.pastry
+        successCriteria:
+          - condition: $statusCode == 200 && $response.body#/status == 'available'
+        outputs:
+          name: $response.body#/name
+          price: $response.body#/price
+      - stepId: reprice
+        operationId: $sourceDescriptions.pastryApi.PatchPastry
+        parameters:
+          - name: name
+            in: path
+            value: $steps.readPastry.outputs.name
+        requestBody:
+          payload:
+            price: 0
+          replacements:
+            - target: /price
+              value: $inputs.newPrice
+        successCriteria:
+          - condition: $statusCode == 200
+          - condition: $response.body#/price == $inputs.newPrice
+        outputs:
+          price: $response.body#/price
+    outputs:
+      before: $steps.readPastry.outputs.price
+      after: $steps.reprice.outputs.price
+
+  - workflowId: listThenReadFirst
+    summary: Reads the first pastry of the list. Fails on mocks whose list and detail examples do not match.
+    steps:
+      - stepId: list
+        operationId: GetPastries
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          first: $response.body#/0/name
+      - stepId: readFirst
+        operationId: GetPastryByName
+        parameters:
+          - name: name
+            in: path
+            value: $steps.list.outputs.first
+        successCriteria:
+          - condition: $statusCode == 200
