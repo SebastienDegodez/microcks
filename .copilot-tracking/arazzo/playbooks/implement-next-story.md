@@ -18,7 +18,8 @@ List the open PRs on the fork whose head branch starts with `arazzo/`.
 - **One is open:**
   - its latest reviewer verdict for the current head SHA (marker `skraft-review` in a PR review, see the reviewer playbook) is `NEEDS_REWORK`: rework it (step 4), then stop;
   - otherwise (waiting for review, `APPROVED` and waiting for the maintainer to merge, or CI running): **stop, doing nothing**.
-- **None is open:** pick the next story (step 2).
+- **None is open, but a remote branch `arazzo/*` without a PR was pushed less than 6 hours ago:** another run is delivering it, so stop doing nothing. Older than 6 hours: resume that branch instead of picking a new story.
+- **None is open and no such branch exists:** pick the next story (step 2). As soon as it is picked, push the empty branch `arazzo/<issue-number>-<short-slug>`: it is the lock that stops concurrent runs.
 
 ## 2. Pick the next story
 
