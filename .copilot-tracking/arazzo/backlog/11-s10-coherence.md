@@ -1,4 +1,6 @@
-Part of {{EPIC}}.
+# S10 — Spot mock examples that do not form a coherent scenario
+
+Part of [the epic](00-epic.md).
 
 ## Story
 
@@ -37,7 +39,7 @@ Then no example hint is shown
 
 ## Dependencies
 
-- {{S6}} — run result detail.
+- [S6](07-s6-why-failed.md) — run result detail.
 
 ## Effort
 

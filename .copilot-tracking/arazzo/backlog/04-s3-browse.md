@@ -1,4 +1,6 @@
-Part of {{EPIC}}.
+# S3 — Browse workflows
+
+Part of [the epic](00-epic.md).
 
 ## Story
 
@@ -39,7 +41,7 @@ Then only *API Pastry scenarios* is listed
 ## Technical notes
 
 - Vertical slice: a query use case returning a view model, its REST endpoint, a new *Workflows* entry in the vertical navigation, and the Angular page (screen 1 of the mock-up).
-- New screens use the current PatternFly 3 style; no restyling of existing pages ({{S13}}).
+- New screens use the current PatternFly 3 style; no restyling of existing pages ([S13](14-s13-refresh.md)).
 - Before the run stories exist, the last result is *Never run*.
 - Tests:
   - acceptance tests on the query use case;
@@ -48,8 +50,8 @@ Then only *API Pastry scenarios* is listed
 
 ## Dependencies
 
-- {{S1}} — imported documents.
-- {{S2}} — link state.
+- [S1](02-s1-import.md) — imported documents.
+- [S2](03-s2-link.md) — link state.
 
 ## Effort
 

@@ -1,4 +1,6 @@
-Part of {{EPIC}}.
+# S9 — Validate workflow step responses against the OpenAPI schema
+
+Part of [the epic](00-epic.md).
 
 ## Story
 
@@ -36,7 +38,7 @@ Then step `readPastry` passes
 
 ## Dependencies
 
-- {{S5}}.
+- [S5](06-s5-run-mocks.md).
 
 ## Effort
 

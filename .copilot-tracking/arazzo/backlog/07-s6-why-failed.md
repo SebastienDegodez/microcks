@@ -1,4 +1,6 @@
-Part of {{EPIC}}.
+# S6 — Understand why a workflow step failed
+
+Part of [the epic](00-epic.md).
 
 ## Story
 
@@ -34,13 +36,13 @@ Then the parameter `name` shows *Baba Rhum* and its source `$steps.list.outputs.
 
 ## Technical notes
 
-- Depends on what {{ADR}} decides to store per step: evaluated criteria, resolved parameters, outputs, and the exchange.
+- Depends on what [ADR](01-adr.md) decides to store per step: evaluated criteria, resolved parameters, outputs, and the exchange.
 - Result page (screen 6): the failing step is expanded by default, and passed steps can be expanded.
 - Request/response rendering reuses the existing test detail components where possible.
 
 ## Dependencies
 
-- {{S5}} — runs exist.
+- [S5](06-s5-run-mocks.md) — runs exist.
 
 ## Effort
 

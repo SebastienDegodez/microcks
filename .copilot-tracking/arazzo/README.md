@@ -1,14 +1,22 @@
 # Arazzo in Microcks — planning workspace
 
-This branch (`planning/arazzo`) is never merged. It keeps the planning material of the Arazzo feature under version control.
+This branch (`planning/arazzo`) is never merged. It is the **only backlog** of the Arazzo feature: no GitHub issues are created. Everything starts from these files.
 
 | Path | What |
 |---|---|
-| `backlog/*.md` | Source of the epic, the ADR and the 13 stories. `{{KEY}}` placeholders become issue numbers at publication. |
-| `backlog/publish.py` | Publishes them as issues on `SebastienDegodez/microcks`, resolves cross-references, and attaches the stories to the epic. Idempotent, matching on title. |
+| `backlog/00-epic.md` | Goal, decisions, delivery conventions, and the ordered list of stories. |
+| `backlog/01-adr.md` | Storage of workflow runs. Its **Decision** section unblocks the run stories once it says `Status: decided`. |
+| `backlog/02-…` to `14-…` | Stories S1 to S13: persona, examples, Given/When/Then criteria, technical notes, dependencies (by story key), effort, DoR. |
 | `playbooks/implement-next-story.md` | What the scheduled *implementer* task does on each run. |
 | `playbooks/review-arazzo-prs.md` | What the scheduled *reviewer* task does on each run. |
 
-Once published, the issues on GitHub are the source of truth; the files under `backlog/` are the initial drafts.
+## State of a story, read from git
 
-Run: `python3 .copilot-tracking/arazzo/backlog/publish.py` (needs `gh api` with write access to the fork, and Issues enabled on it).
+| State | Evidence |
+|---|---|
+| Ready | Its file has every DoR box ticked, and all its dependencies are done. |
+| In progress | Branch `arazzo/<key>-<slug>` exists on the fork, for example `arazzo/s1-import`. |
+| In review | A PR from that branch is open against `master`. |
+| Done | That PR is merged into `master`. |
+
+Only the maintainer edits this branch: story content, DoR boxes, ADR decision, epic checkboxes. The scheduled tasks only read it.

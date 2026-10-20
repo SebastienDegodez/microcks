@@ -1,4 +1,6 @@
-Part of {{EPIC}}.
+# S8 — Refuse a workflow run whose inputs are missing
+
+Part of [the epic](00-epic.md).
 
 ## Story
 
@@ -32,7 +34,7 @@ Then the run starts
 
 ## Dependencies
 
-- {{S5}}.
+- [S5](06-s5-run-mocks.md).
 
 ## Effort
 

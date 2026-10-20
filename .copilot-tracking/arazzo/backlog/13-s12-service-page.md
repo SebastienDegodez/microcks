@@ -1,4 +1,6 @@
-Part of {{EPIC}}.
+# S12 — See the workflows that use an API on its page
+
+Part of [the epic](00-epic.md).
 
 ## Story
 
@@ -34,13 +36,13 @@ Then the page is unchanged from today
 
 ## Technical notes
 
-- **Additions only.** The service detail page keeps its current layout and style (screen 4 with the *highlightAdditions* view of the mock-up). Its layout refresh is {{S13}}.
+- **Additions only.** The service detail page keeps its current layout and style (screen 4 with the *highlightAdditions* view of the mock-up). Its layout refresh is [S13](14-s13-refresh.md).
 - One query returning the workflows per service and per operation, read by the existing service detail page.
 
 ## Dependencies
 
-- {{S2}} — links between workflows and APIs.
-- {{S11}} — last result, optional: show *Never run* until it exists.
+- [S2](03-s2-link.md) — links between workflows and APIs.
+- [S11](12-s11-history.md) — last result, optional: show *Never run* until it exists.
 
 ## Effort
 

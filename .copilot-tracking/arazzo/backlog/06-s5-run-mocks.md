@@ -1,4 +1,6 @@
-Part of {{EPIC}}. **Walking skeleton of the Arazzo minion.**
+# S5 — Run a workflow against Microcks mocks (Arazzo minion walking skeleton)
+
+Part of [the epic](00-epic.md). **Walking skeleton of the Arazzo minion.**
 
 ## Story
 
@@ -39,7 +41,7 @@ Then the run is no longer in progress and shows its final result
 
 ## Technical notes
 
-- **Blocked by {{ADR}}** (where the run is stored).
+- **Blocked by [ADR](01-adr.md)** (where the run is stored).
 - Runs execute in a new **Arazzo minion** (Quarkus, `minions/arazzo`, clean architecture modules), following the AsyncAPI minion protocol:
   - the webapp posts the run, then the minion reports the results back to the webapp;
   - each call targets the mocks of the step's API, at `/rest/{service}/{version}`.
@@ -48,12 +50,12 @@ Then the run is no longer in progress and shows its final result
 - Integration tests:
   - minion executed against `microcks-uber` (Testcontainers) with `APIPastry-openapi.yaml`;
   - webapp ↔ minion contract.
-- Add the minion to the Docker Compose, Helm and uber distributions in a follow-up issue if needed.
+- Add the minion to the Docker Compose, Helm and uber distributions in a follow-up story if needed.
 
 ## Dependencies
 
-- {{ADR}} — storage decision.
-- {{S2}} — runnable state and linked APIs.
+- [ADR](01-adr.md) — storage decision.
+- [S2](03-s2-link.md) — runnable state and linked APIs.
 
 ## Effort
 

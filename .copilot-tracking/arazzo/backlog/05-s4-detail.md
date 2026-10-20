@@ -1,4 +1,6 @@
-Part of {{EPIC}}.
+# S4 — Read the steps of a workflow
+
+Part of [the epic](00-epic.md).
 
 ## Story
 
@@ -37,11 +39,11 @@ And the outputs `before` and `after` are shown with their expressions
 
 - Vertical slice: a detail query use case, its endpoint, and the Angular page (screen 3 of the mock-up), with one tab per workflow.
 - Deriving where an input or an output is used is a rule over the parsed workflow; it belongs to the domain, not to the page.
-- *Recent runs* stays empty until {{S11}}.
+- *Recent runs* stays empty until [S11](12-s11-history.md).
 
 ## Dependencies
 
-- {{S1}}, {{S2}}.
+- [S1](02-s1-import.md), [S2](03-s2-link.md).
 
 ## Effort
 

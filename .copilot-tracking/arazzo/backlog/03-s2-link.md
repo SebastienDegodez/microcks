@@ -1,4 +1,6 @@
-Part of {{EPIC}}.
+# S2 — Link Arazzo source descriptions to Microcks APIs
+
+Part of [the epic](00-epic.md).
 
 ## Story
 
@@ -72,7 +74,7 @@ Then `orderApi` is linked and `placeOrder` is runnable
 
 ## Dependencies
 
-- {{S1}} — provides the imported document.
+- [S1](02-s1-import.md) — provides the imported document.
 
 ## Effort
 

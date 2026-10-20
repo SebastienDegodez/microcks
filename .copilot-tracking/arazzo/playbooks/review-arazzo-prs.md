@@ -4,7 +4,8 @@ Followed by the scheduled *reviewer* task on each run. It reviews; it never chan
 
 ## 0. Setup
 
-1. Attach `SebastienDegodez/microcks` with push access, then clone it. Read-only clone `SebastienDegodez/skraft-plugin`.
+1. Attach `SebastienDegodez/microcks` with push access and clone it. Set `remote.origin.fetch` to `+refs/heads/*:refs/remotes/origin/*`, then fetch. Read-only clone `SebastienDegodez/skraft-plugin`.
+   The story a PR implements is the file named by `Story: S<n>` in its body, read from `origin/planning/arazzo` in `.copilot-tracking/arazzo/backlog/`. The epic `00-epic.md` and the ADR `01-adr.md` come from the same place. There are no GitHub issues.
 2. Load these skraft skills from `plugins/skraft-framework/skills/` and apply them:
    - `acceptance-review-criteria`, `adversarial-review-lenses`, `architecture-review-criteria`;
    - `test-design-mandates`, `clean-architecture-testing`, `clean-architecture-java`;
@@ -19,7 +20,7 @@ Open PRs on the fork whose head branch starts with `arazzo/`. Skip a PR when:
 ## 2. Checks (each finding cites file and line, or the missing evidence)
 
 **Scope and behaviour**
-- The PR closes exactly one story, and implements no behaviour the story's ACs do not state.
+- The PR implements exactly one story (`Story: S<n>`), and implements no behaviour the story's ACs do not state.
 - Every AC has at least one acceptance test whose name mirrors it, entering through the application use case, and asserting an observable outcome (return value or output gateway).
 
 **Tests (skraft mandates)**
@@ -30,7 +31,7 @@ Open PRs on the fork whose head branch starts with `arazzo/`. Skip a PR when:
 - No placeholder assertion. No skipped or disabled test.
 
 **Sequence evidence**
-- A behaviour RED exists for each AC: a local run output or a CI run on `scratch/arazzo-<n>-red`, linked in the PR body.
+- The PR body shows a behaviour RED for each AC: the failing assertion, from a local or CI run.
 - The story branch has no red commit.
 
 **Architecture**

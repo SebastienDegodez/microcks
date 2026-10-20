@@ -1,4 +1,6 @@
-Part of {{EPIC}}.
+# S1 — Import an Arazzo document
+
+Part of [the epic](00-epic.md).
 
 ## Story
 

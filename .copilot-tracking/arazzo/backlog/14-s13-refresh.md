@@ -1,4 +1,6 @@
-Part of {{EPIC}}. **Dedicated PR, separate from the Arazzo feature PRs.**
+# S13 — Refresh the API page layout
+
+Part of [the epic](00-epic.md). **Dedicated PR, separate from the Arazzo feature PRs.**
 
 ## Story
 
@@ -42,7 +44,7 @@ Then every current element is still present and works:
 
 ## Dependencies
 
-- None. It can ship before or after the Arazzo stories; if after {{S12}}, it includes the workflow additions.
+- None. It can ship before or after the Arazzo stories; if after [S12](13-s12-service-page.md), it includes the workflow additions.
 
 ## Effort
 

@@ -1,4 +1,6 @@
-Part of {{EPIC}}.
+# ADR — Storage of workflow runs
+
+Part of [the epic](00-epic.md).
 
 ## Decision to take
 
@@ -78,11 +80,15 @@ What C gets right, and should be kept whatever the option: no parallel storage f
 
 - Runner type `ARAZZO` (new `TestRunnerType`) is excluded from the conformance metric update.
 - Whether the step `TestResult`s show in the API's "Tests runs" with a link back to their workflow run, or are hidden there.
-- Endpoints for the run stories ({{S5}}, {{S6}}, {{S11}}): the run reads `WorkflowResult`, and the exchanges read through the existing `tests/{id}/messages/{testCaseId}`.
+- Endpoints for the run stories ([S5](06-s5-run-mocks.md), [S6](07-s6-why-failed.md), [S11](12-s11-history.md)): the run reads `WorkflowResult`, and the exchanges read through the existing `tests/{id}/messages/{testCaseId}`.
 
 ## Definition of done
 
-The chosen option (A, B, C1 or C2) is recorded in this issue with its reasons and consequences, and the run stories reference it.
+The chosen option (A, B, C1 or C2) is recorded in the **Decision** section below with its reasons and consequences, and the run stories reference it.
 
 ---
 _Drafted with AI assistance (Claude); to be reviewed by the maintainer._
+
+## Decision
+
+_Status: **pending** — to be filled by the maintainer (option, reasons, consequences). The run stories (S5, S6, S11) stay blocked until this section says `Status: decided`._

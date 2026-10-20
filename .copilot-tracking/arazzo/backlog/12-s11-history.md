@@ -1,4 +1,6 @@
-Part of {{EPIC}}.
+# S11 — Follow the workflow runs history
+
+Part of [the epic](00-epic.md).
 
 ## Story
 
@@ -41,11 +43,11 @@ Then only #2 is listed
 
 - A query use case with paging, an endpoint, and the history page (screen 7).
 - The workflow detail page (*Recent runs*) and the Workflows list (*last result*) read the same query.
-- Run numbering is per document, independent of the API test numbers. The order of steps inside a run is not this story's concern (see {{ADR}}).
+- Run numbering is per document, independent of the API test numbers. The order of steps inside a run is not this story's concern (see [ADR](01-adr.md)).
 
 ## Dependencies
 
-- {{S5}} — runs exist.
+- [S5](06-s5-run-mocks.md) — runs exist.
 
 ## Effort
 

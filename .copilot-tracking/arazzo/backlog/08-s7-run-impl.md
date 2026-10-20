@@ -1,4 +1,6 @@
-Part of {{EPIC}}.
+# S7 — Run a workflow against implementation endpoints
+
+Part of [the epic](00-epic.md).
 
 ## Story
 
@@ -36,7 +38,7 @@ Then its target shows `pastryApi` → `http://localhost:8080`
 
 ## Dependencies
 
-- {{S5}}.
+- [S5](06-s5-run-mocks.md).
 
 ## Effort
 
