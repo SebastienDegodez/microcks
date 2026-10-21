@@ -151,6 +151,7 @@ describe('WorkflowRunPageComponent', () => {
       'Workflow readThenReprice in API Pastry scenarios 1.0.0',
       'Target Microcks mocks · /rest/API+Pastry+-+2.0/2.0.0',
       'Inputs pastry = "Eclair Cafe" newPrice = 2.6',
+      'Schema validation Off',
       'Outputs before = 2.5 after = 2.6'
     ]);
     expect(page().querySelector('.workflow-run-property a')?.getAttribute('href'))
@@ -415,6 +416,25 @@ describe('WorkflowRunPageComponent', () => {
     expect(page().querySelectorAll('.breadcrumb [title="Available soon"]').length).toEqual(0);
     expect(texts('.workflow-run-title')).toEqual(['Run #6 · listThenReadFirst failed']);
   }));
+
+  it('tells that the responses were validated against their schema, and why a non-conformant one failed its step',
+    fakeAsync(() => {
+      const run = passedRun();
+      run.status = 'FAILURE';
+      run.validateSchema = true;
+      run.steps[1] = { ...run.steps[1], status: 'FAILED', outputs: {},
+        criteria: [{ condition: '$statusCode == 200', values: [{ expression: '$statusCode', value: 200 }], held: true }],
+        message: '/price does not match the Pastry schema: string found, number expected' };
+      open(run);
+      tick();
+      fixture.detectChanges();
+
+      expect(texts('.workflow-run-property')[3]).toEqual('Schema validation On');
+      expect(texts('.workflow-run-failure')).toEqual(['Step 2, reprice, failed: /price does not match the Pastry '
+        + 'schema: string found, number expected. The workflow stopped there and produced no outputs.']);
+      expect(texts('.workflow-run-step-message', stepElement('reprice')))
+        .toEqual(['/price does not match the Pastry schema: string found, number expected']);
+    }));
 
   it('says the run is not found when it cannot be read', fakeAsync(() => {
     open(new Error('404'));

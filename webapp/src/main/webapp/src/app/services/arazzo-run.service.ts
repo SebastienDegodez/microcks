@@ -32,13 +32,15 @@ export class ArazzoRunService {
    * @param inputs          The inputs of the workflow, by name
    * @param timeout         How long a step waits for its response, in milliseconds
    * @param implementations The base URL of each linked source and the secret of the calls; none for the mocks
+   * @param validateSchema  Whether each response is validated against the OpenAPI schema of its operation
    */
   public launchRun(documentId: string, workflowId: string, inputs: Record<string, unknown>,
-                   timeout: number, implementations?: WorkflowRunImplementations): Observable<WorkflowResult> {
+                   timeout: number, implementations?: WorkflowRunImplementations,
+                   validateSchema = false): Observable<WorkflowResult> {
     const target = implementations
       ? { implementations: implementations.baseUrls, secretName: implementations.secretName } : {};
     return this.http.post<WorkflowResult>(this.rootUrl + '/documents/' + encodeURIComponent(documentId)
-      + '/workflows/' + encodeURIComponent(workflowId) + '/runs', { inputs, timeout, ...target });
+      + '/workflows/' + encodeURIComponent(workflowId) + '/runs', { inputs, timeout, ...target, validateSchema });
   }
 
   public getRun(runId: string): Observable<WorkflowResult> {

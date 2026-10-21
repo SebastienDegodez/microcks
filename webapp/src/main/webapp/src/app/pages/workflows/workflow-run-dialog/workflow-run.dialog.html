@@ -82,8 +82,8 @@
     <p *ngIf="!workflow.inputs.length" class="workflow-run-no-input">This workflow declares no input.</p>
 
     <h5 class="workflow-run-section">Options</h5>
-    <label class="workflow-run-validation" [title]="availableSoon">
-      <input type="checkbox" name="validation" disabled>
+    <label class="workflow-run-validation">
+      <input type="checkbox" name="validation" [(ngModel)]="validateSchema">
       <span class="workflow-run-target-text">
         <span class="workflow-run-option-title">Validate each response against its OpenAPI schema</span>
         <span class="workflow-run-target-description">

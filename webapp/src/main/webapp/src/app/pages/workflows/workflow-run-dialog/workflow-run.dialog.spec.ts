@@ -161,15 +161,29 @@ describe('WorkflowRunDialogComponent', () => {
     expect(texts('.workflow-run-summary')).toEqual(['listThenReadFirst against Microcks mocks']);
   });
 
-  it('keeps schema validation available soon, and a timeout of 10 seconds per step', async () => {
+  it('validates each response against its OpenAPI schema by default, with a timeout of 10 seconds per step',
+    async () => {
+      open();
+      await fixture.whenStable();
+
+      const validation = dialog().querySelector('.workflow-run-validation input') as HTMLInputElement;
+      expect(validation.disabled).toBeFalse();
+      expect(validation.checked).toBeTrue();
+      expect(dialog().querySelector('.workflow-run-validation')?.getAttribute('title')).toBeNull();
+      expect(texts('.workflow-run-option-title')).toEqual(['Validate each response against its OpenAPI schema']);
+      expect((dialog().querySelector('#workflow-run-timeout') as HTMLInputElement).value).toEqual('10000');
+    });
+
+  it('runs without schema validation once the option is unchecked', async () => {
     open();
+    runs.launchRun.and.returnValue(of({ id: 'run-1' } as WorkflowResult));
     await fixture.whenStable();
 
-    const validation = dialog().querySelector('.workflow-run-validation input') as HTMLInputElement;
-    expect(validation.disabled).toBeTrue();
-    expect(validation.checked).toBeFalse();
-    expect(dialog().querySelector('.workflow-run-validation')?.getAttribute('title')).toEqual('Available soon');
-    expect((dialog().querySelector('#workflow-run-timeout') as HTMLInputElement).value).toEqual('10000');
+    (dialog().querySelector('.workflow-run-validation input') as HTMLInputElement).click();
+    fixture.detectChanges();
+    runButton().click();
+
+    expect(runs.launchRun).toHaveBeenCalledWith('doc-1', 'readThenReprice', {}, 10000, false);
   });
 
   it('runs the workflow with its inputs and timeout, then opens the run', async () => {
@@ -184,7 +198,7 @@ describe('WorkflowRunDialogComponent', () => {
     runButton().click();
 
     expect(runs.launchRun).toHaveBeenCalledWith('doc-1', 'readThenReprice', { pastry: 'Eclair Cafe', newPrice: 2.6 },
-      5000);
+      5000, true);
     expect(modalRef.hide).toHaveBeenCalled();
     expect(router.navigate).toHaveBeenCalledWith(['/workflows/runs', 'run-1']);
   });
@@ -197,7 +211,7 @@ describe('WorkflowRunDialogComponent', () => {
     type('#workflow-run-input-pastry', 'Eclair Cafe');
     runButton().click();
 
-    expect(runs.launchRun).toHaveBeenCalledWith('doc-1', 'readThenReprice', { pastry: 'Eclair Cafe' }, 10000);
+    expect(runs.launchRun).toHaveBeenCalledWith('doc-1', 'readThenReprice', { pastry: 'Eclair Cafe' }, 10000, true);
   });
 
   it('does not run a workflow that cannot run, and tells why', () => {
@@ -236,7 +250,7 @@ describe('WorkflowRunDialogComponent', () => {
     runButton().click();
     fixture.detectChanges();
 
-    expect(runs.launchRun).toHaveBeenCalledWith('doc-1', 'readThenReprice', { pastry: 'Eclair Cafe' }, 10000);
+    expect(runs.launchRun).toHaveBeenCalledWith('doc-1', 'readThenReprice', { pastry: 'Eclair Cafe' }, 10000, true);
     expect(texts('.workflow-run-error')).toEqual(['Missing input: newPrice']);
     expect(texts('.workflow-run-input.has-error .workflow-run-input-name')).toEqual(['newPrice']);
     expect(dialog().querySelector('#workflow-run-input-newPrice')?.getAttribute('aria-invalid')).toEqual('true');
