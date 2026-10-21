@@ -27,8 +27,12 @@ function readThenReprice(): ArazzoWorkflowDetail {
     documentId: 'doc-1',
     title: 'API Pastry scenarios',
     version: '1.0.0',
+    arazzoVersion: '1.0.1',
+    fileName: 'pastry.arazzo.yaml',
+    importDate: Date.now() - 2 * 24 * 3600 * 1000,
     workflowIds: ['readThenReprice', 'listThenReadFirst'],
-    sources: [{ sourceName: 'pastryApi', apiName: 'API Pastry - 2.0', apiVersion: '2.0.0', linked: true }],
+    sources: [{ link: { sourceName: 'pastryApi', apiName: 'API Pastry - 2.0', apiVersion: '2.0.0', linked: true },
+      serviceId: 'svc-1', operations: 3, usedOperations: 3 }],
     workflowId: 'readThenReprice',
     summary: 'Reads a pastry, then changes its price using the name returned by the first call.',
     inputs: [
@@ -106,11 +110,21 @@ describe('WorkflowDetailPageComponent', () => {
     return page.querySelector('[data-step-id="' + stepId + '"]') as HTMLElement;
   }
 
+  it('shows the title, version and Arazzo version of the document, and where and when it was imported', async () => {
+    await open(readThenReprice());
+
+    expect(texts('.workflow-title')).toEqual(['API Pastry scenarios 1.0.0 ARAZZO 1.0.1']);
+    expect(texts('.workflow-subtitle')).toEqual(['Imported 2 days ago from pastry.arazzo.yaml · 2 workflows']);
+    expect(texts('.breadcrumb li')).toEqual(['Workflows', 'API Pastry scenarios - 1.0.0']);
+  });
+
   it('shows each step with its operation, parameters, criteria and outputs', async () => {
     await open(readThenReprice());
 
     expect(texts('.workflow-step-title')).toEqual(['1 readPastry', '2 reprice']);
-    expect(texts('.workflow-step-operation', step('readPastry'))).toEqual(['GET /pastry/{name} GetPastryByName']);
+    expect(texts('.workflow-step-operation', step('readPastry'))).toEqual(['REST GET /pastry/{name} GetPastryByName']);
+    expect(step('readPastry').querySelector('.workflow-step-operation a')?.getAttribute('href'))
+      .toEqual('/services/svc-1');
     expect(texts('.workflow-step-parameter', step('readPastry')))
       .toEqual(['name path ← $inputs.pastry', 'Accept header = application/json']);
     expect(texts('.workflow-step-criterion', step('readPastry')))
@@ -200,15 +214,20 @@ describe('WorkflowDetailPageComponent', () => {
 
   it('shows the source descriptions with the API each one is linked to, or why it is not', async () => {
     const workflow = readThenReprice();
-    workflow.sources.push({ sourceName: 'orderApi', apiName: 'Order API', apiVersion: '1.0.0', linked: false },
-      { sourceName: 'customerApi', linked: false });
+    workflow.sources.push(
+      { link: { sourceName: 'orderApi', apiName: 'Order API', apiVersion: '1.0.0', linked: false },
+        reason: 'API Order API 1.0.0 not found', operations: 0, usedOperations: 0 },
+      { link: { sourceName: 'customerApi', linked: false },
+        reason: 'no API name and version for this source', operations: 0, usedOperations: 0 });
     await open(workflow);
 
     expect(texts('.workflow-source')).toEqual([
-      'pastryApi API Pastry - 2.0 2.0.0',
-      'orderApi Order API 1.0.0 not found in Microcks',
-      'customerApi No API name and version for this source'
+      'pastryApi REST API Pastry - 2.0 2.0.0 · 3 operations, 3 used by steps',
+      'orderApi API Order API 1.0.0 not found',
+      'customerApi no API name and version for this source'
     ]);
+    expect(Array.from(page.querySelectorAll('.workflow-source a')).map(link => link.getAttribute('href')))
+      .toEqual(['/services/svc-1']);
   });
 
   it('says the workflow is not found when it cannot be read', async () => {

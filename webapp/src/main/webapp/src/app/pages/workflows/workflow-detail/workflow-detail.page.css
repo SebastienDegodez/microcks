@@ -1,23 +1,115 @@
-.workflow-run-controls .workflow-run-control {
+/* Header: title, version, Arazzo chip, import line and the run controls. */
+.workflow-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.workflow-title {
+  margin: 8px 0 4px;
+  font-size: 30px;
+  font-weight: 300;
+  color: var(--text-strong);
+}
+
+.workflow-version {
+  font-size: 20px;
+  color: var(--text-secondary);
+}
+
+.workflow-arazzo-chip {
   display: inline-block;
-  margin-left: 8px;
-  cursor: not-allowed;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--primary-tint);
+  color: var(--primary-deep);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  vertical-align: middle;
 }
 
 .workflow-subtitle {
   color: var(--text-secondary);
 }
 
+.workflow-file {
+  color: var(--primary-400);
+}
+
+.workflow-run-controls {
+  display: flex;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.workflow-run-control {
+  display: inline-block;
+  cursor: not-allowed;
+}
+
+.workflow-run-control .btn {
+  padding: 9px 16px;
+  font-weight: 600;
+}
+
+.workflow-play::before {
+  content: '\25B7';
+  margin-right: 6px;
+}
+
+/* Source descriptions. */
+.workflow-section-title {
+  margin: 28px 0 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--divider);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
 .workflow-sources {
-  margin-bottom: 20px;
+  margin: 12px 0 24px;
 }
 
 .workflow-source {
   padding: 4px 0;
 }
 
-.workflow-source-api {
-  margin-left: 8px;
+.workflow-source .fa-link {
+  margin: 0 12px 0 8px;
+}
+
+.workflow-source a {
+  margin: 0 8px;
+}
+
+/* Monospace chips for identifiers and runtime expressions. */
+.workflow-page code.workflow-chip {
+  padding: 1px 4px;
+  border-radius: 1px;
+  background: var(--surface-muted);
+  color: var(--text-strong);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.workflow-protocol-chip {
+  display: inline-block;
+  padding: 0 7px;
+  border: 2px solid var(--rest-accent);
+  border-radius: 10px;
+  color: var(--text-strong);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 14px;
+}
+
+.workflow-muted {
+  color: var(--text-secondary);
 }
 
 .workflow-problem {
@@ -25,28 +117,48 @@
   color: var(--danger);
 }
 
-.workflow-muted {
-  color: var(--text-secondary);
-}
-
 .workflow-empty {
   color: var(--text-muted-2);
   font-style: italic;
 }
 
+/* One tab per workflow, the active one underlined. */
 .workflow-tabs {
-  margin-bottom: 16px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--divider-light);
+}
+
+.workflow-tabs > li > a,
+.workflow-tabs > li > a:hover,
+.workflow-tabs > li.active > a,
+.workflow-tabs > li.active > a:hover,
+.workflow-tabs > li.active > a:focus {
+  margin-right: 0;
+  padding: 10px 16px;
+  border: none;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  color: var(--text-default);
+}
+
+.workflow-tabs > li.active > a,
+.workflow-tabs > li.active > a:hover,
+.workflow-tabs > li.active > a:focus {
+  border-bottom-color: var(--primary-500);
+  color: var(--text-strong);
+  font-weight: 600;
 }
 
 .workflow-summary,
 .workflow-description {
-  color: var(--text-default);
+  font-size: 13px;
+  color: var(--text-strong);
 }
 
+/* Step cards. */
 .workflow-step {
   border: 1px solid var(--surface-border);
   background: var(--background);
-  margin-bottom: 8px;
 }
 
 .workflow-step-heading {
@@ -55,7 +167,7 @@
   justify-content: space-between;
   align-items: center;
   gap: 8px;
-  padding: 8px 16px;
+  padding: 12px 16px;
   background: var(--surface-subtle);
   border-bottom: 1px solid var(--surface-border);
 }
@@ -65,12 +177,25 @@
   width: 24px;
   height: 24px;
   margin-right: 8px;
-  border: 2px solid var(--primary-500);
+  border: 2px solid var(--primary-400);
   border-radius: 50%;
-  color: var(--primary-500);
-  font-weight: 600;
+  color: var(--primary-400);
+  font-size: 12px;
+  font-weight: 700;
   line-height: 20px;
   text-align: center;
+}
+
+.workflow-step-id {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.workflow-endpoint {
+  margin: 0 8px;
+  font-family: SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: var(--text-strong);
 }
 
 .workflow-step-description {
@@ -79,12 +204,12 @@
 }
 
 .workflow-step-body {
-  padding: 4px 16px 8px;
+  padding: 4px 16px 12px;
 }
 
 .workflow-step-section {
-  margin: 12px 0 6px;
-  color: var(--text-subtle);
+  margin: 12px 0 8px;
+  color: var(--text-default);
   font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
@@ -100,28 +225,65 @@
 .workflow-step-output,
 .workflow-step-criterion,
 .workflow-output {
-  margin-bottom: 4px;
-  overflow-wrap: anywhere;
+  margin-bottom: 6px;
 }
 
 .workflow-step-body-payload {
-  margin-bottom: 6px;
-  padding: 6px 8px;
+  margin-bottom: 8px;
+  padding: 8px 10px;
   background: var(--surface-muted);
   border: none;
   border-radius: 1px;
+  color: var(--text-strong);
   white-space: pre-wrap;
 }
 
+/* The dashed connector between two step cards, with the data passed from one to the other. */
 .workflow-data-passing {
-  margin: 0 0 8px 24px;
-  padding-left: 12px;
-  border-left: 2px dashed var(--border-muted);
+  margin: 0 0 0 28px;
+  padding: 10px 0 10px 20px;
+  border-left: 1px dashed var(--border-accent);
   color: var(--text-secondary);
+}
+
+.workflow-steps > .workflow-step + .workflow-step {
+  margin-top: 24px;
+}
+
+.workflow-arrow::before {
+  content: '\2193';
+  margin-right: 12px;
+  color: var(--text-secondary);
+}
+
+/* Right column panels. */
+.workflow-panel {
+  margin-bottom: 20px;
+  border: 1px solid var(--surface-border);
+  background: var(--background);
+}
+
+.workflow-panel-title {
+  margin: 0;
+  padding: 12px 14px;
+  background: var(--surface-subtle);
+  border-bottom: 1px solid var(--surface-border);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.workflow-panel-body {
+  padding: 12px 14px;
 }
 
 .workflow-table {
   margin-bottom: 0;
+}
+
+.workflow-table > thead > tr > th {
+  background: var(--surface-subtle);
+  font-weight: 600;
 }
 
 .workflow-table td {

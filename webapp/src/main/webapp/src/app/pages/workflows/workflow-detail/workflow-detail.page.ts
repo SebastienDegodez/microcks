@@ -23,12 +23,12 @@ import { catchError, map, switchMap } from 'rxjs/operators';
 import {
   ArazzoDataPassing,
   ArazzoExpressionUse,
-  ArazzoSourceLink,
   ArazzoStepDetail,
   ArazzoWorkflowDetail,
   ArazzoWorkflowInput
 } from '../../../models/arazzo-workflow.model';
 import { ArazzoWorkflowService } from '../../../services/arazzo-workflow.service';
+import { TimeAgoPipe } from '../../../components/time-ago.pipe';
 
 /** The workflow read from the API, or null when it does not exist. */
 type WorkflowState = { workflow: ArazzoWorkflowDetail | null };
@@ -40,7 +40,8 @@ type WorkflowState = { workflow: ArazzoWorkflowDetail | null };
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     CommonModule,
-    RouterLink
+    RouterLink,
+    TimeAgoPipe
   ]
 })
 export class WorkflowDetailPageComponent implements OnInit {
@@ -73,29 +74,30 @@ export class WorkflowDetailPageComponent implements OnInit {
   }
 
   /** Where an input is used, grouped by step in the order of the steps: "reprice · body /price, criterion". */
-  inputUses(input: ArazzoWorkflowInput): string[] {
-    const byStep = new Map<string, string[]>();
+  inputUseGroups(input: ArazzoWorkflowInput): { stepId: string; uses: ArazzoExpressionUse[] }[] {
+    const groups: { stepId: string; uses: ArazzoExpressionUse[] }[] = [];
     input.usedBy.forEach(use => {
-      const places = byStep.get(use.stepId) ?? [];
-      places.push(this.place(use));
-      byStep.set(use.stepId, places);
+      const last = groups[groups.length - 1];
+      if (last && last.stepId === use.stepId) {
+        last.uses.push(use);
+      } else {
+        groups.push({ stepId: use.stepId, uses: [use] });
+      }
     });
-    return Array.from(byStep.entries()).map(([stepId, places]) => stepId + ' · ' + places.join(', '));
+    return groups;
   }
 
-  /** Why a source description is not linked, when it is not. */
-  sourceProblem(source: ArazzoSourceLink): string | null {
-    if (source.linked) {
-      return null;
-    }
-    return source.apiName ? 'not found in Microcks' : 'No API name and version for this source';
+  /** The Microcks API a step calls, found through the source description of its operation. */
+  serviceIdOf(workflow: ArazzoWorkflowDetail, step: ArazzoStepDetail): string | undefined {
+    return workflow.sources.find(source => source.link.sourceName === step.operation.sourceName)?.serviceId;
+  }
+
+  /** The import date as the time-ago pipe reads it, whether the API gives it as a timestamp or an ISO string. */
+  importDateOf(workflow: ArazzoWorkflowDetail): string {
+    return new Date(workflow.importDate).toISOString();
   }
 
   entries(expressions: Record<string, string>): { name: string; expression: string }[] {
     return Object.entries(expressions).map(([name, expression]) => ({ name, expression }));
-  }
-
-  private place(use: ArazzoExpressionUse): string {
-    return use.target ? use.place + ' ' + use.target : use.place;
   }
 }

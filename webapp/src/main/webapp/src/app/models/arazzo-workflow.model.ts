@@ -22,6 +22,15 @@ export type ArazzoSourceLink = {
   linked: boolean;
 };
 
+/** A source description with the API it is linked to, or the reason why it is not linked. */
+export type ArazzoSourceDescription = {
+  link: ArazzoSourceLink;
+  serviceId?: string;
+  reason?: string;
+  operations: number;
+  usedOperations: number;
+};
+
 /** The operation a step calls: method and path when found in the linked API, else the reason why it is not. */
 export type ArazzoStepOperation = {
   sourceName: string;
@@ -82,8 +91,11 @@ export type ArazzoWorkflowDetail = {
   documentId: string;
   title: string;
   version: string;
+  arazzoVersion: string;
+  fileName?: string;
+  importDate: string | number;
   workflowIds: string[];
-  sources: ArazzoSourceLink[];
+  sources: ArazzoSourceDescription[];
   workflowId: string;
   summary?: string;
   description?: string;
