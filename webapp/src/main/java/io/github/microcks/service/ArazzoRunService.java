@@ -68,6 +68,7 @@ public class ArazzoRunService {
    private final ResponseRepository responseRepository;
    private final ArazzoMinionClient arazzoMinionClient;
    private final SecretRepository secretRepository;
+   private final ArazzoMockCoherenceService arazzoMockCoherenceService;
 
    /**
     * Build a new ArazzoRunService with its required dependencies.
@@ -78,11 +79,13 @@ public class ArazzoRunService {
     * @param responseRepository       The repository the responses of the steps are stored in
     * @param arazzoMinionClient       The client of the Arazzo minion that executes the runs
     * @param secretRepository         The repository of the secrets whose authorization the calls of a run carry
+    * @param arazzoMockCoherence      The service telling which example the mocks lack when a step fails
     */
    public ArazzoRunService(ArazzoDocumentRepository arazzoDocumentRepository,
          ArazzoDocumentService arazzoDocumentService, WorkflowResultRepository workflowResultRepository,
          RequestRepository requestRepository, ResponseRepository responseRepository,
-         ArazzoMinionClient arazzoMinionClient, SecretRepository secretRepository) {
+         ArazzoMinionClient arazzoMinionClient, SecretRepository secretRepository,
+         ArazzoMockCoherenceService arazzoMockCoherence) {
       this.arazzoDocumentRepository = arazzoDocumentRepository;
       this.arazzoDocumentService = arazzoDocumentService;
       this.workflowResultRepository = workflowResultRepository;
@@ -90,6 +93,7 @@ public class ArazzoRunService {
       this.responseRepository = responseRepository;
       this.arazzoMinionClient = arazzoMinionClient;
       this.secretRepository = secretRepository;
+      this.arazzoMockCoherenceService = arazzoMockCoherence;
    }
 
    /**
@@ -285,6 +289,7 @@ public class ArazzoRunService {
                step.requestUrl(), step.parameters(), step.outputOrigins()));
          steps.sort(Comparator.comparingInt(WorkflowStepResult::index));
          run.setSteps(steps);
+         arazzoMockCoherenceService.missingExample(run, step).ifPresent(run::setMissingExample);
          return workflowResultRepository.save(run);
       });
    }

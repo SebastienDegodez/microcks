@@ -47,6 +47,7 @@ public class WorkflowResult {
    private List<WorkflowStepResult> steps = new ArrayList<>();
    private String message;
    private Long number;
+   private WorkflowMissingExample missingExample;
 
    public String getId() {
       return id;
@@ -182,5 +183,14 @@ public class WorkflowResult {
 
    public void setNumber(Long number) {
       this.number = number;
+   }
+
+   /** @return The example the mocks lack for the run to go on; null when the run did not fail for a missing example */
+   public WorkflowMissingExample getMissingExample() {
+      return missingExample;
+   }
+
+   public void setMissingExample(WorkflowMissingExample missingExample) {
+      this.missingExample = missingExample;
    }
 }
