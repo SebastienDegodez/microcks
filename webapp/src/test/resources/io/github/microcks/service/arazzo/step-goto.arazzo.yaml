@@ -10,7 +10,9 @@ workflows:
     steps:
       - stepId: createOrder
         operationId: CreateOrder
-        onFailure:
-          - name: retryOnce
-            type: retry
-            retryLimit: 1
+        onSuccess:
+          - name: pay
+            type: goto
+            stepId: payOrder
+      - stepId: payOrder
+        operationId: PayOrder
