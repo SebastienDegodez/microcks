@@ -16,6 +16,7 @@
 package io.github.microcks.minion.arazzo.client.dto;
 
 import io.github.microcks.minion.arazzo.runner.OperationTarget;
+import io.github.microcks.minion.arazzo.runner.RunSecret;
 import io.github.microcks.minion.arazzo.runner.RunSpecification;
 import io.github.microcks.minion.arazzo.runner.SourceTarget;
 
@@ -32,10 +33,11 @@ import java.util.Map;
  * @param inputs         The inputs of the workflow, by name
  * @param sources        Where to call the operations of each source description, by source name
  * @param timeoutMS      How long a step waits for its response, in milliseconds
+ * @param secret         The secret whose authorization every call carries; null for none
  * @author SebastienDegodez
  */
 public record RunRequestDTO(String runId, String workflowId, String arazzoDocument, Map<String, Object> inputs,
-      Map<String, SourceDTO> sources, long timeoutMS) {
+      Map<String, SourceDTO> sources, long timeoutMS, SecretDTO secret) {
 
    /**
     * @param microcksUrl The URL of Microcks, that relative base URLs are relative to
@@ -50,6 +52,8 @@ public record RunRequestDTO(String runId, String workflowId, String arazzoDocume
          String baseUrl = source.baseUrl().startsWith("/") ? microcksUrl + source.baseUrl() : source.baseUrl();
          targets.put(name, new SourceTarget(URI.create(baseUrl), operations));
       });
-      return new RunSpecification(runId, workflowId, arazzoDocument, inputs, targets, Duration.ofMillis(timeoutMS));
+      return new RunSpecification(runId, workflowId, arazzoDocument, inputs, targets, Duration.ofMillis(timeoutMS),
+            secret == null ? RunSecret.NONE
+                  : new RunSecret(secret.username(), secret.password(), secret.token(), secret.tokenHeader()));
    }
 }

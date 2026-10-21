@@ -27,8 +27,23 @@ import java.util.Map;
  * @param inputs         The inputs of the workflow, by name
  * @param sources        Where the operations of each source description are called, by source name
  * @param timeout        How long a step waits for its response
+ * @param secret         The authorization every call carries
  * @author SebastienDegodez
  */
 public record RunSpecification(String runId, String workflowId, String arazzoDocument, Map<String, Object> inputs,
-      Map<String, SourceTarget> sources, Duration timeout) {
+      Map<String, SourceTarget> sources, Duration timeout, RunSecret secret) {
+
+   /**
+    * A run whose calls carry no secret.
+    * @param runId          The id of the run in Microcks
+    * @param workflowId     The id of the workflow to run
+    * @param arazzoDocument The Arazzo document, as imported in Microcks
+    * @param inputs         The inputs of the workflow, by name
+    * @param sources        Where the operations of each source description are called, by source name
+    * @param timeout        How long a step waits for its response
+    */
+   public RunSpecification(String runId, String workflowId, String arazzoDocument, Map<String, Object> inputs,
+         Map<String, SourceTarget> sources, Duration timeout) {
+      this(runId, workflowId, arazzoDocument, inputs, sources, timeout, RunSecret.NONE);
+   }
 }
