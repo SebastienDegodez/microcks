@@ -31,13 +31,14 @@ public class ArazzoDocument {
    private String id;
    private String title;
    private String version;
+   private String arazzoVersion;
+   private String fileName;
+   private Date importDate;
+   private Map<String, String> workflowDescriptions;
    private List<String> workflowIds;
    private List<String> sourceNames;
    private Map<String, List<ArazzoStepCall>> workflowCalls;
    private String content;
-   private String arazzoVersion;
-   private String fileName;
-   private Date importDate;
 
    public String getId() {
       return id;
@@ -61,6 +62,38 @@ public class ArazzoDocument {
 
    public void setVersion(String version) {
       this.version = version;
+   }
+
+   public String getArazzoVersion() {
+      return arazzoVersion;
+   }
+
+   public void setArazzoVersion(String arazzoVersion) {
+      this.arazzoVersion = arazzoVersion;
+   }
+
+   public String getFileName() {
+      return fileName;
+   }
+
+   public void setFileName(String fileName) {
+      this.fileName = fileName;
+   }
+
+   public Date getImportDate() {
+      return importDate;
+   }
+
+   public void setImportDate(Date importDate) {
+      this.importDate = importDate;
+   }
+
+   public Map<String, String> getWorkflowDescriptions() {
+      return workflowDescriptions;
+   }
+
+   public void setWorkflowDescriptions(Map<String, String> workflowDescriptions) {
+      this.workflowDescriptions = workflowDescriptions;
    }
 
    public List<String> getWorkflowIds() {
@@ -93,29 +126,5 @@ public class ArazzoDocument {
 
    public void setContent(String content) {
       this.content = content;
-   }
-
-   public String getArazzoVersion() {
-      return arazzoVersion;
-   }
-
-   public void setArazzoVersion(String arazzoVersion) {
-      this.arazzoVersion = arazzoVersion;
-   }
-
-   public String getFileName() {
-      return fileName;
-   }
-
-   public void setFileName(String fileName) {
-      this.fileName = fileName;
-   }
-
-   public Date getImportDate() {
-      return importDate;
-   }
-
-   public void setImportDate(Date importDate) {
-      this.importDate = importDate;
    }
 }

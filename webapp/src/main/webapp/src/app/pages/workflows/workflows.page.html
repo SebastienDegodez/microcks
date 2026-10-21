@@ -1,0 +1,141 @@
+<div class="workflows-header">
+  <div class="workflows-header-text">
+    <h1>Workflows</h1>
+    <p class="workflows-intro">
+      Multi-step API journeys described with Arazzo. Each step calls an operation of an API already in Microcks; play
+      them against the mocks or against your implementations.
+    </p>
+  </div>
+  <button class="btn btn-primary btn-lg workflows-import" type="button" (click)="openArtifactUploader()">
+    <span class="fa fa-upload" aria-hidden="true"></span> Import Arazzo document
+  </button>
+</div>
+
+<ng-container *ngIf="allDocuments">
+  <div *ngIf="allDocuments.length === 0" class="blank-slate-pf workflows-empty">
+    <div class="blank-slate-pf-icon">
+      <span class="pficon pficon-process-automation" aria-hidden="true"></span>
+    </div>
+    <h2>No workflow yet</h2>
+    <p>
+      Multi-step API journeys described with Arazzo. Each step calls an operation of an API already in Microcks, so
+      that you can check a whole journey rather than each operation on its own.
+    </p>
+    <p>Import an Arazzo document to list its workflows here.</p>
+    <div class="blank-slate-pf-main-action">
+      <button class="btn btn-primary btn-lg" type="button" (click)="openArtifactUploader()">
+        <span class="fa fa-upload" aria-hidden="true"></span> Import Arazzo document
+      </button>
+    </div>
+  </div>
+
+  <ng-container *ngIf="allDocuments.length > 0">
+    <div class="workflows-toolbar">
+      <div class="workflows-name-filter">
+        <span class="fa fa-search" aria-hidden="true"></span>
+        <label class="sr-only" for="workflows-name-filter">Filter by name</label>
+        <input id="workflows-name-filter" type="search" class="form-control" placeholder="Filter by name"
+          [(ngModel)]="nameFilter" />
+      </div>
+      <label class="sr-only" for="workflows-api-filter">Filter by API</label>
+      <select id="workflows-api-filter" class="form-control" [ngModel]="apiFilter"
+        (ngModelChange)="apiFilter = $event; filterByApi()">
+        <option value="">All APIs</option>
+        <option *ngFor="let apiName of apiNames" [value]="apiName">{{ apiName }}</option>
+      </select>
+      <span class="workflows-soon" title="Available soon">
+        <label class="sr-only" for="workflows-result-filter">Filter by last result</label>
+        <select id="workflows-result-filter" class="form-control" disabled>
+          <option>Any last result</option>
+        </select>
+      </span>
+      <div class="workflows-count">
+        {{ documents.length }} {{ documents.length === 1 ? 'document' : 'documents' }} ·
+        {{ workflowCount }} {{ workflowCount === 1 ? 'workflow' : 'workflows' }}
+      </div>
+    </div>
+
+    <div class="workflows-list">
+      <div *ngIf="documents.length === 0" class="workflows-no-match">No document matches the filters.</div>
+
+      <div *ngFor="let document of documents" class="workflows-document"
+        [class.workflows-document-expanded]="isExpanded(document)">
+        <div class="workflows-document-row">
+          <button type="button" class="btn btn-link workflows-document-toggle" (click)="toggle(document)"
+            [attr.aria-expanded]="isExpanded(document)"
+            [attr.aria-label]="(isExpanded(document) ? 'Collapse ' : 'Expand ') + document.title">
+            <span class="fa" [class.fa-angle-down]="isExpanded(document)"
+              [class.fa-angle-right]="!isExpanded(document)" aria-hidden="true"></span>
+          </button>
+          <div class="workflows-document-info">
+            <div class="workflows-document-heading">
+              <a class="workflows-document-title" role="button" tabindex="0" (click)="toggle(document)"
+                (keydown.enter)="toggle(document)">{{ document.title }}</a>
+              <span class="workflows-document-version">{{ document.version }}</span>
+              <span *ngIf="document.arazzoVersion" class="workflows-arazzo-chip">ARAZZO {{ document.arazzoVersion }}</span>
+            </div>
+            <div class="workflows-document-file">
+              <ng-container *ngIf="document.fileName">{{ document.fileName }}</ng-container>
+              <ng-container *ngIf="importedOn(document) as importDate">
+                <ng-container *ngIf="document.fileName"> · </ng-container>imported {{ importDate | timeAgo }}
+              </ng-container>
+              <ng-container *ngIf="!isExpanded(document)">
+                <ng-container *ngIf="document.fileName || document.importDate != null"> · </ng-container>
+                {{ document.workflows.length }} {{ document.workflows.length === 1 ? 'workflow' : 'workflows' }}
+              </ng-container>
+            </div>
+          </div>
+          <div class="workflows-document-apis">
+            <div class="workflows-column-label">APIs</div>
+            <div *ngFor="let source of document.sources" class="workflows-source">
+              <ng-container *ngIf="source.link.linked; else notLinked">
+                <ng-container *ngIf="apiChip(source) as chip">
+                  <span class="workflows-api-chip {{ chip.styleClass }}">{{ chip.text }}</span>&nbsp;
+                </ng-container>
+                <a [routerLink]="['/services', source.apiId]">{{ source.link.apiName }}</a>&nbsp;
+                <span class="workflows-api-version">{{ source.link.apiVersion }}</span>
+              </ng-container>
+              <ng-template #notLinked>
+                <span class="workflows-not-linked"
+                  [title]="source.link.apiName ? 'API ' + source.link.apiName + ' ' + source.link.apiVersion + ' not found' : 'No API name and version for this source'">
+                  <span class="pficon pficon-warning-triangle-o" aria-hidden="true"></span>
+                  {{ source.link.sourceName }} not linked
+                </span>
+              </ng-template>
+            </div>
+          </div>
+          <div class="workflows-document-runs">
+            <div class="workflows-column-label">Last runs</div>
+            <div *ngIf="neverRun(document)" class="workflows-document-result">Never run</div>
+          </div>
+        </div>
+
+        <ng-container *ngIf="isExpanded(document)">
+          <div *ngFor="let workflow of document.workflows" class="workflows-workflow">
+            <span class="fa fa-sitemap workflows-workflow-icon" aria-hidden="true"></span>
+            <div class="workflows-workflow-info">
+              <a class="workflows-workflow-id"
+                [routerLink]="['/workflows', document.id, workflow.status.workflowId]">{{ workflow.status.workflowId }}</a>
+              <div class="workflows-workflow-meta">
+                <ng-container *ngIf="workflow.description">{{ workflow.description }} · </ng-container>
+                {{ workflow.stepCount }} {{ workflow.stepCount === 1 ? 'step' : 'steps' }}
+              </div>
+              <div *ngIf="!workflow.status.runnable" class="workflows-workflow-reasons">
+                <span class="pficon pficon-warning-triangle-o" aria-hidden="true"></span>
+                Not runnable: {{ workflow.status.reasons.join(', ') }}
+              </div>
+            </div>
+            <div class="workflows-workflow-result">
+              <ng-container *ngIf="workflow.lastResult === 'NEVER_RUN'">Never run</ng-container>
+            </div>
+            <span class="workflows-soon" title="Available soon">
+              <button type="button" class="btn btn-default workflows-run" disabled>
+                <span class="workflows-run-icon" aria-hidden="true">▷</span> Run
+              </button>
+            </span>
+          </div>
+        </ng-container>
+      </div>
+    </div>
+  </ng-container>
+</ng-container>

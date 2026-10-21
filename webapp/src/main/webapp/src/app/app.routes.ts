@@ -4,6 +4,7 @@ import { DashboardPageComponent } from './pages/dashboard/dashboard.page';
 import { ServicesPageComponent } from './pages/services/services.page';
 import { ServiceDetailPageComponent } from './pages/services/{serviceId}/service-detail.page';
 import { OperationOverridePageComponent } from './pages/services/{serviceId}/operation/operation-override.page';
+import { WorkflowsPageComponent } from './pages/workflows/workflows.page';
 import { TestsPageComponent } from './pages/tests/tests.page';
 import { TestCreatePageComponent } from './pages/tests/create/test-create.page';
 import { TestRunnerPageComponent } from './pages/tests/runner/test-runner.page';
@@ -33,6 +34,10 @@ export const routes: Routes = [
   {
     path: 'services/:serviceId/operation/:name',
     component: OperationOverridePageComponent
+  },
+  {
+    path: 'workflows',
+    component: WorkflowsPageComponent
   },
   {
     path: 'tests/service/:serviceId',

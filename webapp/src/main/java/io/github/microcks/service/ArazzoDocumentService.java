@@ -16,11 +16,15 @@
 package io.github.microcks.service;
 
 import io.github.microcks.domain.ArazzoDocument;
+import io.github.microcks.domain.ArazzoDocumentSummary;
+import io.github.microcks.domain.ArazzoLastResult;
 import io.github.microcks.domain.ArazzoSourceLink;
+import io.github.microcks.domain.ArazzoSourceSummary;
 import io.github.microcks.domain.ArazzoSources;
 import io.github.microcks.domain.ArazzoStepCall;
 import io.github.microcks.domain.ArazzoStepOperation;
 import io.github.microcks.domain.ArazzoWorkflowStatus;
+import io.github.microcks.domain.ArazzoWorkflowSummary;
 import io.github.microcks.domain.Resource;
 import io.github.microcks.domain.ResourceType;
 import io.github.microcks.domain.Service;
@@ -36,10 +40,13 @@ import io.github.microcks.util.arazzo.ArazzoDocumentReader;
 import io.github.microcks.util.arazzo.ArazzoOperationCall;
 import io.github.microcks.util.arazzo.UnsupportedArazzoDocumentException;
 
+import org.springframework.data.domain.Sort;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.MissingNode;
 
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -119,9 +126,9 @@ public class ArazzoDocumentService {
    }
 
    /**
-    * Import an Arazzo document so that its workflows are kept in Microcks.
+    * Import an Arazzo document uploaded from a file, so that its workflows are kept in Microcks with that file name.
     * @param content  The document as uploaded, in YAML or JSON
-    * @param fileName The name of the file the document is uploaded from, null if unknown
+    * @param fileName The name of the file the document was uploaded from; null when it is not known
     * @return The imported document
     * @throws MockRepositoryImportException if the document cannot be imported
     */
@@ -139,11 +146,51 @@ public class ArazzoDocumentService {
       document.setWorkflowIds(description.workflowIds());
       document.setSourceNames(ArazzoDocumentReader.sourceDescriptionNames(parsed));
       document.setWorkflowCalls(stepCalls(ArazzoDocumentReader.workflowCalls(parsed)));
-      document.setContent(content);
       document.setArazzoVersion(ArazzoDocumentReader.arazzoVersion(parsed));
       document.setFileName(fileName);
       document.setImportDate(new Date());
+      document.setWorkflowDescriptions(ArazzoDocumentReader.workflowDescriptions(parsed));
+      document.setContent(content);
       return arazzoDocumentRepository.save(document);
+   }
+
+   /**
+    * List the imported Arazzo documents, with the APIs their source descriptions are linked to and their workflows.
+    * @param apiName The name of an API to list only the documents with a source description mapped to it; null to list
+    *                every document
+    * @return The summary of each listed document
+    */
+   public List<ArazzoDocumentSummary> getDocumentSummaries(String apiName) {
+      List<ArazzoDocumentSummary> summaries = new ArrayList<>();
+      for (ArazzoDocument document : arazzoDocumentRepository.findAll(Sort.by("title", "version"))) {
+         Map<String, ResolvedSource> sources = resolveSources(document);
+         if (apiName == null || mapsToApi(sources, apiName)) {
+            summaries.add(summary(document, sources));
+         }
+      }
+      return summaries;
+   }
+
+   /** A document stored before workflow descriptions were kept has none. */
+   private static String description(ArazzoDocument document, String workflowId) {
+      Map<String, String> descriptions = document.getWorkflowDescriptions();
+      return descriptions == null ? null : descriptions.get(workflowId);
+   }
+
+   /** A document uses an API when its overlay maps one of its sources to it, whether this API exists or not. */
+   private static boolean mapsToApi(Map<String, ResolvedSource> sources, String apiName) {
+      return sources.values().stream().anyMatch(source -> apiName.equals(source.link().apiName()));
+   }
+
+   private static ArazzoDocumentSummary summary(ArazzoDocument document, Map<String, ResolvedSource> sources) {
+      List<ArazzoSourceSummary> sourceSummaries = sources.values().stream().map(ResolvedSource::summary).toList();
+      List<ArazzoWorkflowSummary> workflowSummaries = statuses(document, sources).stream()
+            .map(status -> new ArazzoWorkflowSummary(status, description(document, status.workflowId()),
+                  document.getWorkflowCalls().get(status.workflowId()).size(), ArazzoLastResult.NEVER_RUN))
+            .toList();
+      return new ArazzoDocumentSummary(document.getId(), document.getTitle(), document.getVersion(),
+            document.getArazzoVersion(), document.getFileName(), document.getImportDate(), sourceSummaries,
+            workflowSummaries);
    }
 
    /**
@@ -192,7 +239,10 @@ public class ArazzoDocumentService {
     */
    public List<ArazzoWorkflowStatus> getWorkflowStatuses(String title, String version) {
       ArazzoDocument document = arazzoDocumentRepository.findByTitleAndVersion(title, version);
-      Map<String, ResolvedSource> sources = resolveSources(document);
+      return statuses(document, resolveSources(document));
+   }
+
+   private static List<ArazzoWorkflowStatus> statuses(ArazzoDocument document, Map<String, ResolvedSource> sources) {
       return document.getWorkflowIds().stream()
             .map(workflowId -> status(workflowId, document.getWorkflowCalls().get(workflowId), sources)).toList();
    }
@@ -271,8 +321,8 @@ public class ArazzoDocumentService {
          return new ResolvedSource(new ArazzoSourceLink(sourceName, api.getName(), api.getVersion(), false), null,
                Map.of());
       }
-      return new ResolvedSource(new ArazzoSourceLink(sourceName, api.getName(), api.getVersion(), true),
-            service.getId(), definedOperations(sourceName, service));
+      return new ResolvedSource(new ArazzoSourceLink(sourceName, api.getName(), api.getVersion(), true), service,
+            definedOperations(sourceName, service));
    }
 
    /** An API defines the operations whose operationId appears in the main OpenAPI contract Microcks stored for it. */
@@ -316,8 +366,20 @@ public class ArazzoDocumentService {
       return stepCalls;
    }
 
-   /** A source description with its link, the linked API and the operations it defines, by operationId. */
-   record ResolvedSource(ArazzoSourceLink link, String serviceId, Map<String, ArazzoStepOperation> operations) {
+   /**
+    * A source description with its link, the linked API (null when not linked) and the operations the linked API
+    * defines, by operationId.
+    */
+   record ResolvedSource(ArazzoSourceLink link, Service api, Map<String, ArazzoStepOperation> operations) {
+
+      String serviceId() {
+         return api == null ? null : api.getId();
+      }
+
+      ArazzoSourceSummary summary() {
+         return api == null ? new ArazzoSourceSummary(link, null, null)
+               : new ArazzoSourceSummary(link, api.getId(), api.getType());
+      }
    }
 
    private static ArazzoDescription read(JsonNode document) throws MockRepositoryImportException {

@@ -77,6 +77,19 @@ public final class ArazzoDocumentReader {
 
    /**
     * @param document The Arazzo document, parsed from YAML or JSON
+    * @return For each workflow id, its summary, or else its description; null when it has neither
+    */
+   public static Map<String, String> workflowDescriptions(JsonNode document) {
+      Map<String, String> descriptions = new LinkedHashMap<>();
+      for (JsonNode workflow : document.path("workflows")) {
+         JsonNode description = workflow.has("summary") ? workflow.path("summary") : workflow.path("description");
+         descriptions.put(workflow.path("workflowId").asText(), description.textValue());
+      }
+      return descriptions;
+   }
+
+   /**
+    * @param document The Arazzo document, parsed from YAML or JSON
     * @return For each workflow id, the operations its steps call, in the order of the steps
     */
    public static Map<String, List<ArazzoOperationCall>> workflowCalls(JsonNode document) {
