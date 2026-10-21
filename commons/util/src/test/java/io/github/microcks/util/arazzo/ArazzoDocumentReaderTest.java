@@ -100,14 +100,15 @@ class ArazzoDocumentReaderTest {
    }
 
    /**
-    * Permanent refusal, unlike the others: Arazzo requires an operationId to name its source description when there are
-    * several, so a document that does not is invalid and its step cannot be linked to an API.
+    * Permanent refusal, unlike the others: these operationIds are invalid Arazzo, not features the runner does not
+    * handle yet. Arazzo requires an operationId to name its source description when there are several, and a named
+    * source description to be declared by the document; otherwise the step cannot be linked to an API.
     */
    @ParameterizedTest
-   @CsvSource({ "lone-operation-id, CreateOrder" })
-   void anOperationIdArazzoForbidsIsRefusedWithItsReason(String example, String operationId) throws IOException {
-      assertRefused(example("operation-ids", example),
-            "Ambiguous operationId " + operationId + ": the document has several source descriptions");
+   @CsvSource({ "lone-operation-id, Ambiguous operationId CreateOrder: the document has several source descriptions",
+         "unknown-source, Unknown source description: unknown" })
+   void anOperationIdArazzoForbidsIsRefusedWithItsReason(String example, String reason) throws IOException {
+      assertRefused(example("operation-ids", example), reason);
    }
 
    /**

@@ -86,11 +86,9 @@ public final class ArazzoDocumentReader {
 
    private static ArazzoOperationCall call(String operationId, List<String> sourceNames) {
       if (operationId.startsWith(ArazzoSubset.SOURCE_DESCRIPTIONS_EXPRESSION)) {
-         // A source name has no dot, an operationId may have some.
-         int sourceNameEnd = operationId.indexOf('.', ArazzoSubset.SOURCE_DESCRIPTIONS_EXPRESSION.length());
-         return new ArazzoOperationCall(
-               operationId.substring(ArazzoSubset.SOURCE_DESCRIPTIONS_EXPRESSION.length(), sourceNameEnd),
-               operationId.substring(sourceNameEnd + 1));
+         String sourceName = ArazzoSubset.sourceNameOf(operationId);
+         return new ArazzoOperationCall(sourceName,
+               operationId.substring(ArazzoSubset.SOURCE_DESCRIPTIONS_EXPRESSION.length() + sourceName.length() + 1));
       }
       // Arazzo requires an operationId to name its source when there are several: alone, it calls the only one.
       return new ArazzoOperationCall(sourceNames.get(0), operationId);
