@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+import { ArazzoWorkflowStatus } from './arazzo-document.model';
 
 /** The link between a source description of an Arazzo document and the Microcks API it describes. */
 export type ArazzoSourceLink = {
@@ -78,6 +79,8 @@ export type ArazzoExpressionUse = {
 export type ArazzoWorkflowInput = {
   name: string;
   usedBy: ArazzoExpressionUse[];
+  /** The JSON schema type the workflow declares for the input, such as number. */
+  type?: string;
 };
 
 /** An output of a step that a later step uses. */
@@ -103,4 +106,6 @@ export type ArazzoWorkflowDetail = {
   steps: ArazzoStepDetail[];
   outputs: Record<string, string>;
   dataPassings: ArazzoDataPassing[];
+  /** Whether the workflow can run, else why. */
+  status: ArazzoWorkflowStatus;
 };

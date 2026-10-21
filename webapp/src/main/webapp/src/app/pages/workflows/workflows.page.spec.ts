@@ -17,12 +17,15 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { of } from 'rxjs';
 
+import { BsModalService } from 'ngx-bootstrap/modal';
+
 import { routes } from '../../app.routes';
 import { ArazzoDocumentSummary } from '../../models/arazzo-document.model';
 import { ServiceType } from '../../models/service.model';
 import { ArazzoDocumentsService } from '../../services/arazzo-documents.service';
 import { UploaderDialogService } from '../../services/uploader-dialog.service';
 import { WorkflowsPageComponent } from './workflows.page';
+import { WorkflowRunDialogComponent } from './workflow-run-dialog/workflow-run.dialog';
 
 const PASTRY_SCENARIOS: ArazzoDocumentSummary = {
   id: 'pastry-doc',
@@ -102,6 +105,7 @@ class FakeArazzoDocumentsService {
 
 describe('WorkflowsPageComponent', () => {
   let uploaderDialog: jasmine.SpyObj<UploaderDialogService>;
+  let modals: jasmine.SpyObj<BsModalService>;
 
   function openPage(documents: ArazzoDocumentSummary[]): ComponentFixture<WorkflowsPageComponent> {
     uploaderDialog = jasmine.createSpyObj<UploaderDialogService>('UploaderDialogService', [
@@ -109,10 +113,12 @@ describe('WorkflowsPageComponent', () => {
       'registerPageRefreshCallback',
       'unregisterPageRefreshCallback',
     ]);
+    modals = jasmine.createSpyObj<BsModalService>('BsModalService', ['show']);
     TestBed.configureTestingModule({
       imports: [WorkflowsPageComponent],
       providers: [
         provideRouter([]),
+        { provide: BsModalService, useValue: modals },
         { provide: ArazzoDocumentsService, useValue: new FakeArazzoDocumentsService(documents) },
         { provide: UploaderDialogService, useValue: uploaderDialog },
       ],
@@ -246,16 +252,30 @@ describe('WorkflowsPageComponent', () => {
     expect(texts(fixture, '.workflows-document-title')).toEqual(['Order fulfilment']);
   });
 
-  it('shows the run controls disabled until workflows can run', () => {
+  it('runs a workflow that can run from its Run button, the last result filter being available soon', () => {
     const fixture = openPage([PASTRY_SCENARIOS]);
 
     const runButtons = Array.from(element(fixture).querySelectorAll('button.workflows-run')) as HTMLButtonElement[];
-    expect(runButtons.length).toBe(2);
-    expect(runButtons.every((button) => button.disabled)).toBeTrue();
+    expect(runButtons.map((button) => button.disabled)).toEqual([false, false]);
+    runButtons[1].click();
+
+    expect(modals.show).toHaveBeenCalledWith(WorkflowRunDialogComponent, jasmine.objectContaining({
+      initialState: { documentId: 'pastry-doc', workflowIds: ['readThenReprice', 'listThenReadFirst'],
+        workflowId: 'listThenReadFirst' }
+    }));
     const resultFilter = element(fixture).querySelector('#workflows-result-filter') as HTMLSelectElement;
     expect(resultFilter.disabled).toBeTrue();
     const availableSoon = Array.from(element(fixture).querySelectorAll('[title="Available soon"]'));
-    expect(availableSoon.length).toBe(3);
+    expect(availableSoon.length).toBe(1);
+  });
+
+  it('keeps the Run button of a workflow that cannot run disabled, telling why', () => {
+    const fixture = openPage([ORDER_FULFILMENT]);
+
+    const runButtons = Array.from(element(fixture).querySelectorAll('button.workflows-run')) as HTMLButtonElement[];
+    expect(runButtons.map((button) => button.disabled)).toEqual([false, true]);
+    expect(runButtons[1].parentElement?.getAttribute('title')).toEqual('API Order API 1.0.0 not found');
+    expect(runButtons[0].parentElement?.getAttribute('title')).toBeNull();
   });
 
   it('expands the first document only, and counts the workflows of a collapsed one', () => {

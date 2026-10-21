@@ -21,7 +21,8 @@ import java.util.List;
  * An input of an Arazzo workflow, with where it is used.
  * @param name   The name of the input
  * @param usedBy Where the steps use the input, in the order of the steps
+ * @param type   The JSON schema type the workflow declares for the input, such as number; null when it declares none
  * @author SebastienDegodez
  */
-public record ArazzoWorkflowInput(String name, List<ArazzoExpressionUse> usedBy) {
+public record ArazzoWorkflowInput(String name, List<ArazzoExpressionUse> usedBy, String type) {
 }

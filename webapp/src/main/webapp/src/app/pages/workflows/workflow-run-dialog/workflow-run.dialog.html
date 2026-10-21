@@ -1,0 +1,93 @@
+<div class="modal-header workflow-run-dialog-header">
+  <h4 class="modal-title">Run workflow</h4>
+  <button type="button" class="close" aria-label="Close" (click)="bsModalRef.hide()">
+    <span class="pficon pficon-close" aria-hidden="true"></span>
+  </button>
+</div>
+
+<div class="modal-body workflow-run-dialog">
+  <div class="workflow-run-field">
+    <label for="workflow-run-workflow" class="workflow-run-label">Workflow</label>
+    <select id="workflow-run-workflow" class="form-control" name="workflow" [ngModel]="workflowId"
+            (ngModelChange)="selectWorkflow($event)">
+      <option *ngFor="let workflow of workflows" [value]="workflow.workflowId">{{ workflow.workflowId }} · {{ workflow.steps.length }} {{ workflow.steps.length === 1 ? 'step' : 'steps' }}{{ workflow.status.runnable ? '' : ' · not runnable' }}</option>
+    </select>
+  </div>
+
+  <ng-container *ngIf="selected as workflow">
+    <p *ngIf="!workflow.status.runnable" class="workflow-run-not-runnable">
+      <span class="pficon pficon-warning-triangle-o" aria-hidden="true"></span>
+      Not runnable: {{ workflow.status.reasons.join(', ') }}
+    </p>
+
+    <fieldset class="workflow-run-targets">
+      <legend class="workflow-run-section">Run against</legend>
+      <label class="workflow-run-target workflow-run-target-selected">
+        <input type="radio" name="workflow-run-target" value="MOCKS" checked>
+        <span class="workflow-run-target-text">
+          <span class="workflow-run-target-title">Microcks mocks</span>
+          <span class="workflow-run-target-description">
+            Each step calls the mocks of its linked API<ng-container *ngIf="mocksExample(workflow) as example">, for example&ngsp;<code class="workflow-run-chip">{{ example }}</code>&ngsp;</ng-container>. Checks that the mock examples form a coherent scenario.
+          </span>
+        </span>
+      </label>
+      <label class="workflow-run-target workflow-run-target-disabled" [title]="availableSoon">
+        <input type="radio" name="workflow-run-target" value="IMPLEMENTATIONS" disabled>
+        <span class="workflow-run-target-text">
+          <span class="workflow-run-target-title">Implementations</span>
+          <span class="workflow-run-target-description">
+            Each step calls the base URL you set per source description. Checks the real services against the workflow.
+          </span>
+        </span>
+      </label>
+    </fieldset>
+
+    <h5 class="workflow-run-section">Inputs</h5>
+    <div *ngIf="workflow.inputs.length" class="workflow-run-inputs">
+      <div *ngFor="let input of workflow.inputs" class="workflow-run-input">
+        <label [for]="'workflow-run-input-' + input.name" class="workflow-run-input-label">
+          <code class="workflow-run-chip workflow-run-input-name">{{ input.name }}</code>
+        </label>
+        <input *ngIf="inputKind(input) === 'number'" [id]="'workflow-run-input-' + input.name" class="form-control"
+               type="number" [name]="'input-' + input.name" [(ngModel)]="values[input.name]">
+        <input *ngIf="inputKind(input) !== 'number'" [id]="'workflow-run-input-' + input.name" class="form-control"
+               type="text" [name]="'input-' + input.name" [(ngModel)]="values[input.name]">
+        <p *ngIf="input.usedBy.length" class="workflow-run-input-use">
+          <ng-container *ngFor="let part of useOf(input)">{{ part.text }}<code *ngIf="part.code" class="workflow-run-chip">{{ part.code }}</code></ng-container>
+        </p>
+      </div>
+    </div>
+    <p *ngIf="!workflow.inputs.length" class="workflow-run-no-input">This workflow declares no input.</p>
+
+    <h5 class="workflow-run-section">Options</h5>
+    <label class="workflow-run-validation" [title]="availableSoon">
+      <input type="checkbox" name="validation" disabled>
+      <span class="workflow-run-target-text">
+        <span class="workflow-run-option-title">Validate each response against its OpenAPI schema</span>
+        <span class="workflow-run-target-description">
+          Uses the validators of OpenAPI contract tests: a step fails on a non-conformant response, even when its
+          criteria hold.
+        </span>
+      </span>
+    </label>
+    <div class="workflow-run-field">
+      <label for="workflow-run-timeout" class="workflow-run-label">Timeout per step (ms)</label>
+      <input id="workflow-run-timeout" type="number" min="1" class="form-control workflow-run-timeout" name="timeout"
+             [(ngModel)]="timeout">
+    </div>
+
+    <div *ngIf="error" class="alert alert-danger workflow-run-error" role="alert">
+      <span class="pficon pficon-error-circle-o" aria-hidden="true"></span>
+      {{ error }}
+    </div>
+  </ng-container>
+</div>
+
+<div class="modal-footer workflow-run-footer">
+  <span class="workflow-run-summary">{{ workflowId }} against Microcks mocks</span>
+  <button type="button" class="btn btn-default workflow-run-cancel" (click)="bsModalRef.hide()">Cancel</button>
+  <button type="button" class="btn btn-primary workflow-run-launch" [disabled]="running || !selected?.status?.runnable"
+          (click)="run()">
+    <span class="workflow-run-play" aria-hidden="true"></span>Run
+  </button>
+</div>

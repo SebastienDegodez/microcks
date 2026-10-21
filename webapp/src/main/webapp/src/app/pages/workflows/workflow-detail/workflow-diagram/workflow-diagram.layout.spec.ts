@@ -49,7 +49,8 @@ function readThenReprice(): ArazzoWorkflowDetail {
       }
     ],
     outputs: { before: '$steps.readPastry.outputs.price', after: '$steps.reprice.outputs.price' },
-    dataPassings: [{ fromStepId: 'readPastry', outputName: 'name', to: { stepId: 'reprice', place: 'path', target: 'name' } }]
+    dataPassings: [{ fromStepId: 'readPastry', outputName: 'name', to: { stepId: 'reprice', place: 'path', target: 'name' } }],
+    status: { workflowId: 'readThenReprice', runnable: true, reasons: [] }
   };
 }
 

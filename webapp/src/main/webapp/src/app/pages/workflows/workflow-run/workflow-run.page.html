@@ -1,0 +1,125 @@
+<div *ngIf="state | async as state" class="workflow-run-page">
+  <div class="container-fluid breadcrumb-bar">
+    <div class="row">
+      <ol class="breadcrumb">
+        <li><a [routerLink]="['/workflows']">Workflows</a></li>
+        <ng-container *ngIf="state.run as run">
+          <li><a [routerLink]="['/workflows', run.documentId, run.workflowId]">{{ run.documentTitle }} - {{ run.documentVersion }}</a></li>
+          <li><span [title]="availableSoon">Runs</span></li>
+          <li>Run</li>
+        </ng-container>
+      </ol>
+    </div>
+  </div>
+
+  <div *ngIf="!state.run" class="blank-slate-pf workflow-run-not-found">
+    <p>This run does not exist.</p>
+  </div>
+
+  <ng-container *ngIf="state.run as run">
+    <div class="workflow-run-header">
+      <div class="workflow-run-header-text">
+        <h1 class="workflow-run-title">
+          <span class="workflow-run-status-icon" aria-hidden="true"
+                [ngClass]="{ 'pficon pficon-ok': run.status === 'SUCCESS', 'pficon pficon-error-circle-o': run.status === 'FAILURE', 'spinner spinner-inline': run.status === 'IN_PROGRESS' }"></span>
+          Run ·&ngsp;<code class="workflow-run-title-id">{{ run.workflowId }}</code>&ngsp;{{ outcome(run) }}
+        </h1>
+        <p class="workflow-run-subtitle">Ran {{ startedOn(run) | timeAgo }} against Microcks mocks · {{ run.elapsedTime }} ms</p>
+      </div>
+      <div class="workflow-run-actions">
+        <button type="button" class="btn btn-default workflow-run-again" (click)="runAgain(run)">Run again</button>
+      </div>
+    </div>
+
+    <div *ngIf="failure(run) as failure" class="workflow-run-failure" role="alert">
+      <span class="pficon pficon-error-circle-o" aria-hidden="true"></span>
+      <p>
+        <ng-container *ngIf="failure.step as step">
+          <strong>Step {{ step.index + 1 }}, {{ step.stepId }}, failed</strong><ng-container *ngIf="failure.unmet.length">.
+            Success {{ failure.unmet.length === 1 ? 'criterion' : 'criteria' }}<ng-container *ngFor="let criterion of failure.unmet; let last = last">&ngsp;<code class="workflow-run-chip">{{ criterion.condition }}</code>{{ last ? '' : ',' }}</ng-container>
+            did not hold<ng-container *ngIf="evaluated(failure.unmet) as seen">: {{ seen }}</ng-container></ng-container><ng-container *ngIf="!failure.unmet.length && failure.message">: {{ failure.message }}</ng-container>. The workflow stopped there and produced no outputs.
+        </ng-container>
+        <ng-container *ngIf="!failure.step">The run failed: {{ failure.message }}</ng-container>
+      </p>
+    </div>
+
+    <h2 class="workflow-run-section-title">Properties</h2>
+    <dl class="workflow-run-properties">
+      <div class="workflow-run-property">
+        <dt>Workflow</dt>&ngsp;<dd><a [routerLink]="['/workflows', run.documentId, run.workflowId]">{{ run.workflowId }}</a> in {{ run.documentTitle }} {{ run.documentVersion }}</dd>
+      </div>
+      <div class="workflow-run-property">
+        <dt>Target</dt>&ngsp;<dd>Microcks mocks<ng-container *ngFor="let source of run.sources">&ngsp;·&ngsp;<code class="workflow-run-chip" [title]="source.sourceName + ': ' + source.apiName + ' ' + source.apiVersion">{{ source.baseUrl }}</code></ng-container></dd>
+      </div>
+      <div class="workflow-run-property">
+        <dt>Inputs</dt>&ngsp;<dd>
+          <span *ngFor="let input of entries(run.inputs)" class="workflow-run-value"><code class="workflow-run-chip">{{ input.name }}</code> = <code class="workflow-run-chip">{{ input.value }}</code>&ngsp;</span>
+          <span *ngIf="!entries(run.inputs).length" class="workflow-run-muted">None declared</span>
+        </dd>
+      </div>
+      <div *ngIf="run.status === 'SUCCESS'" class="workflow-run-property">
+        <dt>Outputs</dt>&ngsp;<dd>
+          <span *ngFor="let output of entries(run.outputs)" class="workflow-run-value"><code class="workflow-run-chip">{{ output.name }}</code> = <code class="workflow-run-chip">{{ output.value }}</code>&ngsp;</span>
+          <span *ngIf="!entries(run.outputs).length" class="workflow-run-muted">None declared</span>
+        </dd>
+      </div>
+    </dl>
+
+    <h2 class="workflow-run-section-title">Steps</h2>
+    <div class="workflow-run-steps">
+      <div *ngFor="let step of run.steps" class="workflow-run-step" [attr.data-step-id]="step.stepId"
+           [class.workflow-run-step-failed]="step.status === 'FAILED'"
+           [class.workflow-run-step-not-run]="step.status === 'NOT_RUN'">
+        <div class="workflow-run-step-heading">
+          <button *ngIf="step.status !== 'NOT_RUN'" type="button" class="btn btn-link workflow-run-step-toggle"
+                  [attr.aria-expanded]="isExpanded(step)"
+                  [attr.aria-label]="(isExpanded(step) ? 'Collapse ' : 'Expand ') + step.stepId" (click)="toggle(step)">
+            <span class="fa" [class.fa-angle-down]="isExpanded(step)" [class.fa-angle-right]="!isExpanded(step)" aria-hidden="true"></span>
+          </button>
+          <span *ngIf="step.status === 'NOT_RUN'" class="workflow-run-step-toggle-space"></span>
+          <span class="workflow-run-step-status" aria-hidden="true"
+                [ngClass]="{ 'pficon pficon-ok': step.status === 'PASSED', 'pficon pficon-error-circle-o': step.status === 'FAILED', 'fa fa-circle-o': step.status === 'NOT_RUN' }"></span>
+          <span class="workflow-run-step-title">{{ step.index + 1 }} · {{ step.stepId }}</span>&ngsp;<span class="workflow-run-protocol-chip">REST</span>&ngsp;<code class="workflow-run-endpoint">{{ step.operation.method }} {{ step.operation.path }}</code>&ngsp;<span class="workflow-run-operation">{{ step.operation.operationId }}</span>&ngsp;<span class="workflow-run-step-result">
+            <ng-container *ngIf="step.status === 'NOT_RUN'">Not run</ng-container>
+            <ng-container *ngIf="step.status !== 'NOT_RUN'">{{ step.statusCode ?? 'No response' }} · {{ step.elapsedTime }} ms</ng-container>
+          </span>
+        </div>
+
+        <div *ngIf="isExpanded(step)" class="workflow-run-step-body">
+          <p *ngIf="step.message" class="workflow-run-step-message">
+            <span class="pficon pficon-error-circle-o" aria-hidden="true"></span>&ngsp;<span>{{ step.message }}</span>
+          </p>
+          <ng-container *ngIf="entries(step.outputs) as outputs">
+            <ng-container *ngIf="outputs.length">
+              <h4 class="workflow-run-step-section">Outputs</h4>
+              <div *ngFor="let output of outputs" class="workflow-run-step-output">
+                <code class="workflow-run-chip">{{ output.name }}</code> = <code class="workflow-run-chip">{{ output.value }}</code>
+              </div>
+            </ng-container>
+          </ng-container>
+          <ng-container *ngIf="step.criteria.length">
+            <h4 class="workflow-run-step-section">Success criteria</h4>
+            <table class="table workflow-run-criteria">
+              <thead>
+                <tr><th>Criterion</th><th>Evaluated</th><th>Result</th></tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let criterion of step.criteria" class="workflow-run-criterion">
+                  <td><code class="workflow-run-chip">{{ criterion.condition }}</code></td>
+                  <td>
+                    <div *ngFor="let value of criterion.values"><code class="workflow-run-chip">{{ value.expression }}</code> = {{ json(value.value) }}</div>
+                  </td>
+                  <td [class.workflow-run-held]="criterion.held" [class.workflow-run-not-held]="!criterion.held">
+                    <span class="pficon" [class.pficon-ok]="criterion.held" [class.pficon-error-circle-o]="!criterion.held" aria-hidden="true"></span>
+                    {{ criterion.held ? 'Passed' : 'Failed' }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </ng-container>
+        </div>
+      </div>
+      <p *ngIf="!run.steps.length" class="workflow-run-muted workflow-run-no-step">No step has run yet.</p>
+    </div>
+  </ng-container>
+</div>

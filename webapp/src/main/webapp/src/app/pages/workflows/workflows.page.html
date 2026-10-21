@@ -128,8 +128,10 @@
             <div class="workflows-workflow-result">
               <ng-container *ngIf="workflow.lastResult === 'NEVER_RUN'">Never run</ng-container>
             </div>
-            <span class="workflows-soon" title="Available soon">
-              <button type="button" class="btn btn-default workflows-run" disabled>
+            <span class="workflows-run-control" [class.workflows-soon]="!workflow.status.runnable"
+              [attr.title]="notRunnableReason(workflow)">
+              <button type="button" class="btn btn-default workflows-run" [disabled]="!workflow.status.runnable"
+                (click)="openRun(document, workflow)">
                 <span class="workflows-run-icon" aria-hidden="true">▷</span> Run
               </button>
             </span>

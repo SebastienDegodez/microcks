@@ -1,0 +1,159 @@
+/*
+ * Copyright The Microcks Authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *  http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package io.github.microcks.web;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.github.microcks.repository.ArazzoDocumentRepository;
+import io.github.microcks.repository.ArazzoSourcesRepository;
+import io.github.microcks.repository.WorkflowResultRepository;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+/**
+ * Integration tests of the run endpoints: launching a run hands it to the Arazzo minion, which reports it back as the
+ * contract tells, and the run is read as reported.
+ * @author SebastienDegodez
+ */
+class ArazzoRunControllerIT extends AbstractBaseIT {
+
+   private static final String FIXTURES = "target/test-classes/io/github/microcks/service/arazzo/";
+   private static final StubArazzoMinion MINION = new StubArazzoMinion();
+   private static final ObjectMapper JSON = new ObjectMapper();
+
+   @Autowired
+   private ArazzoDocumentRepository arazzoDocumentRepository;
+
+   @Autowired
+   private ArazzoSourcesRepository arazzoSourcesRepository;
+
+   @Autowired
+   private WorkflowResultRepository workflowResultRepository;
+
+   @DynamicPropertySource
+   static void minionUrl(DynamicPropertyRegistry registry) {
+      registry.add("arazzo-minion.url", MINION::url);
+   }
+
+   @AfterEach
+   void deleteDocumentsAndRuns() {
+      arazzoDocumentRepository.deleteAll();
+      arazzoSourcesRepository.deleteAll();
+      workflowResultRepository.deleteAll();
+      MINION.runRequests().clear();
+   }
+
+   @AfterAll
+   static void stopTheMinion() {
+      MINION.stop();
+   }
+
+   @Test
+   void aLaunchedRunIsHandedToTheMinionThenReadAsItReportsIt() throws Exception {
+      String documentId = pastryScenariosAreImported("pastry-scenarios.arazzo.yaml");
+
+      ResponseEntity<String> launched = launch(documentId, "listThenReadFirst");
+
+      assertEquals(201, launched.getStatusCode().value(), launched.getBody());
+      String runId = JSON.readTree(launched.getBody()).get("id").asText();
+      assertEquals("/api/arazzo/runs/" + runId, launched.getHeaders().getLocation().toString());
+      ObjectNode runRequest = (ObjectNode) JSON.readTree(MINION.runRequests().get(0));
+      assertEquals(List.of(runId, "listThenReadFirst", "/rest/API+Pastry+-+2.0/2.0.0"),
+            List.of(runRequest.get("runId").asText(), runRequest.get("workflowId").asText(),
+                  runRequest.get("sources").get("pastryApi").get("baseUrl").asText()));
+      assertEquals("IN_PROGRESS", run(runId).get("status").asText());
+
+      JsonNode contract = ArazzoMinionContractTest.contract();
+      assertEquals(204, report(runId, "steps", contract.get("notRunStep")));
+      assertEquals(204, report(runId, "steps", contract.get("passedStep")));
+      assertEquals(204, report(runId, "outcome", contract.get("runOutcome")));
+
+      JsonNode run = run(runId);
+      assertEquals("SUCCESS", run.get("status").asText());
+      assertEquals(List.of("0 readPastry PASSED " + runId + "-0", "2 reprice NOT_RUN none"),
+            List.of(describe(run.get("steps").get(0)), describe(run.get("steps").get(1))));
+      assertEquals(contract.get("runOutcome").get("outputs"), run.get("outputs"));
+      assertEquals(200, restTemplate.getForEntity("/api/tests/" + runId + "/messages/" + runId + "-0", String.class)
+            .getStatusCode().value());
+   }
+
+   @Test
+   void aWorkflowThatCannotRunIsRefusedWithItsReason() throws Exception {
+      String documentId = pastryScenariosAreImported("pastry-delete.arazzo.yaml");
+
+      ResponseEntity<String> refused = launch(documentId, "readThenReprice");
+
+      assertEquals(400, refused.getStatusCode().value());
+      assertEquals("Workflow readThenReprice cannot run: Operation DeletePastry not found in API Pastry - 2.0 2.0.0",
+            refused.getBody());
+      assertEquals(List.of(), MINION.runRequests());
+   }
+
+   @Test
+   void anUnknownWorkflowOrRunIsNotFound() throws Exception {
+      String documentId = pastryScenariosAreImported("pastry-scenarios.arazzo.yaml");
+
+      assertEquals(404, launch(documentId, "unknown").getStatusCode().value());
+      assertEquals(404, restTemplate.getForEntity("/api/arazzo/runs/unknown", String.class).getStatusCode().value());
+      assertEquals(404, report("unknown", "steps", ArazzoMinionContractTest.contract().get("passedStep")));
+      assertEquals(404, report("unknown", "outcome", ArazzoMinionContractTest.contract().get("runOutcome")));
+   }
+
+   private String pastryScenariosAreImported(String fixture) throws Exception {
+      uploadArtifactFile(FIXTURES + "api-pastry-2.0.openapi.yaml", true);
+      uploadArtifactFile(FIXTURES + fixture, true);
+      uploadArtifactFile(FIXTURES + "pastry.arazzo-sources.yaml", false);
+      return JSON.readTree(restTemplate.getForObject("/api/arazzo/documents", String.class)).get(0).get("id").asText();
+   }
+
+   private ResponseEntity<String> launch(String documentId, String workflowId) {
+      return restTemplate.postForEntity("/api/arazzo/documents/" + documentId + "/workflows/" + workflowId + "/runs",
+            json("{\"inputs\": {}, \"timeout\": 10000}"), String.class);
+   }
+
+   private int report(String runId, String kind, JsonNode report) {
+      return restTemplate.postForEntity("/api/arazzo/runs/" + runId + "/" + kind, json(report.toString()), String.class)
+            .getStatusCode().value();
+   }
+
+   private JsonNode run(String runId) throws Exception {
+      return JSON.readTree(restTemplate.getForObject("/api/arazzo/runs/" + runId, String.class));
+   }
+
+   private static String describe(JsonNode step) {
+      return step.get("index").asInt() + " " + step.get("stepId").asText() + " " + step.get("status").asText() + " "
+            + step.path("testCaseId").asText("none");
+   }
+
+   private static HttpEntity<String> json(String body) {
+      HttpHeaders headers = new HttpHeaders();
+      headers.setContentType(MediaType.APPLICATION_JSON);
+      return new HttpEntity<>(body, headers);
+   }
+}

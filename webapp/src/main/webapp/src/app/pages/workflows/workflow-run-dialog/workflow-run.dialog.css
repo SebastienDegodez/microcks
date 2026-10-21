@@ -1,0 +1,185 @@
+/* Screen 5 of the mock-up: a compact form, grouped by what the API developer decides. */
+.workflow-run-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px;
+  border-top: 3px solid var(--primary-500);
+  border-bottom: 1px solid var(--divider-light);
+  background: var(--background);
+}
+
+.workflow-run-dialog-header .modal-title {
+  flex: 1;
+  margin: 0;
+  text-align: left;
+  font-size: 18px;
+  font-weight: 400;
+  color: var(--text-strong);
+}
+
+.workflow-run-dialog-header .close {
+  float: none;
+  opacity: 0.7;
+}
+
+.workflow-run-dialog {
+  padding: 20px;
+}
+
+.workflow-run-field {
+  margin-bottom: 20px;
+}
+
+.workflow-run-label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.workflow-run-section {
+  margin: 20px 0 10px;
+  padding: 0;
+  border: none;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.workflow-run-targets {
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+/* Run targets: one card per target, the selected one marked by its radio. */
+.workflow-run-target,
+.workflow-run-validation {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  margin: 0 0 8px;
+  font-weight: 400;
+}
+
+.workflow-run-target {
+  padding: 14px 18px;
+  border: 1px solid var(--divider-light);
+  background: var(--background);
+}
+
+.workflow-run-target input,
+.workflow-run-validation input {
+  margin-top: 3px;
+}
+
+.workflow-run-target-disabled,
+.workflow-run-validation {
+  cursor: not-allowed;
+}
+
+.workflow-run-target-disabled .workflow-run-target-text,
+.workflow-run-validation .workflow-run-target-text {
+  opacity: 0.65;
+}
+
+.workflow-run-target-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.workflow-run-target-title,
+.workflow-run-option-title {
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.workflow-run-target-description {
+  color: var(--text-secondary);
+}
+
+code.workflow-run-chip {
+  padding: 1px 4px;
+  border-radius: 1px;
+  background: var(--surface-muted);
+  color: var(--text-strong);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* Inputs: two per row, each with where the workflow uses it. */
+.workflow-run-inputs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px 16px;
+}
+
+.workflow-run-input-label {
+  margin-bottom: 6px;
+}
+
+.workflow-run-input-name {
+  font-weight: 700;
+}
+
+.workflow-run-input-use {
+  margin: 6px 0 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.workflow-run-no-input,
+.workflow-run-not-runnable {
+  color: var(--text-secondary);
+}
+
+.workflow-run-not-runnable .pficon {
+  color: var(--status-warning);
+}
+
+.workflow-run-timeout {
+  max-width: 220px;
+}
+
+.workflow-run-error {
+  margin: 16px 0 0;
+}
+
+/* Footer: what will run on the left, the actions on the right. */
+.workflow-run-footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--divider-light);
+  background: var(--surface-subtle);
+}
+
+.workflow-run-summary {
+  flex: 1;
+  text-align: left;
+  color: var(--text-secondary);
+}
+
+.workflow-run-footer .btn {
+  margin: 0;
+  padding: 9px 16px;
+  font-weight: 600;
+}
+
+.workflow-run-play::before {
+  content: '\25B7';
+  margin-right: 6px;
+}
+
+@media (max-width: 480px) {
+  .workflow-run-footer {
+    flex-wrap: wrap;
+  }
+
+  .workflow-run-summary {
+    flex-basis: 100%;
+  }
+}
