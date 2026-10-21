@@ -15,9 +15,11 @@
  */
 package io.github.microcks.web;
 
+import io.github.microcks.domain.ArazzoDocument;
 import io.github.microcks.domain.Secret;
 import io.github.microcks.domain.Service;
 import io.github.microcks.repository.SecretRepository;
+import io.github.microcks.service.ArazzoDocumentService;
 import io.github.microcks.service.ArtifactInfo;
 import io.github.microcks.service.ServiceService;
 import io.github.microcks.util.HTTPDownloader;
@@ -41,6 +43,8 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.channels.Channels;
 import java.nio.channels.ReadableByteChannel;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Optional;
@@ -59,18 +63,22 @@ public class UploadArtifactController {
 
    private final ServiceService serviceService;
    private final SecretRepository secretRepository;
+   private final ArazzoDocumentService arazzoDocumentService;
 
    @Value("${default-artifacts-repository.url:#{null}}")
    private Optional<String> defaultArtifactsRepositoryUrl;
 
    /**
     * Build a new UploadArtifactController with its dependencies.
-    * @param serviceService   to perform business logic on Services
-    * @param secretRepository to retrieve requested Secrets
+    * @param serviceService        to perform business logic on Services
+    * @param secretRepository      to retrieve requested Secrets
+    * @param arazzoDocumentService to import Arazzo documents
     */
-   public UploadArtifactController(ServiceService serviceService, SecretRepository secretRepository) {
+   public UploadArtifactController(ServiceService serviceService, SecretRepository secretRepository,
+         ArazzoDocumentService arazzoDocumentService) {
       this.serviceService = serviceService;
       this.secretRepository = secretRepository;
+      this.arazzoDocumentService = arazzoDocumentService;
    }
 
    @PostMapping(value = "/artifact/download")
@@ -136,6 +144,13 @@ public class UploadArtifactController {
             try (ReadableByteChannel rbc = Channels.newChannel(file.getInputStream());
                   FileOutputStream fos = new FileOutputStream(localFile)) {
                fos.getChannel().transferFrom(rbc, 0, Long.MAX_VALUE);
+            }
+
+            // Arazzo documents describe workflows across APIs rather than an API: they have their own import.
+            String content = new String(Files.readAllBytes(Paths.get(localFile)), StandardCharsets.UTF_8);
+            if (arazzoDocumentService.isArazzoDocument(content)) {
+               ArazzoDocument document = arazzoDocumentService.importArazzoDocument(content);
+               return new ResponseEntity<>(document.getTitle() + ":" + document.getVersion(), HttpStatus.CREATED);
             }
 
             // Now try importing services.
