@@ -17,12 +17,16 @@ package io.github.microcks.util.arazzo;
 
 import com.fasterxml.jackson.databind.JsonNode;
 
+import java.util.List;
+
 /**
  * The part of the Arazzo specification Microcks supports. A document outside of it is refused rather than partly
  * ignored.
  * @author SebastienDegodez
  */
 final class ArazzoSubset {
+
+   private static final List<String> UNSUPPORTED_STEP_FIELDS = List.of("onFailure");
 
    private ArazzoSubset() {
    }
@@ -35,6 +39,24 @@ final class ArazzoSubset {
       String arazzoVersion = document.path("arazzo").asText();
       if (!arazzoVersion.startsWith("1.")) {
          throw new UnsupportedArazzoDocumentException("Unsupported Arazzo version: " + arazzoVersion);
+      }
+      for (JsonNode workflow : document.path("workflows")) {
+         checkWorkflow(workflow);
+      }
+   }
+
+   private static void checkWorkflow(JsonNode workflow) throws UnsupportedArazzoDocumentException {
+      for (JsonNode step : workflow.path("steps")) {
+         rejectFields(step, UNSUPPORTED_STEP_FIELDS, "step");
+      }
+   }
+
+   private static void rejectFields(JsonNode node, List<String> fields, String owner)
+         throws UnsupportedArazzoDocumentException {
+      for (String field : fields) {
+         if (node.has(field)) {
+            throw new UnsupportedArazzoDocumentException("Unsupported " + owner + " field: " + field);
+         }
       }
    }
 }

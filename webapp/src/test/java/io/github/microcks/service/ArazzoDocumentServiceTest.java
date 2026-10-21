@@ -71,6 +71,16 @@ class ArazzoDocumentServiceTest {
    }
 
    @Test
+   void aFeatureOutsideTheSupportedSubsetIsRefusedWithItsReason() throws Exception {
+      String content = fixture("step-on-failure.arazzo.yaml");
+
+      MockRepositoryImportException refusal = assertThrows(MockRepositoryImportException.class,
+            () -> service.importArazzoDocument(content));
+
+      assertEquals("Unsupported step field: onFailure", refusal.getMessage());
+   }
+
+   @Test
    void aDocumentThatIsNeitherYamlNorJsonIsRefused() throws Exception {
       String content = fixture("unparseable.arazzo.yaml");
 
