@@ -51,7 +51,12 @@ public class ArazzoDocumentService {
     */
    public ArazzoDocument importArazzoDocument(String content) throws MockRepositoryImportException {
       ArazzoDescription description = read(parse(content));
-      ArazzoDocument document = new ArazzoDocument();
+      // Re-importing the same title and version updates the existing document.
+      ArazzoDocument document = arazzoDocumentRepository.findByTitleAndVersion(description.title(),
+            description.version());
+      if (document == null) {
+         document = new ArazzoDocument();
+      }
       document.setTitle(description.title());
       document.setVersion(description.version());
       document.setWorkflowIds(description.workflowIds());

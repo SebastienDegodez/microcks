@@ -81,6 +81,16 @@ class ArazzoDocumentServiceTest {
    }
 
    @Test
+   void reImportingTheSameTitleAndVersionUpdatesTheDocument() throws Exception {
+      service.importArazzoDocument(fixture("pastry.arazzo.yaml"));
+
+      service.importArazzoDocument(fixture("pastry-revision.arazzo.yaml"));
+
+      assertEquals(List.of("API Pastry scenarios 1.0.0: [readThenReprice, listThenReadFirst, repriceAll]"), repository
+            .findAll().stream().map(d -> d.getTitle() + " " + d.getVersion() + ": " + d.getWorkflowIds()).toList());
+   }
+
+   @Test
    void aDocumentThatIsNeitherYamlNorJsonIsRefused() throws Exception {
       String content = fixture("unparseable.arazzo.yaml");
 
