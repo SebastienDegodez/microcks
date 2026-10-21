@@ -84,7 +84,8 @@ public final class ArazzoDocumentReader {
       return workflowCalls;
    }
 
-   private static ArazzoOperationCall call(String operationId, List<String> sourceNames) {
+   /** The operation a step calls, also read by {@link ArazzoWorkflowReader}. */
+   static ArazzoOperationCall call(String operationId, List<String> sourceNames) {
       if (operationId.startsWith(ArazzoSubset.SOURCE_DESCRIPTIONS_EXPRESSION)) {
          String sourceName = ArazzoSubset.sourceNameOf(operationId);
          return new ArazzoOperationCall(sourceName,
