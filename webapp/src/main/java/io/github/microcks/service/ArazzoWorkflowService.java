@@ -15,15 +15,20 @@
  */
 package io.github.microcks.service;
 
+import io.github.microcks.domain.ArazzoApiUsage;
 import io.github.microcks.domain.ArazzoDataPassing;
 import io.github.microcks.domain.ArazzoDocument;
 import io.github.microcks.domain.ArazzoExpressionUse;
 import io.github.microcks.domain.ArazzoSourceDescription;
 import io.github.microcks.domain.ArazzoStepCall;
+import io.github.microcks.domain.ArazzoLastResult;
 import io.github.microcks.domain.ArazzoStepCriterion;
 import io.github.microcks.domain.ArazzoStepDetail;
+import io.github.microcks.domain.ArazzoStepOperation;
 import io.github.microcks.domain.ArazzoStepParameter;
 import io.github.microcks.domain.ArazzoStepRequestBody;
+import io.github.microcks.domain.ArazzoUsingDocument;
+import io.github.microcks.domain.ArazzoUsingWorkflow;
 import io.github.microcks.domain.ArazzoWorkflowDetail;
 import io.github.microcks.domain.ArazzoWorkflowInput;
 import io.github.microcks.repository.ArazzoDocumentRepository;
@@ -36,10 +41,14 @@ import io.github.microcks.util.arazzo.ArazzoUse;
 import io.github.microcks.util.arazzo.ArazzoWorkflow;
 import io.github.microcks.util.arazzo.ArazzoWorkflowReader;
 
+import org.springframework.data.domain.Sort;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.MissingNode;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -76,6 +85,49 @@ public class ArazzoWorkflowService {
    public Optional<ArazzoWorkflowDetail> getWorkflowDetail(String documentId, String workflowId) {
       return arazzoDocumentRepository.findById(documentId).flatMap(document -> ArazzoWorkflowReader
             .workflow(parse(document.getContent()), workflowId).map(workflow -> detail(document, workflow)));
+   }
+
+   /**
+    * Tell which workflows use an API, and how many workflows call each of its operations.
+    * @param serviceId The id of the API
+    * @return The workflows using the API, by document, with the number of workflows calling each of its operations
+    */
+   public ArazzoApiUsage getApiUsage(String serviceId) {
+      List<ArazzoUsingDocument> documents = new ArrayList<>();
+      Map<String, Integer> operationWorkflowCounts = new HashMap<>();
+      for (ArazzoDocument document : arazzoDocumentRepository.findAll(Sort.by("title", "version"))) {
+         Map<String, ResolvedSource> sources = arazzoDocumentService.resolveSources(document);
+         List<ArazzoUsingWorkflow> workflows = new ArrayList<>();
+         for (String workflowId : document.getWorkflowIds()) {
+            List<ArazzoStepCall> apiCalls = document.getWorkflowCalls().get(workflowId).stream()
+                  .filter(call -> serviceId.equals(sources.get(call.sourceName()).serviceId())).toList();
+            if (!apiCalls.isEmpty()) {
+               workflows.add(new ArazzoUsingWorkflow(workflowId, ArazzoLastResult.NEVER_RUN));
+               calledOperationNames(apiCalls, sources)
+                     .forEach(operationName -> operationWorkflowCounts.merge(operationName, 1, Integer::sum));
+            }
+         }
+         if (!workflows.isEmpty()) {
+            documents.add(
+                  new ArazzoUsingDocument(document.getId(), document.getTitle(), document.getVersion(), workflows));
+         }
+      }
+      return new ArazzoApiUsage(documents, operationWorkflowCounts);
+   }
+
+   /**
+    * A workflow calls each Microcks operation once, however many of its steps call it; an operation the API does not
+    * define has no Microcks operation.
+    */
+   private static Set<String> calledOperationNames(List<ArazzoStepCall> apiCalls, Map<String, ResolvedSource> sources) {
+      Set<String> operationNames = new HashSet<>();
+      for (ArazzoStepCall call : apiCalls) {
+         ArazzoStepOperation operation = sources.get(call.sourceName()).operations().get(call.operationId());
+         if (operation != null) {
+            operationNames.add(operation.method() + " " + operation.path());
+         }
+      }
+      return operationNames;
    }
 
    private ArazzoWorkflowDetail detail(ArazzoDocument document, ArazzoWorkflow workflow) {
