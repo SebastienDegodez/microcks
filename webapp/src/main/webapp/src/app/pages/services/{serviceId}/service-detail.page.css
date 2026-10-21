@@ -47,3 +47,16 @@
   flex: 1 1 250px;
   min-width: 0;
 }
+.service-workflow {
+  margin-right: 12px;
+}
+.service-workflow-never-run {
+  margin-right: 4px;
+  color: var(--text-secondary);
+}
+.service-workflows-document {
+  color: var(--text-secondary);
+}
+.service-operation-workflows {
+  margin-right: 20px;
+}
