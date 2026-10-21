@@ -54,13 +54,13 @@ class ArazzoDocumentReaderTest {
    }
 
    @Test
-   void theSourceDescriptionsOfADocumentAreReadByName() throws IOException {
-      assertEquals(List.of("pastryApi"), ArazzoDocumentReader.sourceDescriptionNames(document("pastry.arazzo.yaml")));
+   void theArazzoVersionOfADocumentIsRead() throws IOException {
+      assertEquals("1.0.1", ArazzoDocumentReader.arazzoVersion(document("pastry.arazzo.yaml")));
    }
 
    @Test
-   void theArazzoVersionOfADocumentIsRead() throws IOException {
-      assertEquals("1.0.1", ArazzoDocumentReader.arazzoVersion(document("pastry.arazzo.yaml")));
+   void theSourceDescriptionsOfADocumentAreReadByName() throws IOException {
+      assertEquals(List.of("pastryApi"), ArazzoDocumentReader.sourceDescriptionNames(document("pastry.arazzo.yaml")));
    }
 
    @ParameterizedTest

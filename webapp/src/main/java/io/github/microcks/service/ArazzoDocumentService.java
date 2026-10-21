@@ -22,6 +22,7 @@ import io.github.microcks.domain.ArazzoSourceLink;
 import io.github.microcks.domain.ArazzoSourceSummary;
 import io.github.microcks.domain.ArazzoSources;
 import io.github.microcks.domain.ArazzoStepCall;
+import io.github.microcks.domain.ArazzoStepOperation;
 import io.github.microcks.domain.ArazzoWorkflowStatus;
 import io.github.microcks.domain.ArazzoWorkflowSummary;
 import io.github.microcks.domain.Resource;
@@ -48,10 +49,10 @@ import com.fasterxml.jackson.databind.node.MissingNode;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -254,21 +255,54 @@ public class ArazzoDocumentService {
          Map<String, ResolvedSource> sources) {
       Set<String> reasons = new LinkedHashSet<>();
       for (ArazzoStepCall call : calls) {
-         ResolvedSource source = sources.get(call.sourceName());
-         ArazzoSourceLink link = source.link();
-         if (link.apiName() == null) {
-            reasons.add(NO_API_NAME_AND_VERSION);
-         } else if (!link.linked()) {
-            reasons.add("API " + link.apiName() + " " + link.apiVersion() + " not found");
-         } else if (!source.operationIds().contains(call.operationId())) {
-            reasons
-                  .add("Operation " + call.operationId() + " not found in " + link.apiName() + " " + link.apiVersion());
+         String reason = operationOf(call, sources).reason();
+         if (reason != null) {
+            reasons.add(reason);
          }
       }
       return new ArazzoWorkflowStatus(workflowId, reasons.isEmpty(), List.copyOf(reasons));
    }
 
-   private Map<String, ResolvedSource> resolveSources(ArazzoDocument document) {
+   /**
+    * @param call    The operation a step calls
+    * @param sources The source descriptions of the document, resolved
+    * @return The operation found in the linked API, or why it is not found
+    */
+   static ArazzoStepOperation operationOf(ArazzoStepCall call, Map<String, ResolvedSource> sources) {
+      ResolvedSource source = sources.get(call.sourceName());
+      ArazzoSourceLink link = source.link();
+      String unlinkedReason = unlinkedReason(link);
+      if (unlinkedReason != null) {
+         return notFound(call, unlinkedReason);
+      }
+      ArazzoStepOperation operation = source.operations().get(call.operationId());
+      if (operation == null) {
+         return notFound(call,
+               "Operation " + call.operationId() + " not found in " + link.apiName() + " " + link.apiVersion());
+      }
+      return operation;
+   }
+
+   /**
+    * @param link The link of a source description
+    * @return Why the source is not linked, null when it is linked
+    */
+   static String unlinkedReason(ArazzoSourceLink link) {
+      if (link.apiName() == null) {
+         return NO_API_NAME_AND_VERSION;
+      }
+      if (!link.linked()) {
+         return "API " + link.apiName() + " " + link.apiVersion() + " not found";
+      }
+      return null;
+   }
+
+   private static ArazzoStepOperation notFound(ArazzoStepCall call, String reason) {
+      return new ArazzoStepOperation(call.sourceName(), call.operationId(), null, null, reason);
+   }
+
+   /** Resolve each source description of a document, in the order of the document. */
+   Map<String, ResolvedSource> resolveSources(ArazzoDocument document) {
       ArazzoSources overlay = arazzoSourcesRepository.findByNameAndVersion(document.getTitle(), document.getVersion());
       Map<String, ResolvedSource> sources = new LinkedHashMap<>();
       for (String sourceName : document.getSourceNames()) {
@@ -280,38 +314,40 @@ public class ArazzoDocumentService {
    private ResolvedSource resolve(String sourceName, ArazzoSources overlay) {
       ServiceRef api = overlay == null ? null : overlay.getSources().get(sourceName);
       if (api == null) {
-         return new ResolvedSource(new ArazzoSourceLink(sourceName, null, null, false), null, Set.of());
+         return new ResolvedSource(new ArazzoSourceLink(sourceName, null, null, false), null, Map.of());
       }
       Service service = serviceRepository.findByNameAndVersion(api.getName(), api.getVersion());
       if (service == null) {
          return new ResolvedSource(new ArazzoSourceLink(sourceName, api.getName(), api.getVersion(), false), null,
-               Set.of());
+               Map.of());
       }
       return new ResolvedSource(new ArazzoSourceLink(sourceName, api.getName(), api.getVersion(), true), service,
-            definedOperationIds(service));
+            definedOperations(sourceName, service));
    }
 
    /** An API defines the operations whose operationId appears in the main OpenAPI contract Microcks stored for it. */
-   private Set<String> definedOperationIds(Service service) {
-      Set<String> operationIds = new HashSet<>();
+   private Map<String, ArazzoStepOperation> definedOperations(String sourceName, Service service) {
+      Map<String, ArazzoStepOperation> operations = new HashMap<>();
       for (Resource resource : resourceRepository.findMainByServiceId(service.getId())) {
          if (resource.getType() == ResourceType.OPEN_API_SPEC) {
-            operationIds.addAll(openApiOperationIds(resource.getContent()));
+            operations.putAll(openApiOperations(sourceName, resource.getContent()));
          }
       }
-      return operationIds;
+      return operations;
    }
 
-   private static Set<String> openApiOperationIds(String contract) {
-      Set<String> operationIds = new HashSet<>();
-      for (JsonNode pathItem : readContract(contract).path("paths")) {
-         for (JsonNode operation : pathItem) {
-            if (operation.has("operationId")) {
-               operationIds.add(operation.path("operationId").asText());
+   private static Map<String, ArazzoStepOperation> openApiOperations(String sourceName, String contract) {
+      Map<String, ArazzoStepOperation> operations = new HashMap<>();
+      for (Map.Entry<String, JsonNode> pathItem : readContract(contract).path("paths").properties()) {
+         for (Map.Entry<String, JsonNode> operation : pathItem.getValue().properties()) {
+            if (operation.getValue().has("operationId")) {
+               String operationId = operation.getValue().path("operationId").asText();
+               operations.put(operationId, new ArazzoStepOperation(sourceName, operationId,
+                     operation.getKey().toUpperCase(Locale.ROOT), pathItem.getKey(), null));
             }
          }
       }
-      return operationIds;
+      return operations;
    }
 
    private static JsonNode readContract(String contract) {
@@ -331,10 +367,14 @@ public class ArazzoDocumentService {
    }
 
    /**
-    * A source description with its link, the linked API (null when not linked) and the operationIds the linked API
-    * defines.
+    * A source description with its link, the linked API (null when not linked) and the operations the linked API
+    * defines, by operationId.
     */
-   private record ResolvedSource(ArazzoSourceLink link, Service api, Set<String> operationIds) {
+   record ResolvedSource(ArazzoSourceLink link, Service api, Map<String, ArazzoStepOperation> operations) {
+
+      String serviceId() {
+         return api == null ? null : api.getId();
+      }
 
       ArazzoSourceSummary summary() {
          return api == null ? new ArazzoSourceSummary(link, null, null)

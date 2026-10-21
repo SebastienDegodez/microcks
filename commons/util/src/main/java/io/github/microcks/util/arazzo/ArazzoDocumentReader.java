@@ -57,6 +57,14 @@ public final class ArazzoDocumentReader {
 
    /**
     * @param document The Arazzo document, parsed from YAML or JSON
+    * @return The version of Arazzo the document uses
+    */
+   public static String arazzoVersion(JsonNode document) {
+      return document.path("arazzo").asText();
+   }
+
+   /**
+    * @param document The Arazzo document, parsed from YAML or JSON
     * @return The names of its source descriptions, in the order of the document
     */
    public static List<String> sourceDescriptionNames(JsonNode document) {
@@ -65,14 +73,6 @@ public final class ArazzoDocumentReader {
          names.add(sourceDescription.path("name").asText());
       }
       return names;
-   }
-
-   /**
-    * @param document The Arazzo document, parsed from YAML or JSON
-    * @return The version of the Arazzo specification the document uses
-    */
-   public static String arazzoVersion(JsonNode document) {
-      return document.path("arazzo").asText();
    }
 
    /**
@@ -105,7 +105,8 @@ public final class ArazzoDocumentReader {
       return workflowCalls;
    }
 
-   private static ArazzoOperationCall call(String operationId, List<String> sourceNames) {
+   /** The operation a step calls, also read by {@link ArazzoWorkflowReader}. */
+   static ArazzoOperationCall call(String operationId, List<String> sourceNames) {
       if (operationId.startsWith(ArazzoSubset.SOURCE_DESCRIPTIONS_EXPRESSION)) {
          String sourceName = ArazzoSubset.sourceNameOf(operationId);
          return new ArazzoOperationCall(sourceName,
