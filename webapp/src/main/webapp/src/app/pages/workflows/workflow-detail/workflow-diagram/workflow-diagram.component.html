@@ -1,0 +1,65 @@
+<div class="workflow-diagram">
+  <div class="diagram-canvas" [style.width.px]="diagram.width" [style.height.px]="diagram.height">
+    <svg class="diagram-edges" aria-hidden="true" [attr.width]="diagram.width" [attr.height]="diagram.height"
+         [attr.viewBox]="'0 0 ' + diagram.width + ' ' + diagram.height">
+      <defs>
+        <marker id="workflow-diagram-arrow-sequence" class="diagram-arrow-sequence" viewBox="0 0 10 10" refX="9" refY="5"
+                markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" />
+        </marker>
+        <marker id="workflow-diagram-arrow-data" class="diagram-arrow-data" viewBox="0 0 10 10" refX="9" refY="5"
+                markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" />
+        </marker>
+      </defs>
+      <path *ngFor="let edge of diagram.edges; trackBy: trackEdge" class="diagram-edge"
+            [class.diagram-edge-sequence]="edge.kind === 'sequence'" [class.diagram-edge-data]="edge.kind === 'data'"
+            [attr.data-from]="edge.from" [attr.data-to]="edge.to" [attr.d]="edge.path"
+            [attr.marker-end]="'url(#workflow-diagram-arrow-' + edge.kind + ')'" />
+    </svg>
+
+    <ng-container *ngFor="let edge of diagram.edges; trackBy: trackEdge">
+      <div *ngIf="edge.label as label" class="diagram-data-label" [class.diagram-data-label-end]="label.align === 'end'"
+           [attr.data-from]="edge.from" [attr.data-to]="edge.to"
+           [style.left.px]="label.x" [style.top.px]="label.y" [style.width.px]="label.width">
+        <ng-container *ngFor="let line of label.lines"><div>{{ line }}</div>&ngsp;</ng-container>
+      </div>
+    </ng-container>
+
+    <ng-container *ngFor="let node of diagram.nodes; trackBy: trackNode">
+      <div *ngIf="node.kind === 'inputs'" #nodeElement class="diagram-node diagram-node-io" [attr.data-node-id]="node.id"
+           [style.left.px]="node.x" [style.top.px]="node.y" [style.width.px]="node.width">
+        <div class="diagram-node-title">Inputs</div>&ngsp;<div class="diagram-node-body">
+          <ng-container *ngFor="let input of workflow.inputs"><code class="diagram-chip">{{ input.name }}</code>&ngsp;</ng-container>
+          <span *ngIf="!workflow.inputs.length" class="diagram-empty">No input</span>
+        </div>
+      </div>
+
+      <div *ngIf="node.step as step" #nodeElement class="diagram-node diagram-node-step"
+           [class.diagram-node-problem]="!!step.operation.reason" [attr.data-node-id]="node.id"
+           [style.left.px]="node.x" [style.top.px]="node.y" [style.width.px]="node.width"
+           role="button" tabindex="0" [attr.title]="'Show the step ' + step.stepId"
+           (click)="select(node)" (keydown.enter)="select(node)">
+        <div class="diagram-step-title">
+          <span class="workflow-step-number">{{ node.index! + 1 }}</span>&ngsp;<span class="diagram-step-id">{{ step.stepId }}</span>
+        </div>&ngsp;<div *ngIf="!step.operation.reason" class="diagram-step-endpoint">
+          <span class="workflow-protocol-chip">REST</span>&ngsp;<code class="diagram-mono">{{ step.operation.method }} {{ step.operation.path }}</code>
+        </div>&ngsp;<div class="diagram-step-operation">
+          {{ step.operation.operationId }}<ng-container *ngIf="step.operation.reason">&ngsp;<span class="workflow-problem"><span class="pficon pficon-warning-triangle-o" aria-hidden="true"></span>&ngsp;{{ step.operation.reason }}</span></ng-container>
+        </div>&ngsp;<div *ngIf="criteriaOf(step) as criteria" class="diagram-step-criteria">
+          <span class="fa fa-check" aria-hidden="true"></span><code class="diagram-mono">{{ criteria }}</code>
+        </div>
+      </div>
+
+      <div *ngIf="node.kind === 'outputs'" #nodeElement class="diagram-node diagram-node-io" [attr.data-node-id]="node.id"
+           [style.left.px]="node.x" [style.top.px]="node.y" [style.width.px]="node.width">
+        <div class="diagram-node-title">Outputs</div>&ngsp;<div class="diagram-node-body">
+          <div *ngFor="let output of outputsOf(workflow)" class="diagram-output">
+            <code class="diagram-chip">{{ output.name }}</code>&ngsp;<span class="diagram-muted">←</span>&ngsp;<code class="diagram-mono">{{ output.expression }}</code>&ngsp;
+          </div>
+          <span *ngIf="!outputsOf(workflow).length" class="diagram-empty">No output</span>
+        </div>
+      </div>
+    </ng-container>
+  </div>
+</div>

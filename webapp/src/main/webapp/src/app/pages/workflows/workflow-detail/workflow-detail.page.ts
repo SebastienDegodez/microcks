@@ -13,11 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { ChangeDetectionStrategy, Component, OnInit } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, Injector, OnInit, afterNextRender } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ActivatedRoute, ParamMap, RouterLink } from '@angular/router';
+import { ActivatedRoute, ParamMap, Router, RouterLink } from '@angular/router';
 
-import { Observable, of } from 'rxjs';
+import { Observable, combineLatest, of } from 'rxjs';
 import { catchError, map, switchMap } from 'rxjs/operators';
 
 import {
@@ -29,9 +29,13 @@ import {
 } from '../../../models/arazzo-workflow.model';
 import { ArazzoWorkflowService } from '../../../services/arazzo-workflow.service';
 import { TimeAgoPipe } from '../../../components/time-ago.pipe';
+import { WorkflowDiagramComponent } from './workflow-diagram/workflow-diagram.component';
 
-/** The workflow read from the API, or null when it does not exist. */
-type WorkflowState = { workflow: ArazzoWorkflowDetail | null };
+/** The steps as cards, or the workflow as a diagram; the URL keeps it as ?view=diagram so a link can be shared. */
+export type WorkflowView = 'steps' | 'diagram';
+
+/** The workflow read from the API, or null when it does not exist, and the view it is shown in. */
+type WorkflowState = { workflow: ArazzoWorkflowDetail | null; view: WorkflowView };
 
 @Component({
   selector: 'app-workflow-detail-page',
@@ -41,7 +45,8 @@ type WorkflowState = { workflow: ArazzoWorkflowDetail | null };
   imports: [
     CommonModule,
     RouterLink,
-    TimeAgoPipe
+    TimeAgoPipe,
+    WorkflowDiagramComponent
   ]
 })
 export class WorkflowDetailPageComponent implements OnInit {
@@ -50,17 +55,34 @@ export class WorkflowDetailPageComponent implements OnInit {
 
   state!: Observable<WorkflowState>;
 
-  constructor(private workflowSvc: ArazzoWorkflowService, private route: ActivatedRoute) {
+  constructor(private workflowSvc: ArazzoWorkflowService, private route: ActivatedRoute, private router: Router,
+              private host: ElementRef<HTMLElement>, private injector: Injector) {
   }
 
   ngOnInit(): void {
-    this.state = this.route.paramMap.pipe(
+    const workflow = this.route.paramMap.pipe(
       switchMap((params: ParamMap) =>
         this.workflowSvc.getWorkflow(params.get('documentId')!, params.get('workflowId')!).pipe(
-          map(workflow => ({ workflow } as WorkflowState)),
-          catchError(() => of({ workflow: null } as WorkflowState))
+          catchError(() => of(null))
         ))
     );
+    const view = this.route.queryParamMap.pipe(
+      map(params => (params.get('view') === 'diagram' ? 'diagram' : 'steps') as WorkflowView)
+    );
+    this.state = combineLatest([workflow, view]).pipe(map(([workflow, view]) => ({ workflow, view })));
+  }
+
+  showView(view: WorkflowView): Promise<boolean> {
+    return this.router.navigate([], { relativeTo: this.route, queryParamsHandling: 'merge',
+      queryParams: { view: view === 'diagram' ? 'diagram' : null } });
+  }
+
+  /** Shows the steps view and scrolls to the card of the step chosen in the diagram. */
+  openStep(stepId: string): void {
+    this.showView('steps').then(() => afterNextRender(() => {
+      const card = this.host.nativeElement.querySelector('[data-step-id="' + CSS.escape(stepId) + '"]');
+      card?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, { injector: this.injector }));
   }
 
   /** A value is a runtime expression when it starts with $ or embeds one in braces; otherwise it is a constant. */
