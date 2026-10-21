@@ -20,9 +20,16 @@ import java.util.Map;
 
 /**
  * Where the steps calling a source description send their requests.
- * @param baseUrl    The base URL the paths of the operations are appended to
- * @param operations The method and path of each operation of the source, by operationId
+ * @param baseUrl         The base URL the paths of the operations are appended to
+ * @param operations      The method and path of each operation of the source, by operationId
+ * @param openApiContract The OpenAPI contract of the API the source is linked to, to validate the responses against;
+ *                        null when the responses are not validated
  * @author SebastienDegodez
  */
-public record SourceTarget(URI baseUrl, Map<String, OperationTarget> operations) {
+public record SourceTarget(URI baseUrl, Map<String, OperationTarget> operations, String openApiContract) {
+
+   /** A source whose responses are not validated against a contract. */
+   public SourceTarget(URI baseUrl, Map<String, OperationTarget> operations) {
+      this(baseUrl, operations, null);
+   }
 }
