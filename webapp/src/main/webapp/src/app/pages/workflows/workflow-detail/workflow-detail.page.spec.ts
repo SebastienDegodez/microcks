@@ -13,8 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
+import { TestBed } from '@angular/core/testing';
+import { Router, provideRouter } from '@angular/router';
+import { RouterTestingHarness } from '@angular/router/testing';
 import { of, throwError } from 'rxjs';
 
 import { ArazzoWorkflowDetail } from '../../../models/arazzo-workflow.model';
@@ -70,27 +71,35 @@ function readThenReprice(): ArazzoWorkflowDetail {
 }
 
 describe('WorkflowDetailPageComponent', () => {
-  let fixture: ComponentFixture<WorkflowDetailPageComponent>;
+  let harness: RouterTestingHarness;
   let page: HTMLElement;
 
-  async function open(workflow: ArazzoWorkflowDetail | Error): Promise<void> {
+  async function open(workflow: ArazzoWorkflowDetail | Error,
+                      url = '/workflows/doc-1/readThenReprice'): Promise<void> {
     const service = {
       getWorkflow: jasmine.createSpy('getWorkflow')
         .and.returnValue(workflow instanceof Error ? throwError(() => workflow) : of(workflow))
     };
-    await TestBed.configureTestingModule({
-      imports: [WorkflowDetailPageComponent],
+    TestBed.configureTestingModule({
       providers: [
-        provideRouter([]),
-        { provide: ArazzoWorkflowService, useValue: service },
-        { provide: ActivatedRoute,
-          useValue: { paramMap: of(convertToParamMap({ documentId: 'doc-1', workflowId: 'readThenReprice' })) } }
+        provideRouter([{ path: 'workflows/:documentId/:workflowId', component: WorkflowDetailPageComponent }]),
+        { provide: ArazzoWorkflowService, useValue: service }
       ]
-    }).compileComponents();
-    fixture = TestBed.createComponent(WorkflowDetailPageComponent);
-    fixture.detectChanges();
-    page = fixture.nativeElement as HTMLElement;
+    });
+    harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl(url, WorkflowDetailPageComponent);
+    page = harness.routeNativeElement as HTMLElement;
     expect(service.getWorkflow).toHaveBeenCalledWith('doc-1', 'readThenReprice');
+  }
+
+  /** Lets the router navigate and the page render what it navigated to. */
+  async function settle(): Promise<void> {
+    await harness.fixture.whenStable();
+    harness.detectChanges();
+  }
+
+  function currentUrl(): string {
+    return TestBed.inject(Router).url;
   }
 
   function texts(selector: string, root: ParentNode = page): string[] {
