@@ -86,7 +86,7 @@ class ArazzoRunControllerTest {
       ArazzoDocument document = pastryScenariosAreImported("pastry-scenarios.arazzo.yaml");
 
       ResponseEntity<Object> launched = controller.launchRun(document.getId(), "readThenReprice",
-            new ArazzoRunLaunchDTO(Map.of("pastry", "Eclair Cafe"), 10000L));
+            new ArazzoRunLaunchDTO(Map.of("pastry", "Eclair Cafe", "newPrice", 2.6), 10000L));
 
       WorkflowResult run = (WorkflowResult) launched.getBody();
       assertEquals(201, launched.getStatusCode().value());
@@ -112,6 +112,19 @@ class ArazzoRunControllerTest {
       assertEquals(400, refused.getStatusCode().value());
       assertEquals("Workflow readThenReprice cannot run: Operation DeletePastry not found in API Pastry - 2.0 2.0.0",
             refused.getBody());
+   }
+
+   /** S8: a run missing an input is a bad request naming the input. */
+   @Test
+   void aRunMissingAnInputIsABadRequestNamingIt() throws Exception {
+      ArazzoRunController controller = new ArazzoRunController(arazzoRunService);
+      ArazzoDocument document = pastryScenariosAreImported("pastry-scenarios.arazzo.yaml");
+
+      ResponseEntity<Object> refused = controller.launchRun(document.getId(), "readThenReprice",
+            new ArazzoRunLaunchDTO(Map.of("pastry", "Eclair Cafe"), null));
+
+      assertEquals(400, refused.getStatusCode().value());
+      assertEquals("Missing input: newPrice", refused.getBody());
    }
 
    @Test

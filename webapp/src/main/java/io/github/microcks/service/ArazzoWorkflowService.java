@@ -50,6 +50,7 @@ import com.fasterxml.jackson.databind.node.MissingNode;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -145,11 +146,15 @@ public class ArazzoWorkflowService {
                   sources));
    }
 
+   /** The inputs steps use or the workflow declares, then those only its outputs use or its schema requires. */
    private static List<ArazzoWorkflowInput> inputs(ArazzoWorkflow workflow) {
-      return ArazzoDataFlow.inputUses(workflow).entrySet().stream()
+      List<String> neededInputs = ArazzoDataFlow.neededInputs(workflow);
+      Map<String, List<ArazzoUse>> inputUses = new LinkedHashMap<>(ArazzoDataFlow.inputUses(workflow));
+      neededInputs.forEach(inputName -> inputUses.putIfAbsent(inputName, List.of()));
+      return inputUses.entrySet().stream()
             .map(input -> new ArazzoWorkflowInput(input.getKey(),
                   input.getValue().stream().map(ArazzoWorkflowService::expressionUse).toList(),
-                  workflow.inputTypes().get(input.getKey())))
+                  workflow.inputTypes().get(input.getKey()), neededInputs.contains(input.getKey())))
             .toList();
    }
 
@@ -191,7 +196,11 @@ public class ArazzoWorkflowService {
       return new ArazzoStepRequestBody(requestBody.contentType(), requestBody.payload(), requestBody.replacements());
    }
 
-   private static JsonNode parse(String content) {
+   /**
+    * @param content The content of a stored Arazzo document
+    * @return The parsed document; a missing node when it cannot be read
+    */
+   static JsonNode parse(String content) {
       try {
          return ObjectMapperFactory.getYamlObjectMapper().readTree(content);
       } catch (JsonProcessingException jpe) {
