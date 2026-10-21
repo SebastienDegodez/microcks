@@ -17,7 +17,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
-import { WorkflowResult } from '../models/arazzo-run.model';
+import { WorkflowResult, WorkflowRunImplementations } from '../models/arazzo-run.model';
 import { RequestResponsePair } from '../models/service.model';
 
 @Injectable({ providedIn: 'root' })
@@ -28,14 +28,17 @@ export class ArazzoRunService {
   constructor(private http: HttpClient) { }
 
   /**
-   * Run a workflow against the Microcks mocks of its linked APIs.
-   * @param inputs  The inputs of the workflow, by name
-   * @param timeout How long a step waits for its response, in milliseconds
+   * Run a workflow against the Microcks mocks of its linked APIs, or against their implementations.
+   * @param inputs          The inputs of the workflow, by name
+   * @param timeout         How long a step waits for its response, in milliseconds
+   * @param implementations The base URL of each linked source and the secret of the calls; none for the mocks
    */
   public launchRun(documentId: string, workflowId: string, inputs: Record<string, unknown>,
-                   timeout: number): Observable<WorkflowResult> {
+                   timeout: number, implementations?: WorkflowRunImplementations): Observable<WorkflowResult> {
+    const target = implementations
+      ? { implementations: implementations.baseUrls, secretName: implementations.secretName } : {};
     return this.http.post<WorkflowResult>(this.rootUrl + '/documents/' + encodeURIComponent(documentId)
-      + '/workflows/' + encodeURIComponent(workflowId) + '/runs', { inputs, timeout });
+      + '/workflows/' + encodeURIComponent(workflowId) + '/runs', { inputs, timeout, ...target });
   }
 
   public getRun(runId: string): Observable<WorkflowResult> {

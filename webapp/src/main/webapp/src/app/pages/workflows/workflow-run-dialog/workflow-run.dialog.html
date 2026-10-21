@@ -22,8 +22,9 @@
 
     <fieldset class="workflow-run-targets">
       <legend class="workflow-run-section">Run against</legend>
-      <label class="workflow-run-target workflow-run-target-selected">
-        <input type="radio" name="workflow-run-target" value="MOCKS" checked>
+      <label class="workflow-run-target" [class.workflow-run-target-selected]="target === 'MOCKS'">
+        <input type="radio" name="workflow-run-target" value="MOCKS" [checked]="target === 'MOCKS'"
+               (change)="selectTarget('MOCKS')">
         <span class="workflow-run-target-text">
           <span class="workflow-run-target-title">Microcks mocks</span>
           <span class="workflow-run-target-description">
@@ -31,8 +32,9 @@
           </span>
         </span>
       </label>
-      <label class="workflow-run-target workflow-run-target-disabled" [title]="availableSoon">
-        <input type="radio" name="workflow-run-target" value="IMPLEMENTATIONS" disabled>
+      <label class="workflow-run-target" [class.workflow-run-target-selected]="target === 'IMPLEMENTATIONS'">
+        <input type="radio" name="workflow-run-target" value="IMPLEMENTATIONS" [checked]="target === 'IMPLEMENTATIONS'"
+               (change)="selectTarget('IMPLEMENTATIONS')">
         <span class="workflow-run-target-text">
           <span class="workflow-run-target-title">Implementations</span>
           <span class="workflow-run-target-description">
@@ -40,6 +42,24 @@
           </span>
         </span>
       </label>
+      <div *ngIf="target === 'IMPLEMENTATIONS'" class="workflow-run-implementations">
+        <div *ngFor="let source of linkedSources(workflow)" class="workflow-run-base-url">
+          <label [for]="'workflow-run-base-url-' + source.link.sourceName" class="workflow-run-base-url-label">
+            <code class="workflow-run-chip workflow-run-input-name">{{ source.link.sourceName }}</code>&ngsp;<span class="workflow-run-base-url-api">{{ source.link.apiName }} {{ source.link.apiVersion }}</span>
+          </label>
+          <input [id]="'workflow-run-base-url-' + source.link.sourceName" class="form-control" type="url" required
+                 placeholder="http://localhost:8080" [name]="'base-url-' + source.link.sourceName"
+                 [(ngModel)]="baseUrls[source.link.sourceName]">
+        </div>
+        <div class="workflow-run-base-url">
+          <label for="workflow-run-secret" class="workflow-run-secret-label">Secret</label>
+          <select id="workflow-run-secret" class="form-control" name="secret" [(ngModel)]="secretName">
+            <option [ngValue]="null">No secret</option>
+            <option *ngFor="let secret of secrets" [ngValue]="secret.name">{{ secret.name }}</option>
+          </select>
+          <p class="workflow-run-input-use">Every call carries the authorization this secret defines, as in contract tests.</p>
+        </div>
+      </div>
     </fieldset>
 
     <h5 class="workflow-run-section">Inputs</h5>
@@ -86,9 +106,9 @@
 </div>
 
 <div class="modal-footer workflow-run-footer">
-  <span class="workflow-run-summary">{{ workflowId }} against Microcks mocks</span>
+  <span class="workflow-run-summary">{{ workflowId }} against {{ target === 'IMPLEMENTATIONS' ? 'implementations' : 'Microcks mocks' }}</span>
   <button type="button" class="btn btn-default workflow-run-cancel" (click)="bsModalRef.hide()">Cancel</button>
-  <button type="button" class="btn btn-primary workflow-run-launch" [disabled]="running || !selected?.status?.runnable"
+  <button type="button" class="btn btn-primary workflow-run-launch" [disabled]="running || !canRun()"
           (click)="run()">
     <span class="workflow-run-play" aria-hidden="true"></span>Run
   </button>

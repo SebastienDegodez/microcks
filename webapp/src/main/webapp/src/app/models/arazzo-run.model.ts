@@ -28,7 +28,7 @@ export type WorkflowSourceTarget = {
   serviceId: string;
   apiName: string;
   apiVersion: string;
-  /** Relative to Microcks for its mocks, such as /rest/API+Pastry+-+2.0/2.0.0. */
+  /** Relative to Microcks for its mocks, such as /rest/API+Pastry+-+2.0/2.0.0; absolute for an implementation. */
   baseUrl: string;
 };
 
@@ -96,8 +96,16 @@ export type WorkflowResult = {
   timeout?: number;
   steps: WorkflowStepResult[];
   message?: string;
+  /** The secret whose authorization the calls to the implementations carried. */
+  secretRef?: { secretId: string; name: string };
   /** The number of the run in its document, from 1; absent for a run launched before runs were numbered. */
   number?: number;
+};
+
+/** The implementations a run calls instead of the mocks: one base URL per linked source, and an optional secret. */
+export type WorkflowRunImplementations = {
+  baseUrls: Record<string, string>;
+  secretName?: string;
 };
 
 /** What the runs history shows of a run, as GET /api/arazzo/documents/{documentId}/runs answers it. */

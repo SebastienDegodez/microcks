@@ -188,3 +188,41 @@ code.workflow-run-chip {
     flex-basis: 100%;
   }
 }
+
+/* Implementations: below their card, one base URL per linked source, then the secret of the calls. */
+.workflow-run-implementations {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px 16px;
+  margin: -9px 0 8px;
+  padding: 4px 18px 16px 44px;
+  border: 1px solid var(--divider-light);
+  border-top: none;
+  background: var(--background);
+}
+
+.workflow-run-base-url-label,
+.workflow-run-secret-label {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: baseline;
+  margin-bottom: 6px;
+  font-weight: 400;
+}
+
+.workflow-run-secret-label {
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.workflow-run-base-url-api {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+@media (max-width: 480px) {
+  .workflow-run-implementations {
+    padding-left: 18px;
+  }
+}

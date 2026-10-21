@@ -24,7 +24,7 @@
                 [ngClass]="{ 'pficon pficon-ok': run.status === 'SUCCESS', 'pficon pficon-error-circle-o': run.status === 'FAILURE', 'spinner spinner-inline': run.status === 'IN_PROGRESS' }"></span>
           Run<ng-container *ngIf="run.number">&ngsp;#{{ run.number }}</ng-container>&ngsp;·&ngsp;<code class="workflow-run-title-id">{{ run.workflowId }}</code>&ngsp;{{ outcome(run) }}
         </h1>
-        <p class="workflow-run-subtitle">Ran {{ startedOn(run) | timeAgo }} against Microcks mocks · {{ run.elapsedTime }} ms</p>
+        <p class="workflow-run-subtitle">Ran {{ startedOn(run) | timeAgo }} against {{ run.target === 'IMPLEMENTATIONS' ? 'implementations' : 'Microcks mocks' }} · {{ run.elapsedTime }} ms</p>
       </div>
       <div class="workflow-run-actions">
         <button type="button" class="btn btn-default workflow-run-again" (click)="runAgain(run)">Run again</button>
@@ -49,7 +49,11 @@
         <dt>Workflow</dt>&ngsp;<dd><a [routerLink]="['/workflows', run.documentId, run.workflowId]">{{ run.workflowId }}</a> in {{ run.documentTitle }} {{ run.documentVersion }}</dd>
       </div>
       <div class="workflow-run-property">
-        <dt>Target</dt>&ngsp;<dd>Microcks mocks<ng-container *ngFor="let source of run.sources">&ngsp;·&ngsp;<code class="workflow-run-chip" [title]="source.sourceName + ': ' + source.apiName + ' ' + source.apiVersion">{{ source.baseUrl }}</code></ng-container></dd>
+        <dt>Target</dt>&ngsp;<dd *ngIf="run.target === 'IMPLEMENTATIONS'">Implementations<ng-container *ngFor="let source of run.sources">&ngsp;·&ngsp;<span class="workflow-run-target-source" [title]="source.apiName + ' ' + source.apiVersion"><code class="workflow-run-chip">{{ source.sourceName }}</code> → <code class="workflow-run-chip">{{ source.baseUrl }}</code></span></ng-container></dd>
+        <dd *ngIf="run.target !== 'IMPLEMENTATIONS'">Microcks mocks<ng-container *ngFor="let source of run.sources">&ngsp;·&ngsp;<code class="workflow-run-chip" [title]="source.sourceName + ': ' + source.apiName + ' ' + source.apiVersion">{{ source.baseUrl }}</code></ng-container></dd>
+      </div>
+      <div *ngIf="run.secretRef" class="workflow-run-property">
+        <dt>Secret</dt>&ngsp;<dd>{{ run.secretRef.name }}</dd>
       </div>
       <div class="workflow-run-property">
         <dt>Inputs</dt>&ngsp;<dd>
