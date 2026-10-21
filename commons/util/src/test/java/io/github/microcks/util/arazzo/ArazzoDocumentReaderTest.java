@@ -27,6 +27,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -49,6 +50,20 @@ class ArazzoDocumentReaderTest {
       assertEquals(
             new ArazzoDescription("API Pastry scenarios", "1.0.0", List.of("readThenReprice", "listThenReadFirst")),
             ArazzoDocumentReader.read(document("pastry.arazzo.yaml")));
+   }
+
+   @Test
+   void theSourceDescriptionsOfADocumentAreReadByName() throws IOException {
+      assertEquals(List.of("pastryApi"), ArazzoDocumentReader.sourceDescriptionNames(document("pastry.arazzo.yaml")));
+   }
+
+   @ParameterizedTest
+   @CsvSource({ "operation-id-alone, pastryApi, GetPastryByName", "named-source, orderApi, CreateOrder",
+         "dotted-operation-id, orderApi, orders.create" })
+   void theOperationAStepCallsIsReadFromItsOperationId(String example, String sourceName, String operationId)
+         throws IOException {
+      assertEquals(Map.of("callOne", List.of(new ArazzoOperationCall(sourceName, operationId))),
+            ArazzoDocumentReader.workflowCalls(exampleOf("called-sources.arazzo.yaml", example)));
    }
 
    @Test
@@ -82,6 +97,18 @@ class ArazzoDocumentReaderTest {
    @CsvSource({ "depends-on, dependsOn", "success-actions, successActions", "failure-actions, failureActions" })
    void aWorkflowFieldOutsideTheSupportedSubsetIsRefusedWithItsReason(String example, String field) throws IOException {
       assertRefused(example("workflow-fields", example), "Unsupported workflow field: " + field);
+   }
+
+   /**
+    * Permanent refusal, unlike the others: these operationIds are invalid Arazzo, not features the runner does not
+    * handle yet. Arazzo requires an operationId to name its source description when there are several, and a named
+    * source description to be declared by the document; otherwise the step cannot be linked to an API.
+    */
+   @ParameterizedTest
+   @CsvSource({ "lone-operation-id, Ambiguous operationId CreateOrder: the document has several source descriptions",
+         "unknown-source, Unknown source description: unknown" })
+   void anOperationIdArazzoForbidsIsRefusedWithItsReason(String example, String reason) throws IOException {
+      assertRefused(example("operation-ids", example), reason);
    }
 
    /**
@@ -128,18 +155,27 @@ class ArazzoDocumentReaderTest {
    }
 
    /**
-    * @param category The fixture of a category, holding one YAML document per example, each announced by a
-    *                 {@code # example: <name>} comment
+    * @param category The category of unsupported features, see {@link #exampleOf(String, String)}
     * @param example  The name of the example
     * @return The parsed document of that example
     */
    private static JsonNode example(String category, String example) throws IOException {
+      return exampleOf("unsupported/" + category + ".arazzo.yaml", example);
+   }
+
+   /**
+    * @param fixture The fixture of a category, holding one YAML document per example, each announced by a
+    *                {@code # example: <name>} comment
+    * @param example The name of the example
+    * @return The parsed document of that example
+    */
+   private static JsonNode exampleOf(String fixture, String example) throws IOException {
       try (InputStream stream = ArazzoDocumentReaderTest.class
-            .getResourceAsStream("/io/github/microcks/util/arazzo/unsupported/" + category + ".arazzo.yaml")) {
+            .getResourceAsStream("/io/github/microcks/util/arazzo/" + fixture)) {
          String marker = "# example: " + example + " ";
          String document = Arrays.stream(new String(stream.readAllBytes(), StandardCharsets.UTF_8).split("\n---\n"))
                .filter(d -> d.contains(marker)).findFirst()
-               .orElseThrow(() -> new IllegalArgumentException(example + " is not in " + category));
+               .orElseThrow(() -> new IllegalArgumentException(example + " is not in " + fixture));
          return new ObjectMapper(new YAMLFactory()).readTree(document);
       }
    }

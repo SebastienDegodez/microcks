@@ -17,6 +17,7 @@ package io.github.microcks.util.arazzo;
 
 import com.fasterxml.jackson.databind.JsonNode;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -26,6 +27,9 @@ import java.util.Set;
  * @author SebastienDegodez
  */
 final class ArazzoSubset {
+
+   /** The runtime expression prefix of an operationId that names its source description. */
+   static final String SOURCE_DESCRIPTIONS_EXPRESSION = "$sourceDescriptions.";
 
    private static final List<String> UNSUPPORTED_WORKFLOW_FIELDS = List.of("dependsOn", "successActions",
          "failureActions");
@@ -49,8 +53,12 @@ final class ArazzoSubset {
       for (JsonNode sourceDescription : document.path("sourceDescriptions")) {
          checkSourceDescription(sourceDescription);
       }
+      List<String> sourceNames = new ArrayList<>();
+      for (JsonNode sourceDescription : document.path("sourceDescriptions")) {
+         sourceNames.add(sourceDescription.path("name").asText());
+      }
       for (JsonNode workflow : document.path("workflows")) {
-         checkWorkflow(workflow);
+         checkWorkflow(workflow, sourceNames);
       }
    }
 
@@ -61,17 +69,18 @@ final class ArazzoSubset {
       }
    }
 
-   private static void checkWorkflow(JsonNode workflow) throws UnsupportedArazzoDocumentException {
+   private static void checkWorkflow(JsonNode workflow, List<String> sourceNames)
+         throws UnsupportedArazzoDocumentException {
       rejectFields(workflow, UNSUPPORTED_WORKFLOW_FIELDS, "workflow");
       for (JsonNode parameter : workflow.path("parameters")) {
          checkParameter(parameter);
       }
       for (JsonNode step : workflow.path("steps")) {
-         checkStep(step);
+         checkStep(step, sourceNames);
       }
    }
 
-   private static void checkStep(JsonNode step) throws UnsupportedArazzoDocumentException {
+   private static void checkStep(JsonNode step, List<String> sourceNames) throws UnsupportedArazzoDocumentException {
       rejectFields(step, UNSUPPORTED_STEP_FIELDS, "step");
       for (JsonNode parameter : step.path("parameters")) {
          checkParameter(parameter);
@@ -79,6 +88,33 @@ final class ArazzoSubset {
       for (JsonNode criterion : step.path("successCriteria")) {
          checkCriterion(criterion);
       }
+      checkOperationId(step.path("operationId").asText(), sourceNames);
+   }
+
+   /**
+    * Arazzo requires an operationId to name a source description the document declares, and to name one when there are
+    * several.
+    */
+   private static void checkOperationId(String operationId, List<String> sourceNames)
+         throws UnsupportedArazzoDocumentException {
+      if (operationId.startsWith(SOURCE_DESCRIPTIONS_EXPRESSION)) {
+         String sourceName = sourceNameOf(operationId);
+         if (!sourceNames.contains(sourceName)) {
+            throw new UnsupportedArazzoDocumentException("Unknown source description: " + sourceName);
+         }
+      } else if (sourceNames.size() > 1) {
+         throw new UnsupportedArazzoDocumentException(
+               "Ambiguous operationId " + operationId + ": the document has several source descriptions");
+      }
+   }
+
+   /**
+    * @param operationId An operationId naming its source description
+    * @return The name of that source description: a source name has no dot, an operationId may have some
+    */
+   static String sourceNameOf(String operationId) {
+      return operationId.substring(SOURCE_DESCRIPTIONS_EXPRESSION.length(),
+            operationId.indexOf('.', SOURCE_DESCRIPTIONS_EXPRESSION.length()));
    }
 
    private static void checkParameter(JsonNode parameter) throws UnsupportedArazzoDocumentException {

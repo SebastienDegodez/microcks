@@ -18,7 +18,9 @@ package io.github.microcks.util.arazzo;
 import com.fasterxml.jackson.databind.JsonNode;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Reads an Arazzo document. Shared by the Microcks webapp, which imports documents, and the components that run their
@@ -51,5 +53,44 @@ public final class ArazzoDocumentReader {
          workflowIds.add(workflow.path("workflowId").asText());
       }
       return new ArazzoDescription(info.path("title").asText(), info.path("version").asText(), workflowIds);
+   }
+
+   /**
+    * @param document The Arazzo document, parsed from YAML or JSON
+    * @return The names of its source descriptions, in the order of the document
+    */
+   public static List<String> sourceDescriptionNames(JsonNode document) {
+      List<String> names = new ArrayList<>();
+      for (JsonNode sourceDescription : document.path("sourceDescriptions")) {
+         names.add(sourceDescription.path("name").asText());
+      }
+      return names;
+   }
+
+   /**
+    * @param document The Arazzo document, parsed from YAML or JSON
+    * @return For each workflow id, the operations its steps call, in the order of the steps
+    */
+   public static Map<String, List<ArazzoOperationCall>> workflowCalls(JsonNode document) {
+      List<String> sourceNames = sourceDescriptionNames(document);
+      Map<String, List<ArazzoOperationCall>> workflowCalls = new LinkedHashMap<>();
+      for (JsonNode workflow : document.path("workflows")) {
+         List<ArazzoOperationCall> calls = new ArrayList<>();
+         for (JsonNode step : workflow.path("steps")) {
+            calls.add(call(step.path("operationId").asText(), sourceNames));
+         }
+         workflowCalls.put(workflow.path("workflowId").asText(), calls);
+      }
+      return workflowCalls;
+   }
+
+   private static ArazzoOperationCall call(String operationId, List<String> sourceNames) {
+      if (operationId.startsWith(ArazzoSubset.SOURCE_DESCRIPTIONS_EXPRESSION)) {
+         String sourceName = ArazzoSubset.sourceNameOf(operationId);
+         return new ArazzoOperationCall(sourceName,
+               operationId.substring(ArazzoSubset.SOURCE_DESCRIPTIONS_EXPRESSION.length() + sourceName.length() + 1));
+      }
+      // Arazzo requires an operationId to name its source when there are several: alone, it calls the only one.
+      return new ArazzoOperationCall(sourceNames.get(0), operationId);
    }
 }

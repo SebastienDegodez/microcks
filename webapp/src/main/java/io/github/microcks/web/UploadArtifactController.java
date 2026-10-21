@@ -16,6 +16,7 @@
 package io.github.microcks.web;
 
 import io.github.microcks.domain.ArazzoDocument;
+import io.github.microcks.domain.ArazzoSources;
 import io.github.microcks.domain.Secret;
 import io.github.microcks.domain.Service;
 import io.github.microcks.repository.SecretRepository;
@@ -151,6 +152,10 @@ public class UploadArtifactController {
             if (arazzoDocumentService.isArazzoDocument(content)) {
                ArazzoDocument document = arazzoDocumentService.importArazzoDocument(content);
                return new ResponseEntity<>(document.getTitle() + ":" + document.getVersion(), HttpStatus.CREATED);
+            }
+            if (arazzoDocumentService.isArazzoSources(content)) {
+               ArazzoSources overlay = arazzoDocumentService.importArazzoSources(content);
+               return new ResponseEntity<>(overlay.getName() + ":" + overlay.getVersion(), HttpStatus.CREATED);
             }
 
             // Now try importing services.
