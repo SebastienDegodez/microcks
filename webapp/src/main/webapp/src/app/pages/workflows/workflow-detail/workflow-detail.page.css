@@ -1,0 +1,129 @@
+.workflow-run-controls .workflow-run-control {
+  display: inline-block;
+  margin-left: 8px;
+  cursor: not-allowed;
+}
+
+.workflow-subtitle {
+  color: var(--text-secondary);
+}
+
+.workflow-sources {
+  margin-bottom: 20px;
+}
+
+.workflow-source {
+  padding: 4px 0;
+}
+
+.workflow-source-api {
+  margin-left: 8px;
+}
+
+.workflow-problem {
+  margin-left: 8px;
+  color: var(--danger);
+}
+
+.workflow-muted {
+  color: var(--text-secondary);
+}
+
+.workflow-empty {
+  color: var(--text-muted-2);
+  font-style: italic;
+}
+
+.workflow-tabs {
+  margin-bottom: 16px;
+}
+
+.workflow-summary,
+.workflow-description {
+  color: var(--text-default);
+}
+
+.workflow-step {
+  border: 1px solid var(--surface-border);
+  background: var(--background);
+  margin-bottom: 8px;
+}
+
+.workflow-step-heading {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--surface-subtle);
+  border-bottom: 1px solid var(--surface-border);
+}
+
+.workflow-step-number {
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+  margin-right: 8px;
+  border: 2px solid var(--primary-500);
+  border-radius: 50%;
+  color: var(--primary-500);
+  font-weight: 600;
+  line-height: 20px;
+  text-align: center;
+}
+
+.workflow-step-description {
+  margin: 8px 16px 0;
+  color: var(--text-secondary);
+}
+
+.workflow-step-body {
+  padding: 4px 16px 8px;
+}
+
+.workflow-step-section {
+  margin: 12px 0 6px;
+  color: var(--text-subtle);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.workflow-content-type {
+  font-weight: 400;
+  text-transform: none;
+}
+
+.workflow-step-parameter,
+.workflow-step-replacement,
+.workflow-step-output,
+.workflow-step-criterion,
+.workflow-output {
+  margin-bottom: 4px;
+  overflow-wrap: anywhere;
+}
+
+.workflow-step-body-payload {
+  margin-bottom: 6px;
+  padding: 6px 8px;
+  background: var(--surface-muted);
+  border: none;
+  border-radius: 1px;
+  white-space: pre-wrap;
+}
+
+.workflow-data-passing {
+  margin: 0 0 8px 24px;
+  padding-left: 12px;
+  border-left: 2px dashed var(--border-muted);
+  color: var(--text-secondary);
+}
+
+.workflow-table {
+  margin-bottom: 0;
+}
+
+.workflow-table td {
+  overflow-wrap: anywhere;
+}

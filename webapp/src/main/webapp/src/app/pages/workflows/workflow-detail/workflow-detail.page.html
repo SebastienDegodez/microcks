@@ -1,0 +1,177 @@
+<div *ngIf="state | async as state">
+  <div class="container-fluid breadcrumb-bar">
+    <div class="row">
+      <ol class="breadcrumb">
+        <li><a [routerLink]="['/workflows']">Workflows</a></li>
+        <li *ngIf="state.workflow as workflow">{{ workflow.title }} - {{ workflow.version }}</li>
+      </ol>
+    </div>
+  </div>
+
+  <div *ngIf="!state.workflow" class="blank-slate-pf workflow-not-found">
+    <p>This workflow does not exist.</p>
+  </div>
+
+  <ng-container *ngIf="state.workflow as workflow">
+    <h1>
+      {{ workflow.title }} <small>{{ workflow.version }}</small>
+      <div class="pull-right workflow-run-controls">
+        <span class="workflow-run-control" [title]="availableSoon">
+          <button type="button" class="btn btn-default" disabled>
+            <span class="fa fa-history"></span> Runs history
+          </button>
+        </span>
+        <span class="workflow-run-control" [title]="availableSoon">
+          <button type="button" class="btn btn-primary" disabled>
+            <span class="fa fa-play"></span> Run workflow
+          </button>
+        </span>
+      </div>
+    </h1>
+    <small class="workflow-subtitle">{{ workflow.workflowIds.length }} workflow{{ workflow.workflowIds.length > 1 ? 's' : '' }}</small>
+
+    <h3 class="section-label">Source descriptions</h3>
+    <ul class="list-unstyled workflow-sources">
+      <li *ngFor="let source of workflow.sources" class="workflow-source">
+        <code>{{ source.sourceName }}</code>
+        <span *ngIf="source.apiName" class="workflow-source-api">
+          <span class="fa fa-link" aria-hidden="true"></span>
+          {{ source.apiName }} {{ source.apiVersion }}
+        </span>
+        <span *ngIf="sourceProblem(source) as problem" class="workflow-problem">
+          <span class="pficon pficon-warning-triangle-o" aria-hidden="true"></span> {{ problem }}
+        </span>
+      </li>
+    </ul>
+
+    <ul class="nav nav-tabs workflow-tabs">
+      <li *ngFor="let workflowId of workflow.workflowIds" [class.active]="workflowId === workflow.workflowId">
+        <a [routerLink]="['/workflows', workflow.documentId, workflowId]">{{ workflowId }}</a>
+      </li>
+    </ul>
+
+    <div class="row workflow-body">
+      <div class="col-md-8">
+        <p *ngIf="workflow.summary" class="workflow-summary">{{ workflow.summary }}</p>
+        <p *ngIf="workflow.description" class="workflow-description">{{ workflow.description }}</p>
+
+        <div class="workflow-steps">
+          <ng-container *ngFor="let step of workflow.steps; let index = index">
+            <p *ngFor="let passing of passingsTo(workflow, step)" class="workflow-data-passing">
+              <span class="fa fa-long-arrow-down" aria-hidden="true"></span>
+              <code>{{ passing.fromStepId }}.outputs.{{ passing.outputName }}</code>&ngsp;<ng-container [ngSwitch]="passing.to.place">
+                <ng-container *ngSwitchCase="'body'">replaces <code>{{ passing.to.target }}</code> in the request body of</ng-container>
+                <ng-container *ngSwitchCase="'criterion'">is checked by a success criterion of</ng-container>
+                <ng-container *ngSwitchDefault>becomes the <code>{{ passing.to.target }}</code> {{ passing.to.place }} parameter of</ng-container>
+              </ng-container>&ngsp;{{ passing.to.stepId }}
+            </p>
+            <div class="workflow-step" [attr.data-step-id]="step.stepId">
+              <div class="workflow-step-heading">
+                <span class="workflow-step-title">
+                  <span class="workflow-step-number">{{ index + 1 }}</span>&ngsp;<strong>{{ step.stepId }}</strong>
+                </span>
+                <span class="workflow-step-operation">
+                  <ng-container *ngIf="!step.operation.reason">
+                    <code>{{ step.operation.method }} {{ step.operation.path }}</code>
+                    {{ step.operation.operationId }}
+                  </ng-container>
+                  <ng-container *ngIf="step.operation.reason">
+                    <code>{{ step.operation.operationId }}</code>
+                    <span class="workflow-problem">
+                      <span class="pficon pficon-warning-triangle-o" aria-hidden="true"></span>
+                      {{ step.operation.reason }}
+                    </span>
+                  </ng-container>
+                </span>
+              </div>
+              <p *ngIf="step.description" class="workflow-step-description">{{ step.description }}</p>
+
+              <div class="row workflow-step-body">
+                <div class="col-sm-6">
+                  <ng-container *ngIf="step.parameters.length">
+                    <h4 class="workflow-step-section">Parameters</h4>
+                    <div *ngFor="let parameter of step.parameters" class="workflow-step-parameter">
+                      <code>{{ parameter.name }}</code>&ngsp;<span class="workflow-muted">{{ parameter.in }}</span>
+                      {{ isExpression(parameter.value) ? '←' : '=' }} <code>{{ parameter.value }}</code>
+                    </div>
+                  </ng-container>
+
+                  <ng-container *ngIf="step.requestBody as body">
+                    <h4 class="workflow-step-section">Request body
+                      &ngsp;<span *ngIf="body.contentType" class="workflow-muted workflow-content-type">{{ body.contentType }}</span>
+                    </h4>
+                    <pre class="workflow-step-body-payload">{{ body.payload }}</pre>
+                    <div *ngFor="let replacement of entries(body.replacements)" class="workflow-step-replacement">
+                      <code>{{ replacement.name }}</code>&ngsp;<span class="workflow-muted">replaced by</span>&ngsp;<code>{{ replacement.expression }}</code>
+                    </div>
+                  </ng-container>
+
+                  <ng-container *ngIf="entries(step.outputs) as outputs">
+                    <ng-container *ngIf="outputs.length">
+                      <h4 class="workflow-step-section">Outputs</h4>
+                      <div *ngFor="let output of outputs" class="workflow-step-output">
+                        <code>{{ output.name }}</code> ← <code>{{ output.expression }}</code>
+                      </div>
+                    </ng-container>
+                  </ng-container>
+                </div>
+                <div class="col-sm-6">
+                  <ng-container *ngIf="step.successCriteria.length">
+                    <h4 class="workflow-step-section">Success criteria</h4>
+                    <div *ngFor="let criterion of step.successCriteria" class="workflow-step-criterion">
+                      <code>{{ criterion.condition }}</code>
+                      <ng-container *ngIf="criterion.context">
+                        &ngsp;<span class="workflow-muted">on</span>&ngsp;<code>{{ criterion.context }}</code>
+                      </ng-container>
+                      &ngsp;<span *ngIf="criterion.type !== 'simple'" class="workflow-muted">({{ criterion.type }})</span>
+                    </div>
+                  </ng-container>
+                </div>
+              </div>
+            </div>
+          </ng-container>
+        </div>
+      </div>
+
+      <div class="col-md-4">
+        <div class="panel panel-default workflow-inputs">
+          <div class="panel-heading"><h3 class="panel-title">Inputs</h3></div>
+          <table class="table workflow-table">
+            <thead>
+              <tr><th>Name</th><th>Used by</th></tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let input of workflow.inputs" class="workflow-input">
+                <td><code>{{ input.name }}</code></td>
+                <td>
+                  <div *ngFor="let use of inputUses(input)">{{ use }}</div>
+                  <span *ngIf="!input.usedBy.length" class="workflow-muted">Not used</span>
+                </td>
+              </tr>
+              <tr *ngIf="!workflow.inputs.length">
+                <td colspan="2" class="workflow-empty">No input</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="panel panel-default workflow-outputs">
+          <div class="panel-heading"><h3 class="panel-title">Workflow outputs</h3></div>
+          <div class="panel-body">
+            <div *ngFor="let output of entries(workflow.outputs)" class="workflow-output">
+              <code>{{ output.name }}</code> ← <code>{{ output.expression }}</code>
+            </div>
+            <span *ngIf="!entries(workflow.outputs).length" class="workflow-empty">No output</span>
+          </div>
+        </div>
+
+        <div class="panel panel-default workflow-recent-runs">
+          <div class="panel-heading"><h3 class="panel-title">Recent runs</h3></div>
+          <div class="panel-body">
+            <span class="workflow-empty">Never run</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </ng-container>
+</div>
