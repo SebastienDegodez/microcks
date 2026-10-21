@@ -22,6 +22,7 @@ import io.github.microcks.domain.ArazzoSourceSummary;
 import io.github.microcks.domain.ArazzoSources;
 import io.github.microcks.domain.ArazzoStepCall;
 import io.github.microcks.domain.ArazzoStepOperation;
+import io.github.microcks.domain.ArazzoWorkflowExample;
 import io.github.microcks.domain.ArazzoWorkflowStatus;
 import io.github.microcks.domain.ArazzoWorkflowSummary;
 import io.github.microcks.domain.Resource;
@@ -257,26 +258,50 @@ public class ArazzoDocumentService {
          sources.put(source.getKey(), new ServiceRef(null, source.getValue().path("name").asText(),
                source.getValue().path("version").asText()));
       }
-      return saveSources(requiredMetadata(overlay, "name"), requiredMetadata(overlay, "version"), sources);
+      String name = requiredMetadata(overlay, "name");
+      String version = requiredMetadata(overlay, "version");
+      List<ArazzoWorkflowExample> examples = ArazzoExamplesReader.read(overlay.path("examples"),
+            arazzoDocumentRepository.findByTitleAndVersion(name, version), name, version);
+      ArazzoSources arazzoSources = overlayOf(name, version);
+      arazzoSources.setSources(sources);
+      arazzoSources.setExamples(examples);
+      return arazzoSourcesRepository.save(arazzoSources);
    }
 
    /**
-    * Store the ArazzoSources overlay of an Arazzo document, replacing the existing one.
+    * Store the links of the source descriptions of an Arazzo document in its ArazzoSources overlay, replacing the
+    * existing links and keeping the recorded examples of its workflows.
     * @param name    The title of the Arazzo document
     * @param version The version of the Arazzo document
     * @param sources The Microcks API each linked source description is linked to, by name
     * @return The stored overlay
     */
    ArazzoSources saveSources(String name, String version, Map<String, ServiceRef> sources) {
-      // Re-importing the same name and version replaces the existing overlay.
+      ArazzoSources arazzoSources = overlayOf(name, version);
+      arazzoSources.setSources(sources);
+      return arazzoSourcesRepository.save(arazzoSources);
+   }
+
+   /** Re-importing the same name and version replaces the existing overlay. */
+   private ArazzoSources overlayOf(String name, String version) {
       ArazzoSources arazzoSources = arazzoSourcesRepository.findByNameAndVersion(name, version);
       if (arazzoSources == null) {
          arazzoSources = new ArazzoSources();
+         arazzoSources.setName(name);
+         arazzoSources.setVersion(version);
       }
-      arazzoSources.setName(name);
-      arazzoSources.setVersion(version);
-      arazzoSources.setSources(sources);
-      return arazzoSourcesRepository.save(arazzoSources);
+      return arazzoSources;
+   }
+
+   /**
+    * @param document   An imported Arazzo document
+    * @param workflowId The id of a workflow of that document
+    * @return The recorded examples of that workflow, in the order of the overlay of the document
+    */
+   public List<ArazzoWorkflowExample> getExamples(ArazzoDocument document, String workflowId) {
+      ArazzoSources overlay = arazzoSourcesRepository.findByNameAndVersion(document.getTitle(), document.getVersion());
+      return overlay == null ? List.of()
+            : overlay.getExamples().stream().filter(example -> example.workflowId().equals(workflowId)).toList();
    }
 
    /** An overlay is matched to its Arazzo document by its metadata name and version: without them, it links nothing. */
