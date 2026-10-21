@@ -17,7 +17,10 @@ package io.github.microcks.service;
 
 import io.github.microcks.domain.ArazzoSourceLink;
 import io.github.microcks.domain.ArazzoWorkflowStatus;
+import io.github.microcks.domain.Resource;
 import io.github.microcks.repository.RepositoryTestsConfiguration;
+import io.github.microcks.repository.ResourceRepository;
+import io.github.microcks.repository.ServiceRepository;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -52,6 +55,12 @@ class ArazzoSourceLinkTest {
 
    @Autowired
    private ServiceService serviceService;
+
+   @Autowired
+   private ServiceRepository serviceRepository;
+
+   @Autowired
+   private ResourceRepository resourceRepository;
 
    @Test
    void theOverlayLinksASourceToTheApiWithThatNameAndVersion() throws Exception {
@@ -102,6 +111,66 @@ class ArazzoSourceLinkTest {
             sourceLinks("API Pastry scenarios", "1.0.0"));
       assertEquals(
             List.of("readThenReprice: not runnable [Operation DeletePastry not found in API Pastry - 2.0 2.0.0]"),
+            workflowStatuses("API Pastry scenarios", "1.0.0"));
+   }
+
+   @Test
+   void importingTheMissingApiLaterLinksTheSource() throws Exception {
+      apiIsImported("customer-api.openapi.yaml");
+      arazzoDocumentService.importArazzoDocument(fixture("order-fulfilment.arazzo.yaml"));
+      arazzoDocumentService.importArazzoSources(fixture("order-fulfilment.arazzo-sources.yaml"));
+
+      apiIsImported("order-api.openapi.yaml");
+
+      assertEquals(List.of("customerApi -> Customer API 1.0.0: linked", "orderApi -> Order API 1.0.0: linked"),
+            sourceLinks("Order fulfilment", "1.0.0"));
+      assertEquals(List.of("searchThenRead: runnable", "placeOrder: runnable"),
+            workflowStatuses("Order fulfilment", "1.0.0"));
+   }
+
+   @Test
+   void everyReasonIsGivenOnceInTheOrderOfTheSteps() throws Exception {
+      arazzoDocumentService.importArazzoDocument(fixture("order-fulfilment.arazzo.yaml"));
+      arazzoDocumentService.importArazzoSources(fixture("order-fulfilment.arazzo-sources.yaml"));
+
+      assertEquals(
+            List.of("searchThenRead: not runnable [API Customer API 1.0.0 not found]",
+                  "placeOrder: not runnable [API Customer API 1.0.0 not found, API Order API 1.0.0 not found]"),
+            workflowStatuses("Order fulfilment", "1.0.0"));
+   }
+
+   @Test
+   void anApiImportedFromAnotherFormatDefinesNoOperationAStepCanCall() throws Exception {
+      serviceService.createGenericResourceService("API Pastry - 2.0", "2.0.0", "pastry", null);
+      arazzoDocumentService.importArazzoDocument(fixture("pastry.arazzo.yaml"));
+      arazzoDocumentService.importArazzoSources(fixture("pastry.arazzo-sources.yaml"));
+
+      assertEquals(
+            List.of(
+                  "readThenReprice: not runnable [Operation GetPastryByName not found in API Pastry - 2.0 2.0.0, "
+                        + "Operation PatchPastry not found in API Pastry - 2.0 2.0.0]",
+                  "listThenReadFirst: not runnable [Operation GetPastries not found in API Pastry - 2.0 2.0.0, "
+                        + "Operation GetPastryByName not found in API Pastry - 2.0 2.0.0]"),
+            workflowStatuses("API Pastry scenarios", "1.0.0"));
+   }
+
+   @Test
+   void aStoredContractThatCannotBeReadDefinesNoOperation() throws Exception {
+      apiIsImported("api-pastry-2.0.openapi.yaml");
+      for (Resource contract : resourceRepository
+            .findMainByServiceId(serviceRepository.findByNameAndVersion("API Pastry - 2.0", "2.0.0").getId())) {
+         contract.setContent("paths: [ GetPastries");
+         resourceRepository.save(contract);
+      }
+      arazzoDocumentService.importArazzoDocument(fixture("pastry.arazzo.yaml"));
+      arazzoDocumentService.importArazzoSources(fixture("pastry.arazzo-sources.yaml"));
+
+      assertEquals(
+            List.of(
+                  "readThenReprice: not runnable [Operation GetPastryByName not found in API Pastry - 2.0 2.0.0, "
+                        + "Operation PatchPastry not found in API Pastry - 2.0 2.0.0]",
+                  "listThenReadFirst: not runnable [Operation GetPastries not found in API Pastry - 2.0 2.0.0, "
+                        + "Operation GetPastryByName not found in API Pastry - 2.0 2.0.0]"),
             workflowStatuses("API Pastry scenarios", "1.0.0"));
    }
 
