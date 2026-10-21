@@ -18,8 +18,10 @@ package io.github.microcks.web;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.github.microcks.domain.Secret;
 import io.github.microcks.repository.ArazzoDocumentRepository;
 import io.github.microcks.repository.ArazzoSourcesRepository;
+import io.github.microcks.repository.SecretRepository;
 import io.github.microcks.repository.WorkflowResultRepository;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -55,6 +57,9 @@ class ArazzoRunControllerIT extends AbstractBaseIT {
 
    @Autowired
    private WorkflowResultRepository workflowResultRepository;
+
+   @Autowired
+   private SecretRepository secretRepository;
 
    @DynamicPropertySource
    static void minionUrl(DynamicPropertyRegistry registry) {
@@ -144,6 +149,37 @@ class ArazzoRunControllerIT extends AbstractBaseIT {
       assertEquals(404, restTemplate.getForEntity("/api/arazzo/runs/unknown", String.class).getStatusCode().value());
       assertEquals(404, report("unknown", "steps", ArazzoMinionContractTest.contract().get("passedStep")));
       assertEquals(404, report("unknown", "outcome", ArazzoMinionContractTest.contract().get("runOutcome")));
+   }
+
+   @Test
+   void aRunAgainstAnImplementationIsHandedToTheMinionWithItsBaseUrlAndSecret() throws Exception {
+      String documentId = pastryScenariosAreImported("pastry-scenarios.arazzo.yaml");
+      Secret secret = new Secret();
+      secret.setName("pastry-staging-token");
+      secret.setToken("s3cr3t-t0k3n");
+      secret.setTokenHeader("X-Pastry-Token");
+      String secretId = secretRepository.save(secret).getId();
+
+      try {
+         ResponseEntity<String> launched = restTemplate.postForEntity(
+               "/api/arazzo/documents/" + documentId + "/workflows/readThenReprice/runs",
+               json("{\"inputs\": {\"pastry\": \"Eclair Cafe\", \"newPrice\": 2.6}, \"timeout\": 10000, "
+                     + "\"implementations\": {\"pastryApi\": \"http://localhost:8080\"}, "
+                     + "\"secretName\": \"pastry-staging-token\"}"),
+               String.class);
+
+         assertEquals(201, launched.getStatusCode().value(), launched.getBody());
+         JsonNode runRequest = JSON.readTree(MINION.runRequests().get(0));
+         assertEquals("http://localhost:8080", runRequest.get("sources").get("pastryApi").get("baseUrl").asText());
+         assertEquals(ArazzoMinionContractTest.contract().get("implementationRunRequest").get("secret"),
+               runRequest.get("secret"));
+         JsonNode run = run(JSON.readTree(launched.getBody()).get("id").asText());
+         assertEquals(List.of("IMPLEMENTATIONS", "http://localhost:8080", secretId, "pastry-staging-token"),
+               List.of(run.get("target").asText(), run.get("sources").get(0).get("baseUrl").asText(),
+                     run.get("secretRef").get("secretId").asText(), run.get("secretRef").get("name").asText()));
+      } finally {
+         secretRepository.deleteById(secretId);
+      }
    }
 
    private String pastryScenariosAreImported(String fixture) throws Exception {

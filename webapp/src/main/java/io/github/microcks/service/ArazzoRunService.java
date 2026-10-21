@@ -20,6 +20,8 @@ import io.github.microcks.domain.ArazzoStepOperation;
 import io.github.microcks.domain.ArazzoWorkflowStatus;
 import io.github.microcks.domain.Request;
 import io.github.microcks.domain.Response;
+import io.github.microcks.domain.Secret;
+import io.github.microcks.domain.SecretRef;
 import io.github.microcks.domain.WorkflowResult;
 import io.github.microcks.domain.WorkflowRunStatus;
 import io.github.microcks.domain.WorkflowRunTarget;
@@ -28,6 +30,7 @@ import io.github.microcks.domain.WorkflowStepResult;
 import io.github.microcks.repository.ArazzoDocumentRepository;
 import io.github.microcks.repository.RequestRepository;
 import io.github.microcks.repository.ResponseRepository;
+import io.github.microcks.repository.SecretRepository;
 import io.github.microcks.repository.WorkflowResultRepository;
 import io.github.microcks.service.ArazzoDocumentService.ResolvedSource;
 import io.github.microcks.util.arazzo.ArazzoDataFlow;
@@ -42,6 +45,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.regex.Pattern;
 
 /**
  * Service bean running the workflows of Arazzo documents: it records each run, hands it to the Arazzo minion, and
@@ -54,12 +58,16 @@ public class ArazzoRunService {
    /** How long a step waits for its response when the run does not tell. */
    static final long DEFAULT_TIMEOUT = 10000L;
 
+   /** An absolute http or https URL: a scheme, then a host. */
+   private static final Pattern ABSOLUTE_HTTP_URL = Pattern.compile("(?i)https?://[^/?#\\s]+\\S*");
+
    private final ArazzoDocumentRepository arazzoDocumentRepository;
    private final ArazzoDocumentService arazzoDocumentService;
    private final WorkflowResultRepository workflowResultRepository;
    private final RequestRepository requestRepository;
    private final ResponseRepository responseRepository;
    private final ArazzoMinionClient arazzoMinionClient;
+   private final SecretRepository secretRepository;
 
    /**
     * Build a new ArazzoRunService with its required dependencies.
@@ -69,17 +77,19 @@ public class ArazzoRunService {
     * @param requestRepository        The repository the requests of the steps are stored in
     * @param responseRepository       The repository the responses of the steps are stored in
     * @param arazzoMinionClient       The client of the Arazzo minion that executes the runs
+    * @param secretRepository         The repository of the secrets whose authorization the calls of a run carry
     */
    public ArazzoRunService(ArazzoDocumentRepository arazzoDocumentRepository,
          ArazzoDocumentService arazzoDocumentService, WorkflowResultRepository workflowResultRepository,
          RequestRepository requestRepository, ResponseRepository responseRepository,
-         ArazzoMinionClient arazzoMinionClient) {
+         ArazzoMinionClient arazzoMinionClient, SecretRepository secretRepository) {
       this.arazzoDocumentRepository = arazzoDocumentRepository;
       this.arazzoDocumentService = arazzoDocumentService;
       this.workflowResultRepository = workflowResultRepository;
       this.requestRepository = requestRepository;
       this.responseRepository = responseRepository;
       this.arazzoMinionClient = arazzoMinionClient;
+      this.secretRepository = secretRepository;
    }
 
    /**
@@ -93,6 +103,22 @@ public class ArazzoRunService {
     */
    public Optional<WorkflowResult> launchRun(String documentId, String workflowId, Map<String, Object> inputs,
          Long timeout) throws ArazzoRunRefusedException {
+      return launchRun(documentId, workflowId, inputs, timeout, null);
+   }
+
+   /**
+    * Run a workflow against the implementations of the APIs its source descriptions are linked to, or against their
+    * Microcks mocks.
+    * @param documentId      The id of the Arazzo document
+    * @param workflowId      The id of the workflow in that document
+    * @param inputs          The inputs of the workflow, by name
+    * @param timeout         How long a step waits for its response, in milliseconds; null for 10 seconds
+    * @param implementations The base URL of each linked source and the secret of the calls; null for the mocks
+    * @return The run, in progress; empty if the document or the workflow does not exist
+    * @throws ArazzoRunRefusedException if the workflow cannot run, or cannot reach the implementations
+    */
+   public Optional<WorkflowResult> launchRun(String documentId, String workflowId, Map<String, Object> inputs,
+         Long timeout, ArazzoRunImplementations implementations) throws ArazzoRunRefusedException {
       Optional<ArazzoDocument> found = arazzoDocumentRepository.findById(documentId)
             .filter(document -> document.getWorkflowIds().contains(workflowId));
       if (found.isEmpty()) {
@@ -113,14 +139,19 @@ public class ArazzoRunService {
                (missingInputs.size() == 1 ? "Missing input: " : "Missing inputs: ") + String.join(", ", missingInputs));
       }
       List<ResolvedSource> linked = sources.values().stream().filter(source -> source.api() != null).toList();
+      Map<String, String> baseUrls = baseUrlsOf(workflowId, linked, implementations);
+      Secret secret = secretOf(implementations);
       WorkflowResult run = new WorkflowResult();
       run.setDocumentId(document.getId());
       run.setDocumentTitle(document.getTitle());
       run.setDocumentVersion(document.getVersion());
       run.setWorkflowId(workflowId);
-      run.setTarget(WorkflowRunTarget.MOCKS);
-      run.setSources(linked.stream().map(source -> new WorkflowSourceTarget(source.link().sourceName(),
-            source.serviceId(), source.link().apiName(), source.link().apiVersion(), mocksOf(source))).toList());
+      run.setTarget(implementations == null ? WorkflowRunTarget.MOCKS : WorkflowRunTarget.IMPLEMENTATIONS);
+      run.setSources(linked.stream()
+            .map(source -> new WorkflowSourceTarget(source.link().sourceName(), source.serviceId(),
+                  source.link().apiName(), source.link().apiVersion(), baseUrls.get(source.link().sourceName())))
+            .toList());
+      run.setSecretRef(secret == null ? null : new SecretRef(secret.getId(), secret.getName()));
       run.setInputs(givenInputs);
       run.setTimeout(timeout == null ? DEFAULT_TIMEOUT : timeout);
       run.setStatus(WorkflowRunStatus.IN_PROGRESS);
@@ -129,7 +160,7 @@ public class ArazzoRunService {
       WorkflowResult launched = workflowResultRepository.save(run);
       try {
          arazzoMinionClient.launch(new ArazzoRunRequest(launched.getId(), workflowId, document.getContent(),
-               givenInputs, targets(linked), launched.getTimeout()));
+               givenInputs, targets(linked, baseUrls), launched.getTimeout(), authorizationOf(secret)));
       } catch (ArazzoMinionException ame) {
          launched.setStatus(WorkflowRunStatus.FAILURE);
          launched.setMessage(ame.getMessage());
@@ -160,7 +191,56 @@ public class ArazzoRunService {
             + URLEncoder.encode(source.link().apiVersion(), StandardCharsets.UTF_8);
    }
 
-   private static Map<String, ArazzoRunRequest.Source> targets(List<ResolvedSource> linked) {
+   /** Where each linked source is called: its mocks, or the base URL of its implementation. */
+   private static Map<String, String> baseUrlsOf(String workflowId, List<ResolvedSource> linked,
+         ArazzoRunImplementations implementations) throws ArazzoRunRefusedException {
+      Map<String, String> baseUrls = new LinkedHashMap<>();
+      for (ResolvedSource source : linked) {
+         String sourceName = source.link().sourceName();
+         baseUrls.put(sourceName, implementations == null ? mocksOf(source)
+               : implementationOf(workflowId, sourceName, implementations.baseUrls().get(sourceName)));
+      }
+      return baseUrls;
+   }
+
+   /** The base URL set for the implementation of a source, without its trailing slashes. */
+   private static String implementationOf(String workflowId, String sourceName, String baseUrl)
+         throws ArazzoRunRefusedException {
+      String refusal = "Workflow " + workflowId + " cannot run against implementations: ";
+      if (baseUrl == null || baseUrl.isBlank()) {
+         throw new ArazzoRunRefusedException(refusal + "no base URL for source " + sourceName);
+      }
+      String implementation = baseUrl.strip().replaceAll("/+$", "");
+      if (!ABSOLUTE_HTTP_URL.matcher(implementation).matches()) {
+         throw new ArazzoRunRefusedException(refusal + "the base URL of source " + sourceName
+               + " is not an absolute http or https URL: " + implementation);
+      }
+      return implementation;
+   }
+
+   /** The secret chosen for the calls of a run, looked up by its name as contract tests do; null for none. */
+   private Secret secretOf(ArazzoRunImplementations implementations) throws ArazzoRunRefusedException {
+      if (implementations == null || implementations.secretName() == null) {
+         return null;
+      }
+      String secretName = implementations.secretName();
+      List<Secret> secrets = secretRepository.findByName(secretName);
+      if (secrets.isEmpty()) {
+         throw new ArazzoRunRefusedException(String.format(
+               "Secret '%s' not found. Please ensure the secret exists before running the workflow.", secretName));
+      }
+      return secrets.get(0);
+   }
+
+   /** The authorization a secret defines, as the minion applies it to every call; null for no secret. */
+   private static ArazzoRunRequest.Secret authorizationOf(Secret secret) {
+      return secret == null ? null
+            : new ArazzoRunRequest.Secret(secret.getName(), secret.getUsername(), secret.getPassword(),
+                  secret.getToken(), secret.getTokenHeader());
+   }
+
+   private static Map<String, ArazzoRunRequest.Source> targets(List<ResolvedSource> linked,
+         Map<String, String> baseUrls) {
       Map<String, ArazzoRunRequest.Source> targets = new LinkedHashMap<>();
       for (ResolvedSource source : linked) {
          Map<String, ArazzoRunRequest.Operation> operations = new LinkedHashMap<>();
@@ -168,7 +248,8 @@ public class ArazzoRunService {
             operations.put(operation.operationId(),
                   new ArazzoRunRequest.Operation(operation.method(), operation.path()));
          }
-         targets.put(source.link().sourceName(), new ArazzoRunRequest.Source(mocksOf(source), operations));
+         targets.put(source.link().sourceName(),
+               new ArazzoRunRequest.Source(baseUrls.get(source.link().sourceName()), operations));
       }
       return targets;
    }

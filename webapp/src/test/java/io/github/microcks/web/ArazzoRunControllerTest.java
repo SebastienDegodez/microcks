@@ -141,6 +141,35 @@ class ArazzoRunControllerTest {
             .getStatusCode().value());
    }
 
+   @Test
+   void aRunIsLaunchedAgainstTheImplementationsGivenForItsSources() throws Exception {
+      ArazzoRunController controller = new ArazzoRunController(arazzoRunService);
+      ArazzoDocument document = pastryScenariosAreImported("pastry-scenarios.arazzo.yaml");
+
+      ResponseEntity<Object> launched = controller.launchRun(document.getId(), "readThenReprice",
+            new ArazzoRunLaunchDTO(Map.of("pastry", "Eclair Cafe", "newPrice", 2.6), null,
+                  Map.of("pastryApi", "http://localhost:8080"), null));
+
+      WorkflowResult run = (WorkflowResult) launched.getBody();
+      assertEquals(201, launched.getStatusCode().value());
+      assertEquals("IMPLEMENTATIONS pastryApi http://localhost:8080",
+            run.getTarget() + " " + run.getSources().get(0).sourceName() + " " + run.getSources().get(0).baseUrl());
+   }
+
+   @Test
+   void aRunWithAnUnknownSecretIsABadRequestWithItsReason() throws Exception {
+      ArazzoRunController controller = new ArazzoRunController(arazzoRunService);
+      ArazzoDocument document = pastryScenariosAreImported("pastry-scenarios.arazzo.yaml");
+
+      ResponseEntity<Object> refused = controller.launchRun(document.getId(), "readThenReprice",
+            new ArazzoRunLaunchDTO(Map.of("pastry", "Eclair Cafe", "newPrice", 2.6), null,
+                  Map.of("pastryApi", "http://localhost:8080"), "unknown-secret"));
+
+      assertEquals(400, refused.getStatusCode().value());
+      assertEquals("Secret 'unknown-secret' not found. Please ensure the secret exists before running the workflow.",
+            refused.getBody());
+   }
+
    private static <T> T contract(String part, Class<T> type) throws IOException {
       return JSON.treeToValue(ArazzoMinionContractTest.contract().get(part), type);
    }
