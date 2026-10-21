@@ -93,6 +93,19 @@ class WorkflowRunnerIT {
       assertEquals(RunStatus.FAILURE, reporter.outcome().status());
    }
 
+   @Test
+   void theFailingStepShowsWhatItSentAndReceivedAndWhereItsValuesCameFrom() throws Exception {
+      runner.run(runAgainstTheMocks("listThenReadFirst", Map.of()), reporter);
+
+      StepResult readFirst = reporter.step("readFirst");
+      assertEquals(microcksUrl() + "/rest/API+Pastry+-+2.0/2.0.0/pastry/Baba%20Rhum",
+            readFirst.request().uri().toString());
+      assertEquals(400, readFirst.response().status());
+      assertEquals(List.of(new ParameterValue("name", "path", "Baba Rhum", "$steps.list.outputs.first")),
+            readFirst.parameters());
+      assertEquals(Map.of("first", "$response.body#/0/name"), reporter.step("list").outputOrigins());
+   }
+
    private static RunSpecification runAgainstTheMocks(String workflowId, Map<String, Object> inputs) throws Exception {
       return new RunRequestOf(RunFixtures.runOf("pastry-scenarios", workflowId, inputs))
             .against(URI.create(microcksUrl() + "/rest/API+Pastry+-+2.0/2.0.0"));

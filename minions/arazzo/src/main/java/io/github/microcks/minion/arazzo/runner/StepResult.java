@@ -20,20 +20,22 @@ import java.util.Map;
 
 /**
  * A step of a run, as executed. Its index is its place in the execution order of the run.
- * @param index       The place of the step in the execution order, from 0
- * @param stepId      The id of the step in the workflow
- * @param operation   The operation the step calls
- * @param status      How the step ended
- * @param statusCode  The status code of its response; null when it got none
- * @param elapsedTime How long the step took, in milliseconds
- * @param criteria    Its success criteria, evaluated
- * @param outputs     Its outputs, by name; empty when it did not pass
- * @param request     The request it sent; null when it sent none
- * @param response    The response it received; null when it received none
- * @param message     Why the step failed when no criterion tells it; null otherwise
+ * @param index         The place of the step in the execution order, from 0
+ * @param stepId        The id of the step in the workflow
+ * @param operation     The operation the step calls
+ * @param status        How the step ended
+ * @param statusCode    The status code of its response; null when it got none
+ * @param elapsedTime   How long the step took, in milliseconds
+ * @param criteria      Its success criteria, evaluated
+ * @param outputs       Its outputs, by name; empty when it did not pass
+ * @param request       The request it sent; null when it sent none
+ * @param response      The response it received; null when it received none
+ * @param message       Why the step failed when no criterion tells it; null otherwise
+ * @param parameters    The parameters it sent, resolved, in the order of the step; empty when it sent none
+ * @param outputOrigins The runtime expression each of its outputs came from, by output name
  * @author SebastienDegodez
  */
 public record StepResult(int index, String stepId, StepOperation operation, StepStatus status, Integer statusCode,
       long elapsedTime, List<CriterionResult> criteria, Map<String, Object> outputs, HttpCall request,
-      HttpOutcome response, String message) {
+      HttpOutcome response, String message, List<ParameterValue> parameters, Map<String, String> outputOrigins) {
 }

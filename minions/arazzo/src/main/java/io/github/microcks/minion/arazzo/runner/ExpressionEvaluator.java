@@ -39,7 +39,15 @@ final class ExpressionEvaluator {
     * @return The value of the expression, or the constant
     */
    Object resolve(String value, EvaluationContext context) {
-      return value.startsWith("$") ? evaluate(value, context) : value;
+      return isExpression(value) ? evaluate(value, context) : value;
+   }
+
+   /**
+    * @param value A value of the workflow
+    * @return Whether it is a runtime expression rather than a constant
+    */
+   static boolean isExpression(String value) {
+      return value.startsWith("$");
    }
 
    /**

@@ -151,6 +151,16 @@ workflows:
             value: Baba Rhum
         successCriteria:
           - condition: $response.body#/status == 'available'
+  - workflowId: unknownOperation
+    steps:
+      - stepId: deletePastry
+        operationId: DeletePastry
+        parameters:
+          - name: name
+            in: path
+            value: $inputs.pastry
+        successCriteria:
+          - condition: $statusCode == 204
   - workflowId: textPayload
     steps:
       - stepId: reprice

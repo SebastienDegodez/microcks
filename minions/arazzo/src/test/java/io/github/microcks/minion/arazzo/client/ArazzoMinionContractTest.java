@@ -23,6 +23,7 @@ import io.github.microcks.minion.arazzo.runner.ExpressionValue;
 import io.github.microcks.minion.arazzo.runner.HttpCall;
 import io.github.microcks.minion.arazzo.runner.HttpOutcome;
 import io.github.microcks.minion.arazzo.runner.OperationTarget;
+import io.github.microcks.minion.arazzo.runner.ParameterValue;
 import io.github.microcks.minion.arazzo.runner.RunOutcome;
 import io.github.microcks.minion.arazzo.runner.RunSpecification;
 import io.github.microcks.minion.arazzo.runner.RunStatus;
@@ -108,16 +109,19 @@ class ArazzoMinionContractTest {
                   null),
             new HttpOutcome(200, Map.of("Content-Type", List.of("application/json")),
                   "{\"name\":\"Eclair Cafe\",\"price\":2.5,\"status\":\"available\"}"),
-            null);
+            null,
+            List.of(new ParameterValue("name", "path", "Eclair Cafe", "$inputs.pastry"),
+                  new ParameterValue("Accept", "header", "application/json", null)),
+            origins("name", "$response.body#/name", "price", "$response.body#/price"));
       StepResult failed = new StepResult(1, "readFirst", GET_PASTRY_BY_NAME, StepStatus.FAILED, 400, 5,
             List.of(new CriterionResult("$statusCode == 200", List.of(new ExpressionValue("$statusCode", 400)), false)),
             Map.of(), new HttpCall("GET", URI.create(MOCKS + "/pastry/Baba%20Rhum"), Map.of(), null),
             new HttpOutcome(400, Map.of("Content-Type", List.of("text/plain")),
                   "The response /name=Baba Rhum does not exist!"),
-            null);
+            null, List.of(new ParameterValue("name", "path", "Baba Rhum", "$steps.list.outputs.first")), Map.of());
       StepResult notRun = new StepResult(2, "reprice",
             new StepOperation("pastryApi", "PatchPastry", "PATCH", "/pastry/{name}"), StepStatus.NOT_RUN, null, 0,
-            List.of(), Map.of(), null, null, null);
+            List.of(), Map.of(), null, null, null, List.of(), Map.of());
 
       assertEquals(contract.get("passedStep"), written(StepReportDTO.from(passed)));
       assertEquals(contract.get("failedStep"), written(StepReportDTO.from(failed)));
@@ -135,7 +139,7 @@ class ArazzoMinionContractTest {
       List<String> reports = new ArrayList<>();
       MicrocksRunReporter reporter = new MicrocksRunReporter(recording(reports), "6719f0c2a1b2c3d4e5f60718");
       StepResult notRun = new StepResult(2, "reprice", GET_PASTRY_BY_NAME, StepStatus.NOT_RUN, null, 0, List.of(),
-            Map.of(), null, null, null);
+            Map.of(), null, null, null, List.of(), Map.of());
 
       reporter.stepEnded(notRun);
       reporter.runEnded(new RunOutcome(RunStatus.FAILURE, Map.of(), 5, null));
@@ -149,6 +153,13 @@ class ArazzoMinionContractTest {
       outputs.put(name, value);
       outputs.put(otherName, otherValue);
       return outputs;
+   }
+
+   private static Map<String, String> origins(String name, String origin, String otherName, String otherOrigin) {
+      Map<String, String> origins = new LinkedHashMap<>();
+      origins.put(name, origin);
+      origins.put(otherName, otherOrigin);
+      return origins;
    }
 
    /** The JSON a report is written as, read back. */

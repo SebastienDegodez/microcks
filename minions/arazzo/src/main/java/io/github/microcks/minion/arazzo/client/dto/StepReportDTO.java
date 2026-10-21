@@ -22,22 +22,24 @@ import java.util.Map;
 
 /**
  * A step of a run, as the minion reports it to Microcks when it ends.
- * @param index       The place of the step in the execution order of the run, from 0
- * @param stepId      The id of the step in the workflow
- * @param operation   The operation the step calls
- * @param status      PASSED, FAILED or NOT_RUN
- * @param statusCode  The status code of its response; null when none
- * @param elapsedTime How long the step took, in milliseconds
- * @param criteria    Its success criteria, evaluated
- * @param outputs     Its outputs, by name
- * @param request     The request it sent; null when none
- * @param response    The response it received; null when none
- * @param message     Why it failed when no criterion tells it; null otherwise
+ * @param index         The place of the step in the execution order of the run, from 0
+ * @param stepId        The id of the step in the workflow
+ * @param operation     The operation the step calls
+ * @param status        PASSED, FAILED or NOT_RUN
+ * @param statusCode    The status code of its response; null when none
+ * @param elapsedTime   How long the step took, in milliseconds
+ * @param criteria      Its success criteria, evaluated
+ * @param outputs       Its outputs, by name
+ * @param request       The request it sent; null when none
+ * @param response      The response it received; null when none
+ * @param message       Why it failed when no criterion tells it; null otherwise
+ * @param parameters    The parameters it sent, resolved, with the runtime expression each came from
+ * @param outputOrigins The runtime expression each of its outputs came from, by output name
  * @author SebastienDegodez
  */
 public record StepReportDTO(int index, String stepId, StepOperationDTO operation, String status, Integer statusCode,
       long elapsedTime, List<CriterionDTO> criteria, Map<String, Object> outputs, RequestDTO request,
-      ResponseDTO response, String message) {
+      ResponseDTO response, String message, List<ParameterDTO> parameters, Map<String, String> outputOrigins) {
 
    /**
     * @param step A step of a run, as it ended
@@ -58,6 +60,8 @@ public record StepReportDTO(int index, String stepId, StepOperationDTO operation
                         step.request().body()),
             step.response() == null ? null
                   : new ResponseDTO(step.response().status(), step.response().headers(), step.response().body()),
-            step.message());
+            step.message(), step.parameters().stream().map(parameter -> new ParameterDTO(parameter.name(),
+                  parameter.in(), parameter.value(), parameter.expression())).toList(),
+            step.outputOrigins());
    }
 }
