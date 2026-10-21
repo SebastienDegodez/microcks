@@ -252,7 +252,7 @@ describe('WorkflowsPageComponent', () => {
     expect(texts(fixture, '.workflows-document-title')).toEqual(['Order fulfilment']);
   });
 
-  it('runs a workflow that can run from its Run button, the last result filter being available soon', () => {
+  it('runs a workflow that can run from its Run button', () => {
     const fixture = openPage([PASTRY_SCENARIOS]);
 
     const runButtons = Array.from(element(fixture).querySelectorAll('button.workflows-run')) as HTMLButtonElement[];
@@ -263,10 +263,81 @@ describe('WorkflowsPageComponent', () => {
       initialState: { documentId: 'pastry-doc', workflowIds: ['readThenReprice', 'listThenReadFirst'],
         workflowId: 'listThenReadFirst' }
     }));
-    const resultFilter = element(fixture).querySelector('#workflows-result-filter') as HTMLSelectElement;
-    expect(resultFilter.disabled).toBeTrue();
-    const availableSoon = Array.from(element(fixture).querySelectorAll('[title="Available soon"]'));
-    expect(availableSoon.length).toBe(1);
+    expect(element(fixture).querySelectorAll('[title="Available soon"]').length).toBe(0);
+  });
+
+  describe('last results', () => {
+    const MINUTE = 60 * 1000;
+
+    /** API Pastry scenarios after #5 passed readThenReprice on the mocks and #6 failed listThenReadFirst at readFirst. */
+    const RAN_PASTRY_SCENARIOS: ArazzoDocumentSummary = {
+      ...PASTRY_SCENARIOS,
+      workflows: [
+        { ...PASTRY_SCENARIOS.workflows[0], lastResult: 'PASSED', lastRun: { id: 'run-5', number: 5,
+          workflowId: 'readThenReprice', target: 'MOCKS', status: 'SUCCESS', startedDate: Date.now() - 5 * MINUTE,
+          elapsedTime: 21 } },
+        { ...PASTRY_SCENARIOS.workflows[1], lastResult: 'FAILED', lastRun: { id: 'run-6', number: 6,
+          workflowId: 'listThenReadFirst', target: 'MOCKS', status: 'FAILURE', failedStepId: 'readFirst',
+          startedDate: Date.now() - 3 * MINUTE, elapsedTime: 13 } }
+      ]
+    };
+
+    it('shows how the last run of each workflow went, and the last runs of its document', () => {
+      const fixture = openPage([RAN_PASTRY_SCENARIOS, ORDER_FULFILMENT]);
+
+      expect(texts(fixture, '.workflows-workflow-result')).toEqual([
+        'Passed on mocks · 5 minutes ago',
+        'Failed at readFirst · 3 minutes ago'
+      ]);
+      expect(Array.from(element(fixture).querySelectorAll('.workflows-workflow-result a'))
+        .map((link) => link.getAttribute('href'))).toEqual(['/workflows/runs/run-5', '/workflows/runs/run-6']);
+      expect(texts(fixture, '.workflows-document-result')).toEqual(['1 passed 1 failed', 'Never run']);
+    });
+
+    it('tells a run in progress and a run against the implementations', () => {
+      const fixture = openPage([{
+        ...RAN_PASTRY_SCENARIOS,
+        workflows: [
+          { ...RAN_PASTRY_SCENARIOS.workflows[0], lastResult: 'PASSED',
+            lastRun: { ...RAN_PASTRY_SCENARIOS.workflows[0].lastRun!, target: 'IMPLEMENTATIONS' } },
+          { ...RAN_PASTRY_SCENARIOS.workflows[1], lastResult: 'IN_PROGRESS',
+            lastRun: { ...RAN_PASTRY_SCENARIOS.workflows[1].lastRun!, status: 'IN_PROGRESS', failedStepId: undefined } }
+        ]
+      }]);
+
+      expect(texts(fixture, '.workflows-workflow-result')).toEqual([
+        'Passed on implementation · 5 minutes ago',
+        'In progress on mocks · 3 minutes ago'
+      ]);
+      expect(texts(fixture, '.workflows-document-result')).toEqual(['1 passed 1 in progress']);
+    });
+
+    it('lists only the workflows whose last result is the one filtered on', async () => {
+      const fixture = openPage([RAN_PASTRY_SCENARIOS, ORDER_FULFILMENT]);
+      (element(fixture).querySelectorAll('.workflows-document-toggle')[1] as HTMLButtonElement).click();
+      fixture.detectChanges();
+      const resultFilter = element(fixture).querySelector('#workflows-result-filter') as HTMLSelectElement;
+      expect(resultFilter.disabled).toBeFalse();
+      expect(Array.from(resultFilter.options).map((option) => option.textContent?.trim()))
+        .toEqual(['Any last result', 'Passed', 'Failed', 'Never run']);
+
+      resultFilter.value = resultFilter.options[2].value;
+      resultFilter.dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(texts(fixture, '.workflows-document-title')).toEqual(['API Pastry scenarios']);
+      expect(texts(fixture, '.workflows-workflow-id')).toEqual(['listThenReadFirst']);
+      expect(texts(fixture, '.workflows-count')).toEqual(['1 document · 1 workflow']);
+
+      resultFilter.value = resultFilter.options[3].value;
+      resultFilter.dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(texts(fixture, '.workflows-document-title')).toEqual(['Order fulfilment']);
+      expect(texts(fixture, '.workflows-workflow-id')).toEqual(['searchThenRead', 'placeOrder']);
+    });
   });
 
   it('keeps the Run button of a workflow that cannot run disabled, telling why', () => {

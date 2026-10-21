@@ -244,6 +244,18 @@ describe('WorkflowRunPageComponent', () => {
     }));
   }));
 
+  it('names the run by its number and links the Runs breadcrumb to the runs history of its document', fakeAsync(() => {
+    open({ ...failedRun(), number: 6 });
+    tick();
+    fixture.detectChanges();
+
+    expect(texts('.breadcrumb li')).toEqual(['Workflows', 'API Pastry scenarios - 1.0.0', 'Runs', 'Run #6']);
+    expect(Array.from(page().querySelectorAll('.breadcrumb a')).map(link => link.getAttribute('href')))
+      .toEqual(['/workflows', '/workflows/doc-1/listThenReadFirst', '/workflows/documents/doc-1/runs']);
+    expect(page().querySelectorAll('.breadcrumb [title="Available soon"]').length).toEqual(0);
+    expect(texts('.workflow-run-title')).toEqual(['Run #6 · listThenReadFirst failed']);
+  }));
+
   it('says the run is not found when it cannot be read', fakeAsync(() => {
     open(new Error('404'));
     tick();

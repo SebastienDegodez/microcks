@@ -17,8 +17,8 @@ import { ChangeDetectionStrategy, Component, ElementRef, Injector, OnInit, after
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, ParamMap, Router, RouterLink } from '@angular/router';
 
-import { Observable, combineLatest, of } from 'rxjs';
-import { catchError, map, switchMap } from 'rxjs/operators';
+import { Observable, combineLatest, forkJoin, of } from 'rxjs';
+import { catchError, map, shareReplay, startWith, switchMap } from 'rxjs/operators';
 
 import {
   ArazzoDataPassing,
@@ -28,6 +28,8 @@ import {
   ArazzoWorkflowInput
 } from '../../../models/arazzo-workflow.model';
 import { ArazzoWorkflowService } from '../../../services/arazzo-workflow.service';
+import { ArazzoRunHistoryService } from '../../../services/arazzo-run-history.service';
+import { WorkflowRunSummary } from '../../../models/arazzo-run.model';
 import { BsModalService } from 'ngx-bootstrap/modal';
 import { openRunDialog } from '../workflow-run-dialog/workflow-run.dialog';
 import { TimeAgoPipe } from '../../../components/time-ago.pipe';
@@ -36,8 +38,16 @@ import { WorkflowDiagramComponent } from './workflow-diagram/workflow-diagram.co
 /** The steps as cards, or the workflow as a diagram; the URL keeps it as ?view=diagram so a link can be shared. */
 export type WorkflowView = 'steps' | 'diagram';
 
-/** The workflow read from the API, or null when it does not exist, and the view it is shown in. */
-type WorkflowState = { workflow: ArazzoWorkflowDetail | null; view: WorkflowView };
+/** How many runs of the workflow its page shows under Recent runs. */
+export const RECENT_RUNS = 3;
+
+/** The last runs of the workflow, and the last run of each workflow of its document, by workflow id. */
+export type WorkflowRunHistory = { recent: WorkflowRunSummary[]; lastRuns: Record<string, WorkflowRunSummary> };
+
+const NO_RUN_HISTORY: WorkflowRunHistory = { recent: [], lastRuns: {} };
+
+/** The workflow read from the API, or null when it does not exist, the view it is shown in, and its runs. */
+type WorkflowState = { workflow: ArazzoWorkflowDetail | null; view: WorkflowView; history: WorkflowRunHistory };
 
 @Component({
   selector: 'app-workflow-detail-page',
@@ -53,12 +63,11 @@ type WorkflowState = { workflow: ArazzoWorkflowDetail | null; view: WorkflowView
 })
 export class WorkflowDetailPageComponent implements OnInit {
 
-  readonly availableSoon = 'Available soon';
-
   state!: Observable<WorkflowState>;
 
   constructor(private workflowSvc: ArazzoWorkflowService, private route: ActivatedRoute, private router: Router,
-              private host: ElementRef<HTMLElement>, private injector: Injector, private modalService: BsModalService) {
+              private host: ElementRef<HTMLElement>, private injector: Injector, private modalService: BsModalService,
+              private historySvc: ArazzoRunHistoryService) {
   }
 
   ngOnInit(): void {
@@ -66,12 +75,67 @@ export class WorkflowDetailPageComponent implements OnInit {
       switchMap((params: ParamMap) =>
         this.workflowSvc.getWorkflow(params.get('documentId')!, params.get('workflowId')!).pipe(
           catchError(() => of(null))
-        ))
+        )),
+      shareReplay({ bufferSize: 1, refCount: true })
+    );
+    // The recent runs and the tab icons read the same history query as the runs history page.
+    const history = workflow.pipe(
+      switchMap(workflow => workflow ? this.historyOf(workflow).pipe(startWith(NO_RUN_HISTORY)) : of(NO_RUN_HISTORY))
     );
     const view = this.route.queryParamMap.pipe(
       map(params => (params.get('view') === 'diagram' ? 'diagram' : 'steps') as WorkflowView)
     );
-    this.state = combineLatest([workflow, view]).pipe(map(([workflow, view]) => ({ workflow, view })));
+    this.state = combineLatest([workflow, view, history])
+      .pipe(map(([workflow, view, history]) => ({ workflow, view, history })));
+  }
+
+  private historyOf(workflow: ArazzoWorkflowDetail): Observable<WorkflowRunHistory> {
+    const lastRuns = workflow.workflowIds.map(workflowId =>
+      this.historySvc.getRuns(workflow.documentId, { workflow: workflowId }, 1, 1)
+        .pipe(map(runs => [workflowId, runs[0]] as [string, WorkflowRunSummary])));
+    return combineLatest([
+      this.historySvc.getRuns(workflow.documentId, { workflow: workflow.workflowId }, 1, RECENT_RUNS),
+      forkJoin(lastRuns)
+    ]).pipe(
+      map(([recent, last]) => ({ recent, lastRuns: Object.fromEntries(last.filter(([, run]) => run)) })),
+      catchError(() => of(NO_RUN_HISTORY))
+    );
+  }
+
+  /** The icon of how a run went, in its color. */
+  statusIcon(run: WorkflowRunSummary): string {
+    switch (run.status) {
+      case 'SUCCESS': return 'pficon-ok arazzo-run-passed';
+      case 'FAILURE': return 'pficon-error-circle-o arazzo-run-failed';
+      default: return 'pficon-in-progress';
+    }
+  }
+
+  /** How a run went: "Passed", "Failed at reprice" or "In progress". */
+  outcome(run: WorkflowRunSummary): string {
+    switch (run.status) {
+      case 'SUCCESS': return 'Passed';
+      case 'FAILURE': return run.failedStepId ? 'Failed at ' + run.failedStepId : 'Failed';
+      default: return 'In progress';
+    }
+  }
+
+  /** What the tab of a workflow tells of its last run. */
+  lastRunTitle(run: WorkflowRunSummary): string {
+    switch (run.status) {
+      case 'SUCCESS': return 'Last run passed';
+      case 'FAILURE': return 'Last run failed';
+      default: return 'Last run in progress';
+    }
+  }
+
+  targetOf(run: WorkflowRunSummary): string {
+    return run.target === 'MOCKS' ? 'Microcks mocks' : 'implementation';
+  }
+
+  /** When the run started, for the time-ago pipe. */
+  startedOn(run: WorkflowRunSummary): string {
+    return new Date(run.startedDate).toISOString();
   }
 
   showView(view: WorkflowView): Promise<boolean> {

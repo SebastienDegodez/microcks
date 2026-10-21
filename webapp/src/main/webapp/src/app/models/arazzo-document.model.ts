@@ -14,9 +14,10 @@
  * limitations under the License.
  */
 import { ServiceType } from './service.model';
+import { WorkflowRunSummary } from './arazzo-run.model';
 
-/** How the last run of an Arazzo workflow went. Workflows do not run yet. */
-export type ArazzoLastResult = 'NEVER_RUN';
+/** How the last run of an Arazzo workflow went. */
+export type ArazzoLastResult = 'NEVER_RUN' | 'IN_PROGRESS' | 'PASSED' | 'FAILED';
 
 export interface ArazzoSourceLink {
   sourceName: string;
@@ -43,6 +44,8 @@ export interface ArazzoWorkflowSummary {
   description: string | null;
   stepCount: number;
   lastResult: ArazzoLastResult;
+  /** The last run of the workflow; absent when it never ran. */
+  lastRun?: WorkflowRunSummary;
 }
 
 export interface ArazzoDocumentSummary {

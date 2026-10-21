@@ -22,9 +22,11 @@ import { BsModalService } from 'ngx-bootstrap/modal';
 
 import {
   ArazzoDocumentSummary,
+  ArazzoLastResult,
   ArazzoSourceSummary,
   ArazzoWorkflowSummary
 } from '../../models/arazzo-document.model';
+import { WorkflowRunSummary } from '../../models/arazzo-run.model';
 import { ServiceType } from '../../models/service.model';
 import { TimeAgoPipe } from '../../components/time-ago.pipe';
 import { ArazzoDocumentsService } from '../../services/arazzo-documents.service';
@@ -56,6 +58,8 @@ export class WorkflowsPageComponent implements OnInit, OnDestroy {
   apiNames: string[] = [];
   apiFilter = '';
   nameFilter = '';
+  /** The last result of the workflows listed; empty to list every workflow. */
+  resultFilter: ArazzoLastResult | '' = '';
   /** The documents whose workflows are shown: the first one when the page opens. */
   expandedDocumentIds = new Set<string>();
 
@@ -97,21 +101,30 @@ export class WorkflowsPageComponent implements OnInit, OnDestroy {
     this.arazzoDocumentsSvc.getDocuments(this.apiFilter).subscribe((documents) => (this.apiDocuments = documents));
   }
 
-  /** The documents using the API filtered on, whose title or one of the workflow ids contains the name filtered on. */
+  /**
+   * The documents using the API filtered on, whose title or one of the workflow ids contains the name filtered on,
+   * and with a workflow whose last result is the one filtered on.
+   */
   get documents(): ArazzoDocumentSummary[] {
     const name = this.nameFilter.trim().toLowerCase();
-    if (!name) {
-      return this.apiDocuments;
-    }
     return this.apiDocuments.filter(
       (document) =>
-        document.title.toLowerCase().includes(name) ||
-        document.workflows.some((workflow) => workflow.status.workflowId.toLowerCase().includes(name))
+        (!name ||
+          document.title.toLowerCase().includes(name) ||
+          document.workflows.some((workflow) => workflow.status.workflowId.toLowerCase().includes(name))) &&
+        this.visibleWorkflows(document).length > 0
     );
   }
 
+  /** The workflows of a document whose last result is the one filtered on. */
+  visibleWorkflows(document: ArazzoDocumentSummary): ArazzoWorkflowSummary[] {
+    return this.resultFilter
+      ? document.workflows.filter((workflow) => workflow.lastResult === this.resultFilter)
+      : document.workflows;
+  }
+
   get workflowCount(): number {
-    return this.documents.reduce((count, document) => count + document.workflows.length, 0);
+    return this.documents.reduce((count, document) => count + this.visibleWorkflows(document).length, 0);
   }
 
   isExpanded(document: ArazzoDocumentSummary): boolean {
@@ -135,9 +148,31 @@ export class WorkflowsPageComponent implements OnInit, OnDestroy {
     return document.importDate == null ? null : new Date(document.importDate).toISOString();
   }
 
-  /** Before workflows run, every workflow of a document has never run. */
   neverRun(document: ArazzoDocumentSummary): boolean {
     return document.workflows.every((workflow) => workflow.lastResult === 'NEVER_RUN');
+  }
+
+  /** How many workflows of a document had their last run end with a result. */
+  lastResultCount(document: ArazzoDocumentSummary, lastResult: ArazzoLastResult): number {
+    return document.workflows.filter((workflow) => workflow.lastResult === lastResult).length;
+  }
+
+  /** How the last run of a workflow went: "Passed on mocks", "Failed at readFirst". */
+  lastRunOutcome(run: WorkflowRunSummary): string {
+    const target = run.target === 'MOCKS' ? 'mocks' : 'implementation';
+    switch (run.status) {
+      case 'SUCCESS':
+        return 'Passed on ' + target;
+      case 'FAILURE':
+        return run.failedStepId ? 'Failed at ' + run.failedStepId : 'Failed on ' + target;
+      default:
+        return 'In progress on ' + target;
+    }
+  }
+
+  /** When a run started, for the timeAgo pipe. */
+  startedOn(run: WorkflowRunSummary): string {
+    return new Date(run.startedDate).toISOString();
   }
 
   /** Why a workflow cannot run, shown on its disabled Run button; null when it can run. */

@@ -526,3 +526,18 @@ pre.hljs {
     width: 720px;
   }
 }
+
+/* How a run of an Arazzo workflow went, wherever it shows: passed in green, failed in red legible on both themes. */
+.arazzo-run-passed {
+  color: var(--status-success);
+}
+
+.arazzo-run-failed,
+.arazzo-run-failed::before {
+  color: var(--danger);
+}
+
+.dark .arazzo-run-failed,
+.dark .arazzo-run-failed::before {
+  color: var(--danger-accent);
+}
