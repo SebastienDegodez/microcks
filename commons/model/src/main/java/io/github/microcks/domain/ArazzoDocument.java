@@ -30,6 +30,7 @@ public class ArazzoDocument {
    private String id;
    private String title;
    private String version;
+   private String fileName;
    private List<String> workflowIds;
    private List<String> sourceNames;
    private Map<String, List<ArazzoStepCall>> workflowCalls;
@@ -57,6 +58,14 @@ public class ArazzoDocument {
 
    public void setVersion(String version) {
       this.version = version;
+   }
+
+   public String getFileName() {
+      return fileName;
+   }
+
+   public void setFileName(String fileName) {
+      this.fileName = fileName;
    }
 
    public List<String> getWorkflowIds() {
