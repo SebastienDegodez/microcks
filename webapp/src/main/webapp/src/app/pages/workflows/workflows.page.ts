@@ -18,11 +18,18 @@ import { Component, OnDestroy, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 
-import { ArazzoDocumentSummary, ArazzoSourceSummary } from '../../models/arazzo-document.model';
+import { BsModalService } from 'ngx-bootstrap/modal';
+
+import {
+  ArazzoDocumentSummary,
+  ArazzoSourceSummary,
+  ArazzoWorkflowSummary
+} from '../../models/arazzo-document.model';
 import { ServiceType } from '../../models/service.model';
 import { TimeAgoPipe } from '../../components/time-ago.pipe';
 import { ArazzoDocumentsService } from '../../services/arazzo-documents.service';
 import { UploaderDialogService } from '../../services/uploader-dialog.service';
+import { openRunDialog } from './workflow-run-dialog/workflow-run.dialog';
 
 /** The protocol chip of each type of API, in the colors of its protocol. */
 const API_CHIPS: Record<ServiceType, { text: string; styleClass: string }> = {
@@ -54,7 +61,8 @@ export class WorkflowsPageComponent implements OnInit, OnDestroy {
 
   constructor(
     private arazzoDocumentsSvc: ArazzoDocumentsService,
-    private uploaderDialogService: UploaderDialogService
+    private uploaderDialogService: UploaderDialogService,
+    private modalService: BsModalService
   ) {}
 
   ngOnInit(): void {
@@ -130,6 +138,20 @@ export class WorkflowsPageComponent implements OnInit, OnDestroy {
   /** Before workflows run, every workflow of a document has never run. */
   neverRun(document: ArazzoDocumentSummary): boolean {
     return document.workflows.every((workflow) => workflow.lastResult === 'NEVER_RUN');
+  }
+
+  /** Why a workflow cannot run, shown on its disabled Run button; null when it can run. */
+  notRunnableReason(workflow: ArazzoWorkflowSummary): string | null {
+    return workflow.status.runnable ? null : workflow.status.reasons.join(', ');
+  }
+
+  openRun(document: ArazzoDocumentSummary, workflow: ArazzoWorkflowSummary): void {
+    openRunDialog(
+      this.modalService,
+      document.id,
+      document.workflows.map((candidate) => candidate.status.workflowId),
+      workflow.status.workflowId
+    );
   }
 
   openArtifactUploader(): void {

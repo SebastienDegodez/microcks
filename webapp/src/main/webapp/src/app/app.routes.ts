@@ -11,6 +11,7 @@ import { TestRunnerPageComponent } from './pages/tests/runner/test-runner.page';
 import { InvocationsServicePageComponent } from './pages/metrics/invocations/{serviceId}/invocations-service.page';
 import { TestDetailPageComponent } from './pages/tests/{testId}/test-detail.page';
 import { WorkflowDetailPageComponent } from './pages/workflows/workflow-detail/workflow-detail.page';
+import { WorkflowRunPageComponent } from './pages/workflows/workflow-run/workflow-run.page';
 import { ImportersPageComponent } from './pages/importers/importers.page';
 import { HubPageComponent } from './pages/hub/hub.page';
 import { HubPackagePageComponent } from './pages/hub/package/package.page';
@@ -54,6 +55,10 @@ export const routes: Routes = [
   {
     path: 'tests/:testId',
     component: TestDetailPageComponent
+  },
+  {
+    path: 'workflows/runs/:runId',
+    component: WorkflowRunPageComponent
   },
   {
     path: 'workflows/:documentId/:workflowId',

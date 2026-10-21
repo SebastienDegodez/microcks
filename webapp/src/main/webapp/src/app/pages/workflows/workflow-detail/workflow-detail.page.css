@@ -48,6 +48,9 @@
 
 .workflow-run-control {
   display: inline-block;
+}
+
+.workflow-run-control-disabled {
   cursor: not-allowed;
 }
 

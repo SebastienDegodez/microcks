@@ -28,6 +28,8 @@ import {
   ArazzoWorkflowInput
 } from '../../../models/arazzo-workflow.model';
 import { ArazzoWorkflowService } from '../../../services/arazzo-workflow.service';
+import { BsModalService } from 'ngx-bootstrap/modal';
+import { openRunDialog } from '../workflow-run-dialog/workflow-run.dialog';
 import { TimeAgoPipe } from '../../../components/time-ago.pipe';
 import { WorkflowDiagramComponent } from './workflow-diagram/workflow-diagram.component';
 
@@ -56,7 +58,7 @@ export class WorkflowDetailPageComponent implements OnInit {
   state!: Observable<WorkflowState>;
 
   constructor(private workflowSvc: ArazzoWorkflowService, private route: ActivatedRoute, private router: Router,
-              private host: ElementRef<HTMLElement>, private injector: Injector) {
+              private host: ElementRef<HTMLElement>, private injector: Injector, private modalService: BsModalService) {
   }
 
   ngOnInit(): void {
@@ -83,6 +85,15 @@ export class WorkflowDetailPageComponent implements OnInit {
       const card = this.host.nativeElement.querySelector('[data-step-id="' + CSS.escape(stepId) + '"]');
       card?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, { injector: this.injector }));
+  }
+
+  /** Why the workflow cannot run, shown on its disabled Run button; null when it can run. */
+  notRunnableReason(workflow: ArazzoWorkflowDetail): string | null {
+    return workflow.status.runnable ? null : workflow.status.reasons.join(', ');
+  }
+
+  openRun(workflow: ArazzoWorkflowDetail): void {
+    openRunDialog(this.modalService, workflow.documentId, workflow.workflowIds, workflow.workflowId);
   }
 
   /** A value is a runtime expression when it starts with $ or embeds one in braces; otherwise it is a constant. */

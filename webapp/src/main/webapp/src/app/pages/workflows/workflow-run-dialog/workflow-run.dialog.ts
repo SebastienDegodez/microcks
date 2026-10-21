@@ -1,0 +1,154 @@
+/*
+ * Copyright The Microcks Authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *  http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+import { Component, OnInit } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
+import { forkJoin } from 'rxjs';
+
+import { BsModalRef, BsModalService } from 'ngx-bootstrap/modal';
+
+import { ArazzoWorkflowDetail, ArazzoWorkflowInput } from '../../../models/arazzo-workflow.model';
+import { ArazzoRunService } from '../../../services/arazzo-run.service';
+import { ArazzoWorkflowService } from '../../../services/arazzo-workflow.service';
+
+/** A piece of the sentence telling where an input is used: some text, or an identifier shown as code. */
+export type UsePart = { text: string; code?: string };
+
+/** How each place of a step names what it holds. */
+const PLACES: Record<string, string> = {
+  path: 'path parameter',
+  query: 'query parameter',
+  header: 'header',
+  body: 'body'
+};
+
+/**
+ * Open the dialog running a workflow of an Arazzo document.
+ * @param workflowIds The workflows of the document that the dialog offers
+ * @param workflowId  The workflow selected when the dialog opens
+ */
+export function openRunDialog(modals: BsModalService, documentId: string, workflowIds: string[],
+                              workflowId: string): void {
+  modals.show(WorkflowRunDialogComponent, {
+    initialState: { documentId, workflowIds, workflowId },
+    class: 'workflow-run-modal'
+  });
+}
+
+/** The dialog running a workflow of an Arazzo document against the Microcks mocks of its linked APIs. */
+@Component({
+  selector: 'app-workflow-run-dialog',
+  templateUrl: './workflow-run.dialog.html',
+  styleUrls: ['./workflow-run.dialog.css'],
+  imports: [CommonModule, FormsModule]
+})
+export class WorkflowRunDialogComponent implements OnInit {
+
+  readonly availableSoon = 'Available soon';
+
+  documentId!: string;
+  workflowIds!: string[];
+  workflowId!: string;
+
+  workflows: ArazzoWorkflowDetail[] = [];
+  values: Record<string, string | number | null> = {};
+  timeout = 10000;
+  error?: string;
+  running = false;
+
+  constructor(public bsModalRef: BsModalRef, private workflowSvc: ArazzoWorkflowService,
+              private runSvc: ArazzoRunService, private router: Router) {
+  }
+
+  ngOnInit(): void {
+    forkJoin(this.workflowIds.map(workflowId => this.workflowSvc.getWorkflow(this.documentId, workflowId)))
+      .subscribe(workflows => this.workflows = workflows);
+  }
+
+  get selected(): ArazzoWorkflowDetail | undefined {
+    return this.workflows.find(workflow => workflow.workflowId === this.workflowId);
+  }
+
+  selectWorkflow(workflowId: string): void {
+    this.workflowId = workflowId;
+    this.values = {};
+    this.error = undefined;
+  }
+
+  /** Where the mocks of the first linked API are, as Microcks serves them. */
+  mocksExample(workflow: ArazzoWorkflowDetail): string | null {
+    const source = workflow.sources.find(candidate => candidate.link.linked);
+    return source ? '/rest/' + encodeMockPart(source.link.apiName!) + '/' + encodeMockPart(source.link.apiVersion!)
+      : null;
+  }
+
+  /** A number input for the inputs the workflow declares as numbers, a text input for the others. */
+  inputKind(input: ArazzoWorkflowInput): string {
+    return input.type === 'number' || input.type === 'integer' ? 'number' : 'text';
+  }
+
+  /** Where the steps use an input: "Body /price of reprice, and its success criterion". */
+  useOf(input: ArazzoWorkflowInput): UsePart[] {
+    const parts: UsePart[] = [];
+    let previousStepId: string | undefined;
+    input.usedBy.forEach(use => {
+      const sameStep = use.stepId === previousStepId;
+      if (previousStepId !== undefined) {
+        parts.push({ text: sameStep ? ', and ' : '; ' });
+      }
+      if (use.place === 'criterion') {
+        parts.push({ text: sameStep ? 'its success criterion' : 'Success criterion of ' + use.stepId });
+      } else if (sameStep) {
+        parts.push({ text: 'its ' + PLACES[use.place] + ' ' }, { text: '', code: use.target });
+      } else {
+        const place = PLACES[use.place];
+        parts.push({ text: place.charAt(0).toUpperCase() + place.slice(1) + ' ' }, { text: '', code: use.target },
+          { text: ' of ' + use.stepId });
+      }
+      previousStepId = use.stepId;
+    });
+    return parts;
+  }
+
+  run(): void {
+    const workflow = this.selected!;
+    const inputs: Record<string, unknown> = {};
+    workflow.inputs.forEach(input => {
+      const value = this.values[input.name];
+      if (value !== undefined && value !== null && value !== '') {
+        inputs[input.name] = value;
+      }
+    });
+    this.running = true;
+    this.error = undefined;
+    this.runSvc.launchRun(this.documentId, workflow.workflowId, inputs, this.timeout).subscribe({
+      next: run => {
+        this.bsModalRef.hide();
+        this.router.navigate(['/workflows/runs', run.id]);
+      },
+      error: refusal => {
+        this.running = false;
+        this.error = typeof refusal.error === 'string' ? refusal.error : 'Microcks could not run the workflow.';
+      }
+    });
+  }
+}
+
+/** Microcks writes the spaces of the name and version of an API as + in the URLs of its mocks. */
+function encodeMockPart(part: string): string {
+  return encodeURIComponent(part).replace(/%20/g, '+');
+}

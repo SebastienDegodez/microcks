@@ -18,9 +18,12 @@ import { Router, provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { of, throwError } from 'rxjs';
 
+import { BsModalService } from 'ngx-bootstrap/modal';
+
 import { ArazzoWorkflowDetail } from '../../../models/arazzo-workflow.model';
 import { ArazzoWorkflowService } from '../../../services/arazzo-workflow.service';
 import { WorkflowDetailPageComponent } from './workflow-detail.page';
+import { WorkflowRunDialogComponent } from '../workflow-run-dialog/workflow-run.dialog';
 
 /** The workflow readThenReprice, as GET /api/arazzo/documents/{documentId}/workflows/readThenReprice answers it. */
 function readThenReprice(): ArazzoWorkflowDetail {
@@ -37,7 +40,7 @@ function readThenReprice(): ArazzoWorkflowDetail {
     workflowId: 'readThenReprice',
     summary: 'Reads a pastry, then changes its price using the name returned by the first call.',
     inputs: [
-      { name: 'pastry', usedBy: [{ stepId: 'readPastry', place: 'path', target: 'name' }] },
+      { name: 'pastry', type: 'string', usedBy: [{ stepId: 'readPastry', place: 'path', target: 'name' }] },
       { name: 'newPrice', usedBy: [{ stepId: 'reprice', place: 'body', target: '/price' },
           { stepId: 'reprice', place: 'criterion' }] }
     ],
@@ -66,13 +69,15 @@ function readThenReprice(): ArazzoWorkflowDetail {
       }
     ],
     outputs: { before: '$steps.readPastry.outputs.price', after: '$steps.reprice.outputs.price' },
-    dataPassings: [{ fromStepId: 'readPastry', outputName: 'name', to: { stepId: 'reprice', place: 'path', target: 'name' } }]
+    dataPassings: [{ fromStepId: 'readPastry', outputName: 'name', to: { stepId: 'reprice', place: 'path', target: 'name' } }],
+    status: { workflowId: 'readThenReprice', runnable: true, reasons: [] }
   };
 }
 
 describe('WorkflowDetailPageComponent', () => {
   let harness: RouterTestingHarness;
   let page: HTMLElement;
+  let modals: jasmine.SpyObj<BsModalService>;
 
   async function open(workflow: ArazzoWorkflowDetail | Error,
                       url = '/workflows/doc-1/readThenReprice'): Promise<void> {
@@ -80,9 +85,11 @@ describe('WorkflowDetailPageComponent', () => {
       getWorkflow: jasmine.createSpy('getWorkflow')
         .and.returnValue(workflow instanceof Error ? throwError(() => workflow) : of(workflow))
     };
+    modals = jasmine.createSpyObj<BsModalService>('BsModalService', ['show']);
     TestBed.configureTestingModule({
       providers: [
         provideRouter([{ path: 'workflows/:documentId/:workflowId', component: WorkflowDetailPageComponent }]),
+        { provide: BsModalService, useValue: modals },
         { provide: ArazzoWorkflowService, useValue: service }
       ]
     });
@@ -202,17 +209,35 @@ describe('WorkflowDetailPageComponent', () => {
       .toEqual(['/workflows/doc-1/readThenReprice', '/workflows/doc-1/listThenReadFirst']);
   });
 
-  it('shows the run controls disabled, as available soon, and no link source control', async () => {
+  it('runs the workflow from its page, the runs history being available soon, and no link source control', async () => {
     await open(readThenReprice());
 
     const controls = Array.from(page.querySelectorAll('.workflow-run-controls button')) as HTMLButtonElement[];
     expect(controls.map(control => normalized(control.textContent))).toEqual(['Runs history', 'Run workflow']);
-    expect(controls.every(control => control.disabled)).toBeTrue();
-    expect(texts('.workflow-run-controls [title]').length).toEqual(2);
+    expect(controls.map(control => control.disabled)).toEqual([true, false]);
     expect(Array.from(page.querySelectorAll('.workflow-run-controls [title]')).map(e => e.getAttribute('title')))
-      .toEqual(['Available soon', 'Available soon']);
+      .toEqual(['Available soon']);
     expect(normalized(page.textContent)).not.toContain('Change link');
     expect(normalized(page.textContent)).not.toContain('Link sources');
+
+    controls[1].click();
+
+    expect(modals.show).toHaveBeenCalledWith(WorkflowRunDialogComponent, jasmine.objectContaining({
+      initialState: { documentId: 'doc-1', workflowIds: ['readThenReprice', 'listThenReadFirst'],
+        workflowId: 'readThenReprice' }
+    }));
+  });
+
+  it('keeps the Run workflow button disabled when the workflow cannot run, telling why', async () => {
+    const workflow = readThenReprice();
+    workflow.status = { workflowId: 'readThenReprice', runnable: false,
+      reasons: ['Operation DeletePastry not found in API Pastry - 2.0 2.0.0', 'API Order API 1.0.0 not found'] };
+    await open(workflow);
+
+    const run = page.querySelectorAll('.workflow-run-controls button')[1] as HTMLButtonElement;
+    expect(run.disabled).toBeTrue();
+    expect(run.parentElement?.getAttribute('title'))
+      .toEqual('Operation DeletePastry not found in API Pastry - 2.0 2.0.0, API Order API 1.0.0 not found');
   });
 
   it('shows that the workflow has never run, with no recent run', async () => {
@@ -391,11 +416,11 @@ describe('WorkflowDetailPageComponent', () => {
       expect(scrolled.calls.mostRecent().object).toBe(step('readPastry'));
     });
 
-    it('keeps the run controls disabled and shows no run result on the nodes', async () => {
+    it('keeps the run controls and shows no run result on the nodes', async () => {
       await open(readThenReprice(), '/workflows/doc-1/readThenReprice?view=diagram');
 
       const controls = Array.from(page.querySelectorAll('.workflow-run-controls button')) as HTMLButtonElement[];
-      expect(controls.every(control => control.disabled)).toBeTrue();
+      expect(controls.map(control => control.disabled)).toEqual([true, false]);
       expect(page.querySelectorAll('.workflow-diagram [class*="status"]').length).toEqual(0);
     });
   });

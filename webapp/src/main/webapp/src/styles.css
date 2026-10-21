@@ -519,3 +519,10 @@ pre.hljs {
   font-family: "Open Sans", Helvetica, Arial, sans-serif;
   font-size: 16px;
 }
+
+/* The run dialog of Arazzo workflows (screen 5 of the mock-up) is wider than a default dialog. */
+@media (min-width: 768px) {
+  .modal-dialog.workflow-run-modal {
+    width: 720px;
+  }
+}

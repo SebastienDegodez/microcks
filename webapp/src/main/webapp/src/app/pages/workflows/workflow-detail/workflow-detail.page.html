@@ -24,13 +24,14 @@
         </p>
       </div>
       <div class="workflow-run-controls">
-        <span class="workflow-run-control" [title]="availableSoon">
+        <span class="workflow-run-control workflow-run-control-disabled" [title]="availableSoon">
           <button type="button" class="btn btn-default" disabled>
             <span class="fa fa-clock-o" aria-hidden="true"></span> Runs history
           </button>
         </span>
-        <span class="workflow-run-control" [title]="availableSoon">
-          <button type="button" class="btn btn-primary" disabled>
+        <span class="workflow-run-control" [class.workflow-run-control-disabled]="!workflow.status.runnable"
+              [attr.title]="notRunnableReason(workflow)">
+          <button type="button" class="btn btn-primary" [disabled]="!workflow.status.runnable" (click)="openRun(workflow)">
             <span class="workflow-play" aria-hidden="true"></span>Run workflow
           </button>
         </span>
