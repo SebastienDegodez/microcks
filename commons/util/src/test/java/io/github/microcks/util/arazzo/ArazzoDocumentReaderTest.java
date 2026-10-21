@@ -26,6 +26,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -42,6 +43,25 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  * @author SebastienDegodez
  */
 class ArazzoDocumentReaderTest {
+
+   @Test
+   void aSupportedDocumentIsReadWithItsTitleVersionAndWorkflows() throws Exception {
+      assertEquals(
+            new ArazzoDescription("API Pastry scenarios", "1.0.0", List.of("readThenReprice", "listThenReadFirst")),
+            ArazzoDocumentReader.read(document("pastry.arazzo.yaml")));
+   }
+
+   @Test
+   void anUnsupportedVersionIsRefusedWithItsReason() throws IOException {
+      assertRefused(document("unsupported-version.arazzo.yaml"), "Unsupported Arazzo version: 2.0.0");
+   }
+
+   @ParameterizedTest
+   @CsvSource({ "pastry.arazzo.yaml, true", "pastry.openapi.yaml, false" })
+   void onlyADocumentDeclaringAnArazzoVersionIsAnArazzoDocument(String fileName, boolean arazzoDocument)
+         throws IOException {
+      assertEquals(arazzoDocument, ArazzoDocumentReader.isArazzoDocument(document(fileName)));
+   }
 
    /**
     * Temporary refusal: success and failure actions, nested workflows and operationPath are listed under "Later" in the
@@ -98,6 +118,13 @@ class ArazzoDocumentReaderTest {
             () -> ArazzoDocumentReader.read(document));
 
       assertEquals(reason, refusal.getMessage());
+   }
+
+   private static JsonNode document(String fileName) throws IOException {
+      try (InputStream stream = ArazzoDocumentReaderTest.class
+            .getResourceAsStream("/io/github/microcks/util/arazzo/" + fileName)) {
+         return new ObjectMapper(new YAMLFactory()).readTree(stream);
+      }
    }
 
    /**
