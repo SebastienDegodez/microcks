@@ -50,6 +50,7 @@ final class ArazzoSubset {
       if (!arazzoVersion.startsWith("1.")) {
          throw new UnsupportedArazzoDocumentException("Unsupported Arazzo version: " + arazzoVersion);
       }
+      checkInfo(document.path("info"));
       for (JsonNode sourceDescription : document.path("sourceDescriptions")) {
          checkSourceDescription(sourceDescription);
       }
@@ -59,6 +60,17 @@ final class ArazzoSubset {
       }
       for (JsonNode workflow : document.path("workflows")) {
          checkWorkflow(workflow, sourceNames);
+      }
+   }
+
+   /**
+    * Arazzo requires an info with a title and a version: they identify the document in Microcks.
+    */
+   private static void checkInfo(JsonNode info) throws UnsupportedArazzoDocumentException {
+      for (String field : List.of("title", "version")) {
+         if (info.path(field).asText().isBlank()) {
+            throw new UnsupportedArazzoDocumentException("Invalid Arazzo document: info." + field + " is required");
+         }
       }
    }
 

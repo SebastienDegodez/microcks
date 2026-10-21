@@ -207,8 +207,8 @@ public class ArazzoDocumentService {
          sources.put(source.getKey(), new ServiceRef(null, source.getValue().path("name").asText(),
                source.getValue().path("version").asText()));
       }
-      String name = overlay.path("metadata").path("name").asText();
-      String version = overlay.path("metadata").path("version").asText();
+      String name = requiredMetadata(overlay, "name");
+      String version = requiredMetadata(overlay, "version");
       // Re-importing the same name and version replaces the existing overlay.
       ArazzoSources arazzoSources = arazzoSourcesRepository.findByNameAndVersion(name, version);
       if (arazzoSources == null) {
@@ -218,6 +218,15 @@ public class ArazzoDocumentService {
       arazzoSources.setVersion(version);
       arazzoSources.setSources(sources);
       return arazzoSourcesRepository.save(arazzoSources);
+   }
+
+   /** An overlay is matched to its Arazzo document by its metadata name and version: without them, it links nothing. */
+   private static String requiredMetadata(JsonNode overlay, String field) throws MockRepositoryImportException {
+      String value = overlay.path("metadata").path(field).asText();
+      if (value.isBlank()) {
+         throw new MockRepositoryImportException("Invalid ArazzoSources overlay: metadata." + field + " is required");
+      }
+      return value;
    }
 
    /**
