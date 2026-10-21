@@ -250,6 +250,48 @@
   padding: 12px 16px;
 }
 
+/* What a step sent and received: the request on the left, the response on the right. */
+.workflow-run-exchange {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: 20px;
+}
+
+.workflow-run-request-url {
+  margin-bottom: 8px;
+}
+
+.workflow-run-exchange-properties {
+  margin: 0;
+}
+
+.workflow-run-body {
+  max-height: 240px;
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  overflow: auto;
+  border: 1px solid var(--divider);
+  border-radius: 1px;
+  background: var(--surface-subtle);
+  color: var(--text-strong);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* The highlighted body takes the surface of its block rather than the theme of the highlighting. */
+.workflow-run-body code {
+  padding: 0;
+  background: transparent;
+  color: inherit;
+}
+
+@media (max-width: 992px) {
+  .workflow-run-exchange {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+}
+
 @media (max-width: 768px) {
   .workflow-run-property {
     grid-template-columns: 1fr;

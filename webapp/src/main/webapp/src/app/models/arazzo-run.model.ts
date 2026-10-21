@@ -60,6 +60,20 @@ export type WorkflowStepResult = {
   outputs: Record<string, unknown>;
   testCaseId?: string;
   message?: string;
+  /** The URL the step sent its request to; absent when it sent none. */
+  requestUrl?: string;
+  /** The parameters the step sent, with the runtime expression each value came from. */
+  parameters?: WorkflowParameterValue[];
+  /** The runtime expression each output came from, by output name. */
+  outputOrigins?: Record<string, string>;
+};
+
+/** A parameter a step sent, with its value and the runtime expression it came from, absent for a constant. */
+export type WorkflowParameterValue = {
+  name: string;
+  in: string;
+  value?: unknown;
+  expression?: string;
 };
 
 /** A run of a workflow, as GET /api/arazzo/runs/{runId} answers it. */

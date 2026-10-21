@@ -18,6 +18,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
 import { WorkflowResult } from '../models/arazzo-run.model';
+import { RequestResponsePair } from '../models/service.model';
 
 @Injectable({ providedIn: 'root' })
 export class ArazzoRunService {
@@ -39,5 +40,14 @@ export class ArazzoRunService {
 
   public getRun(runId: string): Observable<WorkflowResult> {
     return this.http.get<WorkflowResult>(this.rootUrl + '/runs/' + encodeURIComponent(runId));
+  }
+
+  /**
+   * The request and response of a step of a run, stored as those of tests.
+   * @param testCaseId What the step gives as its testCaseId: the id of the run and the index of the step
+   */
+  public getExchanges(runId: string, testCaseId: string): Observable<RequestResponsePair[]> {
+    return this.http.get<RequestResponsePair[]>('/api/tests/' + encodeURIComponent(runId) + '/messages/'
+      + encodeURIComponent(testCaseId));
   }
 }

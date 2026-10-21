@@ -89,14 +89,55 @@
           <p *ngIf="step.message" class="workflow-run-step-message">
             <span class="pficon pficon-error-circle-o" aria-hidden="true"></span>&ngsp;<span>{{ step.message }}</span>
           </p>
-          <ng-container *ngIf="entries(step.outputs) as outputs">
+          <ng-container *ngIf="outputsOf(step) as outputs">
             <ng-container *ngIf="outputs.length">
               <h4 class="workflow-run-step-section">Outputs</h4>
               <div *ngFor="let output of outputs" class="workflow-run-step-output">
-                <code class="workflow-run-chip">{{ output.name }}</code> = <code class="workflow-run-chip">{{ output.value }}</code>
+                <code class="workflow-run-chip">{{ output.name }}</code> = <code class="workflow-run-chip">{{ output.value }}</code><ng-container *ngIf="output.origin">&ngsp;<span class="workflow-run-muted">from</span>&ngsp;<code class="workflow-run-chip">{{ output.origin }}</code></ng-container>
               </div>
             </ng-container>
           </ng-container>
+          <div *ngIf="step.requestUrl" class="workflow-run-exchange">
+            <div class="workflow-run-request">
+              <h4 class="workflow-run-step-section">Request</h4>
+              <div class="workflow-run-request-url" [title]="step.requestUrl"><code class="workflow-run-chip">{{ step.operation.method }} {{ requestTarget(step) }}</code></div>
+              <table *ngIf="step.parameters?.length" class="table workflow-run-criteria workflow-run-parameters">
+                <thead>
+                  <tr><th>Parameter</th><th>Value</th><th>From</th></tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let parameter of step.parameters" class="workflow-run-parameter">
+                    <td><code class="workflow-run-chip">{{ parameter.name }}</code>&ngsp;<span class="workflow-run-muted">{{ parameter.in }}</span></td>
+                    <td><code class="workflow-run-chip">{{ sent(parameter.value) }}</code></td>
+                    <td>
+                      <code *ngIf="parameter.expression" class="workflow-run-chip">{{ parameter.expression }}</code>
+                      <span *ngIf="!parameter.expression" class="workflow-run-muted">Constant</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              <ng-container *ngIf="exchange(run, step) | async as exchange">
+                <pre *ngIf="exchange.pair?.request?.content as content" class="workflow-run-body"><code [highlightAuto]="content" [languages]="hlLang"></code></pre>
+              </ng-container>
+            </div>
+            <div class="workflow-run-response">
+              <h4 class="workflow-run-step-section">Response</h4>
+              <ng-container *ngIf="step.statusCode != null; else noResponse">
+                <dl class="workflow-run-properties workflow-run-exchange-properties">
+                  <div class="workflow-run-property workflow-run-exchange-property">
+                    <dt>Status</dt>&ngsp;<dd><code class="workflow-run-chip">{{ step.statusCode }}</code></dd>
+                  </div>
+                  <div class="workflow-run-property workflow-run-exchange-property">
+                    <dt>Body</dt>&ngsp;<dd><ng-container *ngIf="exchange(run, step) | async as exchange"><span *ngIf="!exchange.pair?.response?.content" class="workflow-run-muted">Empty</span></ng-container></dd>
+                  </div>
+                </dl>
+                <ng-container *ngIf="exchange(run, step) | async as exchange">
+                  <pre *ngIf="exchange.pair?.response?.content as content" class="workflow-run-body"><code [highlightAuto]="content" [languages]="hlLang"></code></pre>
+                </ng-container>
+              </ng-container>
+              <ng-template #noResponse><p class="workflow-run-muted workflow-run-no-response">No response</p></ng-template>
+            </div>
+          </div>
           <ng-container *ngIf="step.criteria.length">
             <h4 class="workflow-run-step-section">Success criteria</h4>
             <table class="table workflow-run-criteria">
