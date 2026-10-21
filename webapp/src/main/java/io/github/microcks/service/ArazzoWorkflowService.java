@@ -24,6 +24,7 @@ import io.github.microcks.domain.ArazzoStepDetail;
 import io.github.microcks.domain.ArazzoStepParameter;
 import io.github.microcks.domain.ArazzoStepRequestBody;
 import io.github.microcks.domain.ArazzoWorkflowDetail;
+import io.github.microcks.domain.ArazzoWorkflowInput;
 import io.github.microcks.repository.ArazzoDocumentRepository;
 import io.github.microcks.service.ArazzoDocumentService.ResolvedSource;
 import io.github.microcks.util.ObjectMapperFactory;
@@ -78,12 +79,17 @@ public class ArazzoWorkflowService {
       Map<String, ResolvedSource> sources = arazzoDocumentService.resolveSources(document);
       return new ArazzoWorkflowDetail(document.getId(), document.getTitle(), document.getVersion(),
             document.getWorkflowIds(), sources.values().stream().map(ResolvedSource::link).toList(),
-            workflow.workflowId(), workflow.summary(), workflow.description(), List.of(),
+            workflow.workflowId(), workflow.summary(), workflow.description(), inputs(workflow),
             workflow.steps().stream().map(step -> step(step, sources)).toList(), workflow.outputs(),
             ArazzoDataFlow.stepOutputPassings(workflow).stream()
                   .map(passing -> new ArazzoDataPassing(passing.fromStepId(), passing.outputName(),
                         expressionUse(passing.use())))
                   .toList());
+   }
+
+   private static List<ArazzoWorkflowInput> inputs(ArazzoWorkflow workflow) {
+      return ArazzoDataFlow.inputUses(workflow).entrySet().stream().map(input -> new ArazzoWorkflowInput(input.getKey(),
+            input.getValue().stream().map(ArazzoWorkflowService::expressionUse).toList())).toList();
    }
 
    private static ArazzoExpressionUse expressionUse(ArazzoUse use) {

@@ -45,6 +45,19 @@ class ArazzoDataFlowTest {
             .toList()));
    }
 
+   @ParameterizedTest
+   @CsvSource(delimiter = ';', value = { "parameters; pastry: read header X-Pastry | size: list query size",
+         "body; pastry: reprice body /name", "criteria; newPrice: reprice criterion",
+         "embedded; user-name: read header Authorization, read criterion", "constants; 'unused: '" })
+   void anInputIsListedWithWhereStepsUseItDeclaredInputsFirst(String example, String inputs) throws IOException {
+      assertEquals(inputs,
+            String.join(" | ",
+                  ArazzoDataFlow.inputUses(workflow(example)).entrySet().stream()
+                        .map(input -> input.getKey() + ": "
+                              + String.join(", ", input.getValue().stream().map(ArazzoDataFlowTest::describe).toList()))
+                        .toList()));
+   }
+
    private static ArazzoWorkflow workflow(String example) throws IOException {
       return ArazzoWorkflowReader.workflow(ArazzoFixtures.exampleOf(FIXTURE, example), "flow").orElseThrow();
    }

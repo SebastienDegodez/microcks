@@ -16,21 +16,24 @@
 package io.github.microcks.util.arazzo;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * The data flow of an Arazzo workflow: where its steps use the outputs of earlier steps, read from the runtime
- * expressions of their parameters, request body replacements and success criteria.
+ * The data flow of an Arazzo workflow: where its steps use its inputs and the outputs of earlier steps, read from the
+ * runtime expressions of their parameters, request body replacements and success criteria.
  * @author SebastienDegodez
  */
 public final class ArazzoDataFlow {
 
    /** Arazzo ids and output names are made of letters, digits, underscores and hyphens. */
    private static final String NAME = "([A-Za-z0-9_\\-]+)";
+   private static final Pattern INPUT = Pattern.compile("\\$inputs\\." + NAME);
    private static final Pattern STEP_OUTPUT = Pattern.compile("\\$steps\\." + NAME + "\\.outputs\\." + NAME);
 
    private ArazzoDataFlow() {
@@ -49,6 +52,26 @@ public final class ArazzoDataFlow {
          }
       }
       return List.copyOf(passings);
+   }
+
+   /**
+    * @param workflow A workflow of an Arazzo document
+    * @return For each input, where the steps use it, in the order of the steps, then of their places; each once. The
+    *         inputs the workflow declares come first, in the order of the document, then the inputs steps use without
+    *         the workflow declaring them, in the order of use
+    */
+   public static Map<String, List<ArazzoUse>> inputUses(ArazzoWorkflow workflow) {
+      Map<String, Set<ArazzoUse>> uses = new LinkedHashMap<>();
+      workflow.inputNames().forEach(inputName -> uses.put(inputName, new LinkedHashSet<>()));
+      for (ExpressionPlace place : places(workflow)) {
+         Matcher matcher = INPUT.matcher(place.expression());
+         while (matcher.find()) {
+            uses.computeIfAbsent(matcher.group(1), inputName -> new LinkedHashSet<>()).add(place.use());
+         }
+      }
+      Map<String, List<ArazzoUse>> inputUses = new LinkedHashMap<>();
+      uses.forEach((inputName, inputPlaces) -> inputUses.put(inputName, List.copyOf(inputPlaces)));
+      return inputUses;
    }
 
    /** The places where the steps of a workflow may use runtime expressions, in the order of the steps. */

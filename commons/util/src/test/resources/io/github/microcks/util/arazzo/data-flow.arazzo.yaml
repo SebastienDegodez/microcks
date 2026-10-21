@@ -117,7 +117,7 @@ workflows:
           - condition: $statusCode == 200 && $inputs.user-name != '' && $inputs.user-name != $steps.login.outputs.token
           - condition: $response.header.X-Token == $steps.login.outputs.token
 ---
-# example: constants - a workflow whose steps use neither step outputs nor inputs
+# example: constants - a workflow whose steps use neither step outputs nor the input it declares
 arazzo: 1.0.1
 info:
   title: Constants
@@ -127,6 +127,11 @@ sourceDescriptions:
     url: ./APIPastry-openapi.yaml
 workflows:
   - workflowId: flow
+    inputs:
+      type: object
+      properties:
+        unused:
+          type: string
     steps:
       - stepId: list
         operationId: GetPastries

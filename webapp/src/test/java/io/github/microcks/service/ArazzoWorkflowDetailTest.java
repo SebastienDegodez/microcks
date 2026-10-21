@@ -97,6 +97,23 @@ class ArazzoWorkflowDetailTest {
                   .toList());
    }
 
+   @Test
+   void inputsAndWorkflowOutputsAreListedWithWhereTheyAreUsed() throws Exception {
+      ArazzoDocument document = pastryScenariosAreImportedAndLinked();
+
+      ArazzoWorkflowDetail workflow = arazzoWorkflowService.getWorkflowDetail(document.getId(), "readThenReprice")
+            .orElseThrow();
+
+      assertEquals(List.of("pastry: readPastry path name", "newPrice: reprice body /price, reprice criterion"),
+            workflow.inputs().stream()
+                  .map(input -> input.name() + ": " + String.join(", ", input.usedBy().stream()
+                        .map(use -> use.stepId() + " " + use.place() + (use.target() == null ? "" : " " + use.target()))
+                        .toList()))
+                  .toList());
+      assertEquals("{before=$steps.readPastry.outputs.price, after=$steps.reprice.outputs.price}",
+            workflow.outputs().toString());
+   }
+
    /** Maintainer decision: a step whose operation is not found shows its operationId alone, with the S2 reason. */
    @ParameterizedTest
    @CsvSource(delimiter = ';', value = {
