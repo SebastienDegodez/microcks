@@ -13,8 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
+import { TestBed } from '@angular/core/testing';
+import { Router, provideRouter } from '@angular/router';
+import { RouterTestingHarness } from '@angular/router/testing';
 import { of, throwError } from 'rxjs';
 
 import { ArazzoWorkflowDetail } from '../../../models/arazzo-workflow.model';
@@ -70,27 +71,35 @@ function readThenReprice(): ArazzoWorkflowDetail {
 }
 
 describe('WorkflowDetailPageComponent', () => {
-  let fixture: ComponentFixture<WorkflowDetailPageComponent>;
+  let harness: RouterTestingHarness;
   let page: HTMLElement;
 
-  async function open(workflow: ArazzoWorkflowDetail | Error): Promise<void> {
+  async function open(workflow: ArazzoWorkflowDetail | Error,
+                      url = '/workflows/doc-1/readThenReprice'): Promise<void> {
     const service = {
       getWorkflow: jasmine.createSpy('getWorkflow')
         .and.returnValue(workflow instanceof Error ? throwError(() => workflow) : of(workflow))
     };
-    await TestBed.configureTestingModule({
-      imports: [WorkflowDetailPageComponent],
+    TestBed.configureTestingModule({
       providers: [
-        provideRouter([]),
-        { provide: ArazzoWorkflowService, useValue: service },
-        { provide: ActivatedRoute,
-          useValue: { paramMap: of(convertToParamMap({ documentId: 'doc-1', workflowId: 'readThenReprice' })) } }
+        provideRouter([{ path: 'workflows/:documentId/:workflowId', component: WorkflowDetailPageComponent }]),
+        { provide: ArazzoWorkflowService, useValue: service }
       ]
-    }).compileComponents();
-    fixture = TestBed.createComponent(WorkflowDetailPageComponent);
-    fixture.detectChanges();
-    page = fixture.nativeElement as HTMLElement;
+    });
+    harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl(url, WorkflowDetailPageComponent);
+    page = harness.routeNativeElement as HTMLElement;
     expect(service.getWorkflow).toHaveBeenCalledWith('doc-1', 'readThenReprice');
+  }
+
+  /** Lets the router navigate and the page render what it navigated to. */
+  async function settle(): Promise<void> {
+    await harness.fixture.whenStable();
+    harness.detectChanges();
+  }
+
+  function currentUrl(): string {
+    return TestBed.inject(Router).url;
   }
 
   function texts(selector: string, root: ParentNode = page): string[] {
@@ -228,6 +237,167 @@ describe('WorkflowDetailPageComponent', () => {
     ]);
     expect(Array.from(page.querySelectorAll('.workflow-source a')).map(link => link.getAttribute('href')))
       .toEqual(['/services/svc-1']);
+  });
+
+  describe('view switch', () => {
+
+    function switchButtons(): HTMLButtonElement[] {
+      return Array.from(page.querySelectorAll('.workflow-view-switch button')) as HTMLButtonElement[];
+    }
+
+    function pressed(): string[] {
+      return switchButtons().filter(button => button.getAttribute('aria-pressed') === 'true')
+        .map(button => normalized(button.textContent));
+    }
+
+    it('shows the steps by default, with a switch to the diagram', async () => {
+      await open(readThenReprice());
+
+      expect(switchButtons().map(button => normalized(button.textContent))).toEqual(['Steps', 'Diagram']);
+      expect(pressed()).toEqual(['Steps']);
+      expect(page.querySelectorAll('.workflow-step').length).toEqual(2);
+      expect(page.querySelector('.workflow-diagram')).toBeNull();
+    });
+
+    it('shows the diagram when the URL asks for it, and keeps that view on the tabs of the other workflows', async () => {
+      await open(readThenReprice(), '/workflows/doc-1/readThenReprice?view=diagram');
+
+      expect(pressed()).toEqual(['Diagram']);
+      expect(page.querySelector('.workflow-diagram')).not.toBeNull();
+      expect(page.querySelectorAll('.workflow-step').length).toEqual(0);
+      expect(Array.from(page.querySelectorAll('.workflow-tabs a')).map(link => link.getAttribute('href'))).toEqual([
+        '/workflows/doc-1/readThenReprice?view=diagram',
+        '/workflows/doc-1/listThenReadFirst?view=diagram'
+      ]);
+    });
+
+    it('switches to the diagram and back to the steps, keeping the choice in the URL', async () => {
+      await open(readThenReprice());
+
+      switchButtons()[1].click();
+      await settle();
+
+      expect(currentUrl()).toEqual('/workflows/doc-1/readThenReprice?view=diagram');
+      expect(pressed()).toEqual(['Diagram']);
+      expect(page.querySelector('.workflow-diagram')).not.toBeNull();
+
+      switchButtons()[0].click();
+      await settle();
+
+      expect(currentUrl()).toEqual('/workflows/doc-1/readThenReprice');
+      expect(pressed()).toEqual(['Steps']);
+      expect(page.querySelector('.workflow-diagram')).toBeNull();
+      expect(page.querySelectorAll('.workflow-step').length).toEqual(2);
+    });
+  });
+
+  describe('diagram', () => {
+
+    function diagramNode(id: string): HTMLElement {
+      return page.querySelector('.diagram-node[data-node-id="' + id + '"]') as HTMLElement;
+    }
+
+    it('draws the inputs, each step in order with its operation and criteria, then the outputs', async () => {
+      await open(readThenReprice(), '/workflows/doc-1/readThenReprice?view=diagram');
+
+      expect(Array.from(page.querySelectorAll('.diagram-node')).map(each => each.getAttribute('data-node-id')))
+        .toEqual(['inputs', 'step:readPastry', 'step:reprice', 'outputs']);
+      expect(texts('.diagram-node')).toEqual([
+        'Inputs pastry newPrice',
+        '1 readPastry REST GET /pastry/{name} GetPastryByName '
+          + '$statusCode == 200 && $response.body#/status == \'available\'',
+        '2 reprice REST PATCH /pastry/{name} PatchPastry '
+          + '$statusCode == 200 · $response.body#/price == $inputs.newPrice',
+        'Outputs before ← $steps.readPastry.outputs.price after ← $steps.reprice.outputs.price'
+      ]);
+    });
+
+    it('chains the inputs, the steps and the outputs with sequence edges', async () => {
+      await open(readThenReprice(), '/workflows/doc-1/readThenReprice?view=diagram');
+
+      expect(Array.from(page.querySelectorAll('.diagram-edge-sequence'))
+        .map(edge => edge.getAttribute('data-from') + ' -> ' + edge.getAttribute('data-to'))).toEqual([
+        'inputs -> step:readPastry',
+        'step:readPastry -> step:reprice',
+        'step:reprice -> outputs'
+      ]);
+    });
+
+    it('labels the data edges with what flows from the inputs and from a step output', async () => {
+      await open(readThenReprice(), '/workflows/doc-1/readThenReprice?view=diagram');
+
+      expect(Array.from(page.querySelectorAll('.diagram-edge-data'))
+        .map(edge => edge.getAttribute('data-from') + ' -> ' + edge.getAttribute('data-to'))).toEqual([
+        'inputs -> step:readPastry',
+        'inputs -> step:reprice',
+        'step:readPastry -> step:reprice'
+      ]);
+      expect(texts('.diagram-data-label')).toEqual([
+        '$inputs.pastry → path name',
+        '$inputs.newPrice → body /price → criterion',
+        'outputs.name → path name'
+      ]);
+    });
+
+    it('shows a step whose operation is not found with its operationId alone and the reason as a problem', async () => {
+      const workflow = readThenReprice();
+      workflow.steps[0].operation = { sourceName: 'pastryApi', operationId: 'GetPastryByName',
+        reason: 'no API name and version for this source' };
+      await open(workflow, '/workflows/doc-1/readThenReprice?view=diagram');
+
+      const unlinked = diagramNode('step:readPastry');
+      expect(normalized(unlinked.textContent)).toEqual('1 readPastry GetPastryByName '
+        + 'no API name and version for this source $statusCode == 200 && $response.body#/status == \'available\'');
+      expect(texts('.workflow-problem', unlinked)).toEqual(['no API name and version for this source']);
+      expect(unlinked.classList).toContain('diagram-node-problem');
+      expect(unlinked.querySelector('.workflow-protocol-chip')).toBeNull();
+      expect(diagramNode('step:reprice').classList).not.toContain('diagram-node-problem');
+    });
+
+    it('shows a workflow without input nor output', async () => {
+      const workflow = readThenReprice();
+      workflow.inputs = [];
+      workflow.outputs = {};
+      await open(workflow, '/workflows/doc-1/readThenReprice?view=diagram');
+
+      expect(texts('.diagram-node[data-node-id="inputs"]')).toEqual(['Inputs No input']);
+      expect(texts('.diagram-node[data-node-id="outputs"]')).toEqual(['Outputs No output']);
+    });
+
+    it('opens the step card of a step clicked in the diagram', async () => {
+      const scrolled = spyOn(Element.prototype, 'scrollIntoView');
+      await open(readThenReprice(), '/workflows/doc-1/readThenReprice?view=diagram');
+
+      diagramNode('step:reprice').click();
+      await settle();
+
+      expect(currentUrl()).toEqual('/workflows/doc-1/readThenReprice');
+      expect(page.querySelector('.workflow-diagram')).toBeNull();
+      expect(scrolled).toHaveBeenCalledTimes(1);
+      expect(scrolled.calls.mostRecent().object).toBe(step('reprice'));
+    });
+
+    it('opens the step card of a step chosen with the keyboard', async () => {
+      const scrolled = spyOn(Element.prototype, 'scrollIntoView');
+      await open(readThenReprice(), '/workflows/doc-1/readThenReprice?view=diagram');
+
+      const node = diagramNode('step:readPastry');
+      expect(node.getAttribute('tabindex')).toEqual('0');
+      expect(node.getAttribute('role')).toEqual('button');
+      node.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+      await settle();
+
+      expect(currentUrl()).toEqual('/workflows/doc-1/readThenReprice');
+      expect(scrolled.calls.mostRecent().object).toBe(step('readPastry'));
+    });
+
+    it('keeps the run controls disabled and shows no run result on the nodes', async () => {
+      await open(readThenReprice(), '/workflows/doc-1/readThenReprice?view=diagram');
+
+      const controls = Array.from(page.querySelectorAll('.workflow-run-controls button')) as HTMLButtonElement[];
+      expect(controls.every(control => control.disabled)).toBeTrue();
+      expect(page.querySelectorAll('.workflow-diagram [class*="status"]').length).toEqual(0);
+    });
   });
 
   it('says the workflow is not found when it cannot be read', async () => {

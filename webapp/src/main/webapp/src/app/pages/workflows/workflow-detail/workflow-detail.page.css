@@ -149,6 +149,47 @@
   font-weight: 600;
 }
 
+/* Summary and description, with the steps / diagram switch on their right. */
+.workflow-intro {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0 16px;
+}
+
+.workflow-intro-text {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.workflow-view-switch {
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.workflow-view-switch .btn {
+  border-color: var(--divider-light);
+  background: var(--background);
+  color: var(--text-default);
+  font-weight: 600;
+}
+
+.workflow-view-switch .fa {
+  margin-right: 3px;
+}
+
+.workflow-view-switch .btn:hover {
+  background: var(--surface-hover);
+}
+
+.workflow-view-switch .btn.active {
+  border-color: var(--primary-400);
+  background: color-mix(in srgb, var(--primary-400) 14%, var(--background));
+  box-shadow: none;
+  color: var(--text-strong);
+}
+
 .workflow-summary,
 .workflow-description {
   font-size: 13px;
@@ -159,6 +200,7 @@
 .workflow-step {
   border: 1px solid var(--surface-border);
   background: var(--background);
+  scroll-margin-top: 80px;
 }
 
 .workflow-step-heading {

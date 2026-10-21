@@ -1,0 +1,243 @@
+/*
+ * Copyright The Microcks Authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *  http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+import { ArazzoExpressionUse, ArazzoStepDetail, ArazzoWorkflowDetail } from '../../../../models/arazzo-workflow.model';
+
+/** A rectangle of the diagram, in pixels from its top left corner. */
+export type DiagramBox = { x: number; y: number; width: number; height: number };
+
+/** The result of a step in a run. Reserved for the runs to come: the diagram does not show it yet. */
+export type DiagramNodeStatus = 'passed' | 'failed' | 'skipped';
+
+/** The inputs, a step or the outputs of the workflow; a step node carries the step and its position (from 0). */
+export type DiagramNode = DiagramBox & {
+  id: string;
+  kind: 'inputs' | 'step' | 'outputs';
+  step?: ArazzoStepDetail;
+  index?: number;
+  status?: DiagramNodeStatus;
+};
+
+/** What a data edge carries, one line per text line; 'end' aligns the lines on the right edge of the box. */
+export type DiagramLabel = DiagramBox & { lines: string[]; align: 'start' | 'end' };
+
+/** A sequence edge goes from a node to the next one; a data edge brings a value to a step, on one side. */
+export type DiagramEdge = {
+  kind: 'sequence' | 'data';
+  from: string;
+  to: string;
+  side?: 'left' | 'right';
+  path: string;
+  label?: DiagramLabel;
+};
+
+export type WorkflowDiagram = { width: number; height: number; nodes: DiagramNode[]; edges: DiagramEdge[] };
+
+const MARGIN = 16;
+const NODE_WIDTH = 300;
+/** The width left for text inside a node: its width less its border and padding. */
+const NODE_TEXT_WIDTH = NODE_WIDTH - 2 * 2 - 2 * 12;
+const NODE_GAP = 56;
+const NODE_PADDING = 2 * 2 + 2 * 10;
+
+/** Approximate character widths: monospace is 0.6em, Open Sans a bit less; a measured height replaces the estimate. */
+const MONO_12 = 7.3;
+const MONO_11 = 6.7;
+const SANS_13 = 7.4;
+
+const LANE_FIRST = 28;
+const LANE_STEP = 28;
+const EXIT_ABOVE_BOTTOM = 12;
+const ENTRY_BELOW_TOP = 18;
+const ENTRY_STEP = 10;
+
+const LABEL_MAX_CHARS = 28;
+const LABEL_GAP = 6;
+const LABEL_LINE = 16;
+const LABEL_PADDING_X = 6;
+const LABEL_PADDING_Y = 3;
+
+/**
+ * Lays the workflow out as a top-down flow chart: the inputs, each step in order, then the outputs, in one column
+ * linked by sequence edges. Each value given to a step is a data edge curving on a side of the column: values of
+ * the workflow inputs on the left, step outputs on the right, each with a label telling where the value goes.
+ *
+ * Node heights are estimated from their text; the heights measured once rendered (by node id) replace them.
+ */
+export function layoutWorkflowDiagram(workflow: ArazzoWorkflowDetail,
+                                      measuredHeights: Record<string, number> = {}): WorkflowDiagram {
+  const nodes = placeNodes(workflow, measuredHeights);
+  const flows = dataFlows(workflow, nodes);
+  const left = sideExtent(flows.filter(flow => flow.side === 'left'));
+  const right = sideExtent(flows.filter(flow => flow.side === 'right'));
+  nodes.forEach(node => node.x = MARGIN + left);
+
+  const edges = [...sequenceEdges(nodes), ...dataEdges(flows, nodes)];
+  const bottoms = [...nodes, ...edges.filter(edge => edge.label).map(edge => edge.label!)]
+    .map(box => box.y + box.height);
+  return {
+    width: MARGIN + left + NODE_WIDTH + right + MARGIN,
+    height: Math.max(...bottoms) + MARGIN,
+    nodes,
+    edges
+  };
+}
+
+function placeNodes(workflow: ArazzoWorkflowDetail, measuredHeights: Record<string, number>): DiagramNode[] {
+  const nodes: DiagramNode[] = [
+    { id: 'inputs', kind: 'inputs', x: 0, y: 0, width: NODE_WIDTH, height: inputsHeight(workflow) },
+    ...workflow.steps.map((step, index) => ({ id: 'step:' + step.stepId, kind: 'step' as const, step, index,
+      x: 0, y: 0, width: NODE_WIDTH, height: stepHeight(step) })),
+    { id: 'outputs', kind: 'outputs', x: 0, y: 0, width: NODE_WIDTH, height: outputsHeight(workflow) }
+  ];
+  let y = MARGIN;
+  nodes.forEach(node => {
+    node.height = measuredHeights[node.id] ?? node.height;
+    node.y = y;
+    y += node.height + NODE_GAP;
+  });
+  return nodes;
+}
+
+function linesOf(text: string, charWidth: number, width = NODE_TEXT_WIDTH): number {
+  return Math.max(1, Math.ceil(text.length * charWidth / width));
+}
+
+function inputsHeight(workflow: ArazzoWorkflowDetail): number {
+  const chips = workflow.inputs.map(input => input.name + '   ').join('');
+  return NODE_PADDING + 22 + 22 * linesOf(chips || 'No input', MONO_12);
+}
+
+function outputsHeight(workflow: ArazzoWorkflowDetail): number {
+  const outputs = Object.entries(workflow.outputs).map(([name, expression]) => name + ' ← ' + expression);
+  return NODE_PADDING + 22 + (outputs.length ? outputs : ['No output'])
+    .reduce((height, output) => height + 4 + 18 * linesOf(output, MONO_12), 0);
+}
+
+function stepHeight(step: ArazzoStepDetail): number {
+  const operation = step.operation;
+  const endpoint = operation.reason ? 0 : 20 * linesOf('REST  ' + operation.method + ' ' + operation.path, MONO_12);
+  const operationId = 20 * linesOf(operation.operationId + (operation.reason ? '  ' + operation.reason : ''), SANS_13);
+  const criteria = step.successCriteria.map(criterion => criterion.condition).join(' · ');
+  return NODE_PADDING + 28 + endpoint + operationId + (criteria ? 6 + 16 * linesOf('✓ ' + criteria, MONO_11) : 0);
+}
+
+function sequenceEdges(nodes: DiagramNode[]): DiagramEdge[] {
+  // The Arazzo subset read today only runs steps one after the other: onSuccess, onFailure and goto are refused at
+  // import. Branching edges, from a step to the step its success or failure action goes to, would be added here.
+  return nodes.slice(1).map((node, i) => {
+    const above = nodes[i];
+    const middle = above.x + above.width / 2;
+    return { kind: 'sequence', from: above.id, to: node.id,
+      path: `M ${middle} ${above.y + above.height} L ${middle} ${node.y}` };
+  });
+}
+
+/** A value given to a step, before it gets a lane and a label position. */
+type DataFlow = { from: string; to: string; side: 'left' | 'right'; lines: string[]; lane: number };
+
+function dataFlows(workflow: ArazzoWorkflowDetail, nodes: DiagramNode[]): DataFlow[] {
+  const flows: DataFlow[] = [];
+  const add = (from: string, side: 'left' | 'right', expression: string, use: ArazzoExpressionUse) => {
+    const to = 'step:' + use.stepId;
+    if (!nodes.some(node => node.id === to)) {
+      return;
+    }
+    const place = '→ ' + use.place + (use.target ? ' ' + use.target : '');
+    const flow = flows.find(each => each.from === from && each.to === to && each.lines[0] === expression);
+    if (flow) {
+      flow.lines.push(place);
+    } else {
+      flows.push({ from, to, side, lines: [expression, place], lane: 0 });
+    }
+  };
+  workflow.inputs.forEach(input => input.usedBy.forEach(use => add('inputs', 'left', '$inputs.' + input.name, use)));
+  workflow.dataPassings.forEach(passing =>
+    add('step:' + passing.fromStepId, 'right', 'outputs.' + passing.outputName, passing.to));
+
+  const span = (flow: DataFlow) => Math.abs(indexOf(nodes, flow.to) - indexOf(nodes, flow.from));
+  (['left', 'right'] as const).forEach(side => flows.filter(flow => flow.side === side)
+    .sort((a, b) => span(a) - span(b))
+    .forEach((flow, lane) => flow.lane = lane));
+  flows.forEach(flow => flow.lines = flow.lines.flatMap(wrap));
+  return flows;
+}
+
+function indexOf(nodes: DiagramNode[], id: string): number {
+  return nodes.findIndex(node => node.id === id);
+}
+
+function wrap(line: string): string[] {
+  const lines: string[] = [];
+  for (let start = 0; start < line.length; start += LABEL_MAX_CHARS) {
+    lines.push(line.substring(start, start + LABEL_MAX_CHARS));
+  }
+  return lines;
+}
+
+function laneOffset(lane: number): number {
+  return LANE_FIRST + lane * LANE_STEP;
+}
+
+/** How far a curve bulges from the side of the nodes: a cubic curve reaches 3/4 of its control points. */
+function bulge(lane: number): number {
+  return Math.ceil(laneOffset(lane) * 3 / 4);
+}
+
+function labelSize(lines: string[]): { width: number; height: number } {
+  return {
+    width: Math.ceil(Math.max(...lines.map(line => line.length)) * MONO_11) + 2 * LABEL_PADDING_X,
+    height: lines.length * LABEL_LINE + 2 * LABEL_PADDING_Y
+  };
+}
+
+/** The room a side takes next to the nodes: the widest bulge plus its label. */
+function sideExtent(flows: DataFlow[]): number {
+  return Math.max(0, ...flows.map(flow => bulge(flow.lane) + LABEL_GAP + labelSize(flow.lines).width));
+}
+
+function dataEdges(flows: DataFlow[], nodes: DiagramNode[]): DiagramEdge[] {
+  const entries = new Map<string, number>();
+  const edges = flows.map(flow => {
+    const source = nodes[indexOf(nodes, flow.from)];
+    const target = nodes[indexOf(nodes, flow.to)];
+    const direction = flow.side === 'left' ? -1 : 1;
+    const x = flow.side === 'left' ? source.x : source.x + source.width;
+    const entry = entries.get(flow.side + flow.to) ?? 0;
+    entries.set(flow.side + flow.to, entry + 1);
+
+    const startY = source.y + source.height - EXIT_ABOVE_BOTTOM;
+    const endY = target.y + ENTRY_BELOW_TOP + entry * ENTRY_STEP;
+    const laneX = x + direction * laneOffset(flow.lane);
+    const size = labelSize(flow.lines);
+    const apex = x + direction * (bulge(flow.lane) + LABEL_GAP);
+    const label: DiagramLabel = { lines: flow.lines, align: flow.side === 'left' ? 'end' : 'start',
+      x: flow.side === 'left' ? apex - size.width : apex, y: Math.round((startY + endY - size.height) / 2), ...size };
+    return { kind: 'data' as const, from: flow.from, to: flow.to, side: flow.side, label,
+      path: `M ${x} ${startY} C ${laneX} ${startY} ${laneX} ${endY} ${x} ${endY}` };
+  });
+  separateLabels(edges.map(edge => edge.label));
+  return edges;
+}
+
+/** Moves a label down below the labels above it that it would cover. */
+function separateLabels(labels: DiagramLabel[]): void {
+  const placed: DiagramLabel[] = [];
+  [...labels].sort((a, b) => a.y - b.y).forEach(label => {
+    placed.filter(other => other.x < label.x + label.width && label.x < other.x + other.width)
+      .forEach(other => label.y = Math.max(label.y, other.y + other.height + 4));
+    placed.push(label);
+  });
+}

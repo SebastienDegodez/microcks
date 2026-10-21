@@ -52,16 +52,33 @@
 
     <ul class="nav nav-tabs workflow-tabs">
       <li *ngFor="let workflowId of workflow.workflowIds" [class.active]="workflowId === workflow.workflowId">
-        <a [routerLink]="['/workflows', workflow.documentId, workflowId]">{{ workflowId }}</a>
+        <a [routerLink]="['/workflows', workflow.documentId, workflowId]" queryParamsHandling="preserve">{{ workflowId }}</a>
       </li>
     </ul>
 
     <div class="row workflow-body">
       <div class="col-md-8">
-        <p *ngIf="workflow.summary" class="workflow-summary">{{ workflow.summary }}</p>
-        <p *ngIf="workflow.description" class="workflow-description">{{ workflow.description }}</p>
+        <div class="workflow-intro">
+          <div class="workflow-intro-text">
+            <p *ngIf="workflow.summary" class="workflow-summary">{{ workflow.summary }}</p>
+            <p *ngIf="workflow.description" class="workflow-description">{{ workflow.description }}</p>
+          </div>
+          <div class="btn-group btn-group-sm workflow-view-switch" role="group" aria-label="Show the workflow as">
+            <button type="button" class="btn btn-default" [class.active]="state.view === 'steps'"
+                    [attr.aria-pressed]="state.view === 'steps'" (click)="showView('steps')">
+              <span class="fa fa-list-ol" aria-hidden="true"></span>&ngsp;Steps
+            </button>
+            <button type="button" class="btn btn-default" [class.active]="state.view === 'diagram'"
+                    [attr.aria-pressed]="state.view === 'diagram'" (click)="showView('diagram')">
+              <span class="fa fa-sitemap" aria-hidden="true"></span>&ngsp;Diagram
+            </button>
+          </div>
+        </div>
 
-        <div class="workflow-steps">
+        <app-workflow-diagram *ngIf="state.view === 'diagram'" [workflow]="workflow"
+                              (stepSelected)="openStep($event)"></app-workflow-diagram>
+
+        <div *ngIf="state.view === 'steps'" class="workflow-steps">
           <ng-container *ngFor="let step of workflow.steps; let index = index">
             <p *ngFor="let passing of passingsTo(workflow, step)" class="workflow-data-passing">
               <span class="workflow-arrow" aria-hidden="true"></span>
