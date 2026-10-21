@@ -69,6 +69,8 @@ export class WorkflowRunDialogComponent implements OnInit {
   timeout = 10000;
   error?: string;
   running = false;
+  /** Once a run is refused, the inputs it needs that are still empty are marked. */
+  refused = false;
 
   constructor(public bsModalRef: BsModalRef, private workflowSvc: ArazzoWorkflowService,
               private runSvc: ArazzoRunService, private router: Router) {
@@ -87,6 +89,12 @@ export class WorkflowRunDialogComponent implements OnInit {
     this.workflowId = workflowId;
     this.values = {};
     this.error = undefined;
+    this.refused = false;
+  }
+
+  /** Whether an input a run needs is still empty after a run was refused. */
+  isMissing(input: ArazzoWorkflowInput): boolean {
+    return this.refused && !!input.required && isEmpty(this.values[input.name]);
   }
 
   /** Where the mocks of the first linked API are, as Microcks serves them. */
@@ -129,7 +137,7 @@ export class WorkflowRunDialogComponent implements OnInit {
     const inputs: Record<string, unknown> = {};
     workflow.inputs.forEach(input => {
       const value = this.values[input.name];
-      if (value !== undefined && value !== null && value !== '') {
+      if (!isEmpty(value)) {
         inputs[input.name] = value;
       }
     });
@@ -142,10 +150,16 @@ export class WorkflowRunDialogComponent implements OnInit {
       },
       error: refusal => {
         this.running = false;
+        this.refused = true;
         this.error = typeof refusal.error === 'string' ? refusal.error : 'Microcks could not run the workflow.';
       }
     });
   }
+}
+
+/** An input left empty is not given. */
+function isEmpty(value: string | number | null | undefined): boolean {
+  return value === undefined || value === null || value === '';
 }
 
 /** Microcks writes the spaces of the name and version of an API as + in the URLs of its mocks. */

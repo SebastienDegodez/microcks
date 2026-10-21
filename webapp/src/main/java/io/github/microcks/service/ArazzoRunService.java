@@ -30,6 +30,8 @@ import io.github.microcks.repository.RequestRepository;
 import io.github.microcks.repository.ResponseRepository;
 import io.github.microcks.repository.WorkflowResultRepository;
 import io.github.microcks.service.ArazzoDocumentService.ResolvedSource;
+import io.github.microcks.util.arazzo.ArazzoDataFlow;
+import io.github.microcks.util.arazzo.ArazzoWorkflowReader;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -84,10 +86,10 @@ public class ArazzoRunService {
     * Run a workflow against the Microcks mocks of the APIs its source descriptions are linked to.
     * @param documentId The id of the Arazzo document
     * @param workflowId The id of the workflow in that document
-    * @param inputs     The inputs of the workflow, by name
+    * @param inputs     The inputs of the workflow, by name; null for none
     * @param timeout    How long a step waits for its response, in milliseconds; null for 10 seconds
     * @return The run, in progress; empty if the document or the workflow does not exist
-    * @throws ArazzoRunRefusedException if the workflow cannot run
+    * @throws ArazzoRunRefusedException if the workflow cannot run, or if an input it needs is missing
     */
    public Optional<WorkflowResult> launchRun(String documentId, String workflowId, Map<String, Object> inputs,
          Long timeout) throws ArazzoRunRefusedException {
@@ -104,6 +106,12 @@ public class ArazzoRunService {
          throw new ArazzoRunRefusedException(
                "Workflow " + workflowId + " cannot run: " + String.join(", ", status.reasons()));
       }
+      Map<String, Object> givenInputs = inputs == null ? Map.of() : inputs;
+      List<String> missingInputs = missingInputs(document, workflowId, givenInputs);
+      if (!missingInputs.isEmpty()) {
+         throw new ArazzoRunRefusedException(
+               (missingInputs.size() == 1 ? "Missing input: " : "Missing inputs: ") + String.join(", ", missingInputs));
+      }
       List<ResolvedSource> linked = sources.values().stream().filter(source -> source.api() != null).toList();
       WorkflowResult run = new WorkflowResult();
       run.setDocumentId(document.getId());
@@ -113,20 +121,30 @@ public class ArazzoRunService {
       run.setTarget(WorkflowRunTarget.MOCKS);
       run.setSources(linked.stream().map(source -> new WorkflowSourceTarget(source.link().sourceName(),
             source.serviceId(), source.link().apiName(), source.link().apiVersion(), mocksOf(source))).toList());
-      run.setInputs(inputs);
+      run.setInputs(givenInputs);
       run.setTimeout(timeout == null ? DEFAULT_TIMEOUT : timeout);
       run.setStatus(WorkflowRunStatus.IN_PROGRESS);
       run.setStartedDate(new Date());
       WorkflowResult launched = workflowResultRepository.save(run);
       try {
-         arazzoMinionClient.launch(new ArazzoRunRequest(launched.getId(), workflowId, document.getContent(), inputs,
-               targets(linked), launched.getTimeout()));
+         arazzoMinionClient.launch(new ArazzoRunRequest(launched.getId(), workflowId, document.getContent(),
+               givenInputs, targets(linked), launched.getTimeout()));
       } catch (ArazzoMinionException ame) {
          launched.setStatus(WorkflowRunStatus.FAILURE);
          launched.setMessage(ame.getMessage());
          workflowResultRepository.save(launched);
       }
       return Optional.of(launched);
+   }
+
+   /**
+    * The inputs a run of the workflow needs that are not given, or given as null; in the order the kernel gives them.
+    */
+   private static List<String> missingInputs(ArazzoDocument document, String workflowId,
+         Map<String, Object> givenInputs) {
+      return ArazzoWorkflowReader.workflow(ArazzoWorkflowService.parse(document.getContent()), workflowId)
+            .map(ArazzoDataFlow::neededInputs).orElse(List.of()).stream()
+            .filter(inputName -> givenInputs.get(inputName) == null).toList();
    }
 
    /** The base URL of the Microcks mocks of the API a source is linked to, as Microcks encodes it. */

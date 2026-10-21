@@ -115,6 +115,21 @@ class ArazzoRunControllerIT extends AbstractBaseIT {
       assertEquals(List.of(), MINION.runRequests());
    }
 
+   /** S8 AC-01: a run missing an input is refused with a 400 naming it, and nothing reaches the minion. */
+   @Test
+   void aRunMissingAnInputIsRefusedNamingItAndNotHandedToTheMinion() throws Exception {
+      String documentId = pastryScenariosAreImported("pastry-scenarios.arazzo.yaml");
+
+      ResponseEntity<String> refused = restTemplate.postForEntity(
+            "/api/arazzo/documents/" + documentId + "/workflows/readThenReprice/runs",
+            json("{\"inputs\": {\"pastry\": \"Eclair Cafe\"}, \"timeout\": 10000}"), String.class);
+
+      assertEquals(400, refused.getStatusCode().value());
+      assertEquals("Missing input: newPrice", refused.getBody());
+      assertEquals(List.of(), MINION.runRequests());
+      assertEquals(0, workflowResultRepository.count());
+   }
+
    @Test
    void anUnknownWorkflowOrRunIsNotFound() throws Exception {
       String documentId = pastryScenariosAreImported("pastry-scenarios.arazzo.yaml");

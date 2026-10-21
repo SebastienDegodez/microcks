@@ -287,6 +287,55 @@ class ArazzoRunTest {
       assertEquals(List.of(), minion.requests());
    }
 
+   /** S8 AC-01: a run missing an input is refused, naming the input, and no call is made to the mocks. */
+   @Test
+   void aRunMissingAnInputIsRefusedNamingItAndNoCallIsMadeToTheMocks() throws Exception {
+      ArazzoDocument document = pastryScenariosAreImportedAndLinked("pastry-scenarios.arazzo.yaml");
+
+      ArazzoRunRefusedException refused = assertThrows(ArazzoRunRefusedException.class, () -> arazzoRunService
+            .launchRun(document.getId(), "readThenReprice", Map.of("pastry", "Eclair Cafe"), 10000L));
+
+      assertEquals("Missing input: newPrice", refused.getMessage());
+      assertEquals(List.of(), workflowResultRepository.findAll());
+      assertEquals(List.of(), minion.requests());
+   }
+
+   /**
+    * S8: every missing input is named, the inputs the workflow declares first, whether its steps or outputs use them or
+    * its inputs schema requires them. An input given as null is missing.
+    */
+   @ParameterizedTest
+   @CsvSource(delimiter = ';', value = {
+         "pastry-scenarios.arazzo.yaml; readThenReprice; ; Missing inputs: pastry, newPrice",
+         "pastry-scenarios.arazzo.yaml; readThenReprice; newPrice=2.6; Missing input: pastry",
+         "pastry-scenarios.arazzo.yaml; readThenReprice; pastry=Eclair Cafe|newPrice=null; Missing input: newPrice",
+         "pastry-needed-inputs.arazzo.yaml; readAndTell; comment=Fine; Missing inputs: pastry, note, label",
+         "pastry-needed-inputs.arazzo.yaml; readAndTell; pastry=Eclair Cafe|label=Tasty; Missing input: note" })
+   void everyMissingInputIsNamedInAStableOrder(String fixture, String workflowId, String given, String reason)
+         throws Exception {
+      ArazzoDocument document = pastryScenariosAreImportedAndLinked(fixture);
+
+      ArazzoRunRefusedException refused = assertThrows(ArazzoRunRefusedException.class,
+            () -> arazzoRunService.launchRun(document.getId(), workflowId, inputs(given), 10000L));
+
+      assertEquals(reason, refused.getMessage());
+      assertEquals(List.of(), workflowResultRepository.findAll());
+      assertEquals(List.of(), minion.requests());
+   }
+
+   /** S8 AC-02: a workflow that uses no input runs without any. */
+   @Test
+   void aWorkflowWithoutInputsRunsWithoutInputs() throws Exception {
+      ArazzoDocument document = pastryScenariosAreImportedAndLinked("pastry-scenarios.arazzo.yaml");
+
+      WorkflowResult withNoInput = launch(document, "listThenReadFirst", Map.of(), 10000L);
+      WorkflowResult withoutInputs = launch(document, "listThenReadFirst", null, 10000L);
+
+      assertEquals(List.of(WorkflowRunStatus.IN_PROGRESS, WorkflowRunStatus.IN_PROGRESS),
+            List.of(withNoInput.getStatus(), withoutInputs.getStatus()));
+      assertEquals(List.of(Map.of(), Map.of()), minion.requests().stream().map(ArazzoRunRequest::inputs).toList());
+   }
+
    @ParameterizedTest
    @CsvSource({ "false, readThenReprice", "true, unknown" })
    void anUnknownDocumentOrWorkflowHasNoRun(boolean knownDocument, String workflowId) throws Exception {
@@ -303,7 +352,7 @@ class ArazzoRunTest {
       arazzoDocumentService.importArazzoSources(fixture("order-fulfilment.arazzo-sources.yaml"));
       ArazzoDocument document = arazzoDocumentService.importArazzoDocument(fixture("order-fulfilment.arazzo.yaml"));
 
-      WorkflowResult run = launch(document, "searchThenRead", Map.of(), 10000L);
+      WorkflowResult run = launch(document, "searchThenRead", Map.of("name", "Jane"), 10000L);
 
       assertEquals(List.of("customerApi /rest/Customer+API/1.0.0"),
             run.getSources().stream().map(source -> source.sourceName() + " " + source.baseUrl()).toList());
@@ -355,6 +404,18 @@ class ArazzoRunTest {
 
    private static List<String> described(WorkflowResult run) {
       return run.getSteps().stream().map(step -> step.index() + " " + step.stepId() + " " + step.status()).toList();
+   }
+
+   /** Inputs written as name=value, separated by |; the value null stands for an input given as null. */
+   private static Map<String, Object> inputs(String given) {
+      Map<String, Object> inputs = new LinkedHashMap<>();
+      if (given != null) {
+         for (String input : given.split("\\|")) {
+            String[] nameAndValue = input.split("=");
+            inputs.put(nameAndValue[0], "null".equals(nameAndValue[1]) ? null : nameAndValue[1]);
+         }
+      }
+      return inputs;
    }
 
    private static Map<String, Object> pastryInputs() {

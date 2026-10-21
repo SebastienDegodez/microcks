@@ -134,6 +134,26 @@ class ArazzoWorkflowDetailTest {
             workflow.inputs().stream().map(input -> input.name() + ": " + input.type()).toList());
    }
 
+   /**
+    * S8, run dialog: each input tells whether a run needs it, because the steps or the outputs use it or the inputs
+    * schema requires it; an input the outputs use without the workflow declaring it is asked for too.
+    */
+   @Test
+   void eachInputTellsWhetherARunNeedsIt() throws Exception {
+      apiIsImported("api-pastry-2.0.openapi.yaml");
+      arazzoDocumentService.importArazzoSources(fixture("pastry.arazzo-sources.yaml"));
+      ArazzoDocument document = arazzoDocumentService.importArazzoDocument(fixture("pastry-needed-inputs.arazzo.yaml"));
+
+      ArazzoWorkflowDetail workflow = arazzoWorkflowService.getWorkflowDetail(document.getId(), "readAndTell")
+            .orElseThrow();
+
+      assertEquals(
+            List.of("pastry: required, used 1 time(s)", "note: required, used 0 time(s)",
+                  "comment: optional, used 0 time(s)", "label: required, used 0 time(s)"),
+            workflow.inputs().stream().map(input -> input.name() + ": " + (input.required() ? "required" : "optional")
+                  + ", used " + input.usedBy().size() + " time(s)").toList());
+   }
+
    /** S5: the Run button of the workflow page is enabled when the workflow can run, else gives the S2 reason. */
    @ParameterizedTest
    @CsvSource(delimiter = ';', value = { "pastry-scenarios.arazzo.yaml; readThenReprice: runnable []",
