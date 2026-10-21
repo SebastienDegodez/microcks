@@ -47,7 +47,7 @@
         </ng-container>
         <span *ngIf="source.reason" class="workflow-problem">
           <span class="pficon pficon-warning-triangle-o" aria-hidden="true"></span> {{ source.reason }}
-        </span>
+        </span>&ngsp;<button type="button" class="btn btn-link workflow-change-link" (click)="openLinkSources(workflow)">{{ source.reason ? 'Link source' : 'Change link' }}</button>
       </li>
     </ul>
 

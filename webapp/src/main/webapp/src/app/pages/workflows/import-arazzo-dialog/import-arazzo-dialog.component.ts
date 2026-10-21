@@ -15,12 +15,14 @@
  */
 import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { BsModalRef } from 'ngx-bootstrap/modal';
+import { Observable } from 'rxjs';
 
 import {
   ArazzoApiRef,
+  ArazzoDocumentSummary,
   ArazzoImportAnalysis,
   ArazzoSourceAnalysis,
   ArazzoSourceLinks,
@@ -36,7 +38,8 @@ export interface SourceHint {
 
 /**
  * Imports an Arazzo document and links its source descriptions to Microcks APIs in one go: the document is analysed
- * when dropped and again each time a link changes, then imported with its links.
+ * when dropped and again each time a link changes, then imported with its links. Opened on an imported document, it
+ * is the linking step of that document only: its links are saved as the sources of its overlay.
  */
 @Component({
   selector: 'app-import-arazzo-dialog',
@@ -44,8 +47,11 @@ export interface SourceHint {
   styleUrls: ['./import-arazzo-dialog.component.css'],
   imports: [CommonModule, FormsModule],
 })
-export class ImportArazzoDialogComponent {
-  fileName?: string;
+export class ImportArazzoDialogComponent implements OnInit {
+  /** The name of the file of the document; null when it is not known. */
+  fileName?: string | null;
+  /** The imported document whose sources are linked again; absent to import a document. */
+  documentId?: string;
   content?: string;
   analysis?: ArazzoImportAnalysis;
   /** The option picked for each source description, by name: the key of an API, or '' when it is not linked. */
@@ -59,6 +65,13 @@ export class ImportArazzoDialogComponent {
     private arazzoDocumentsSvc: ArazzoDocumentsService,
     private uploaderDialogService: UploaderDialogService
   ) {}
+
+  /** The linking step of an imported document analyses it as soon as it opens, with the links of its overlay. */
+  ngOnInit(): void {
+    if (this.documentId) {
+      this.analyse();
+    }
+  }
 
   onDragOver(event: DragEvent): void {
     event.preventDefault();
@@ -165,7 +178,10 @@ export class ImportArazzoDialogComponent {
   importDocument(): void {
     this.importing = true;
     this.importError = undefined;
-    this.arazzoDocumentsSvc.importDocument(this.content as string, this.fileName as string, this.links()).subscribe({
+    const saving: Observable<ArazzoDocumentSummary> = this.documentId
+      ? this.arazzoDocumentsSvc.relinkSources(this.documentId, this.links())
+      : this.arazzoDocumentsSvc.importDocument(this.content as string, this.fileName as string, this.links());
+    saving.subscribe({
       next: () => {
         this.importing = false;
         this.bsModalRef.hide();
@@ -178,7 +194,10 @@ export class ImportArazzoDialogComponent {
   }
 
   private analyse(links?: ArazzoSourceLinks): void {
-    this.arazzoDocumentsSvc.analyseDocument(this.content as string, links).subscribe((analysis) => {
+    const analysing: Observable<ArazzoImportAnalysis> = this.documentId
+      ? this.arazzoDocumentsSvc.analyseImportedDocument(this.documentId, links)
+      : this.arazzoDocumentsSvc.analyseDocument(this.content as string, links);
+    analysing.subscribe((analysis) => {
       this.analysis = analysis;
       this.choices = {};
       for (const source of analysis.sources) {

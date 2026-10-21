@@ -132,6 +132,23 @@ class FakeArazzoDocumentsService {
     this.imports.push({ content, fileName, links });
     return this.importAnswer;
   }
+
+  relinkAnalyses: { documentId: string; links?: ArazzoSourceLinks }[] = [];
+  relinks: { documentId: string; links: ArazzoSourceLinks }[] = [];
+  relinkAnswer = of({ id: 'order-doc' } as ArazzoDocumentSummary);
+
+  analyseImportedDocument(documentId: string, links?: ArazzoSourceLinks) {
+    this.relinkAnalyses.push({ documentId, links });
+    if (this.answers.length === 0) {
+      return new Subject<ArazzoImportAnalysis>();
+    }
+    return of(this.answers[Math.min(this.relinkAnalyses.length, this.answers.length) - 1]);
+  }
+
+  relinkSources(documentId: string, links: ArazzoSourceLinks) {
+    this.relinks.push({ documentId, links });
+    return this.relinkAnswer;
+  }
 }
 
 describe('ImportArazzoDialogComponent', () => {
@@ -143,6 +160,18 @@ describe('ImportArazzoDialogComponent', () => {
   let uploaderHidden: Subject<unknown>;
 
   function openDialog(...answers: ArazzoImportAnalysis[]): ComponentFixture<ImportArazzoDialogComponent> {
+    return openDialogFor(undefined, answers);
+  }
+
+  /** Open the dialog on the linking step of the imported Order fulfilment, as Link sources and Change link do. */
+  function openLinkingStep(...answers: ArazzoImportAnalysis[]): ComponentFixture<ImportArazzoDialogComponent> {
+    return openDialogFor({ documentId: 'order-doc', fileName: 'place-order.arazzo.yaml' }, answers);
+  }
+
+  function openDialogFor(
+    initialState: Partial<ImportArazzoDialogComponent> | undefined,
+    answers: ArazzoImportAnalysis[]
+  ): ComponentFixture<ImportArazzoDialogComponent> {
     documentsService = new FakeArazzoDocumentsService(answers);
     modalRef = jasmine.createSpyObj<BsModalRef>('BsModalRef', ['hide']);
     uploaderDialog = jasmine.createSpyObj<UploaderDialogService>('UploaderDialogService', [
@@ -159,6 +188,7 @@ describe('ImportArazzoDialogComponent', () => {
       ],
     });
     const fixture = TestBed.createComponent(ImportArazzoDialogComponent);
+    Object.assign(fixture.componentInstance, initialState);
     fixture.detectChanges();
     return fixture;
   }
@@ -509,5 +539,99 @@ describe('ImportArazzoDialogComponent', () => {
 
     expect(modalRef.hide).toHaveBeenCalled();
     expect(documentsService.imports).toEqual([]);
+  });
+
+  // S15 AC-03: Link sources and Change link open the linking step of an imported document
+
+  describe('linking the sources of an imported document', () => {
+    it('opens on the imported document, pre-filled with the links of its overlay', async () => {
+      const fixture = openLinkingStep(ORDER_FULFILMENT);
+      await stable(fixture);
+
+      expect(documentsService.relinkAnalyses).toEqual([{ documentId: 'order-doc', links: undefined }]);
+      expect(documentsService.analyses).toEqual([]);
+      expect(texts(fixture, '.modal-title')).toEqual(['Link sources']);
+      expect(texts(fixture, '.arazzo-import-file-name')).toEqual(['place-order.arazzo.yaml']);
+      expect(texts(fixture, '.arazzo-import-validation')).toEqual([
+        'Valid Arazzo 1.0.1 · title “Order fulfilment” 1.0.0 · 2 workflows · 2 source descriptions',
+      ]);
+      expect(element(fixture).querySelector('input[type=file]')).toBeNull();
+      expect(element(fixture).querySelector('.arazzo-import-choose')).toBeNull();
+      expect(element(fixture).querySelector('.arazzo-import-drop')).toBeNull();
+      expect(texts(fixture, '.arazzo-import-help')).toEqual([
+        'Saving replaces the links of its ArazzoSources overlay. Refreshing the document from Importers keeps them.',
+      ]);
+      expect(sourceRows(fixture).map(selectedApi)).toEqual(['Customer API · 1.0.0', 'Not linked']);
+      expect(texts(fixture, '.arazzo-import-linked-count')).toEqual(['1 of 2 sources linked']);
+      expect(text(importButton(fixture))).toBe('Save links');
+      expect(importButton(fixture).disabled).toBeFalse();
+    });
+
+    it('analyses the imported document again when another API is picked', async () => {
+      const fixture = openLinkingStep(ORDER_FULFILMENT, ORDER_API_LINKED_TO_CUSTOMER_API);
+      await stable(fixture);
+
+      const select = sourceRows(fixture)[1].querySelector('select') as HTMLSelectElement;
+      select.value = select.options[1].value;
+      select.dispatchEvent(new Event('change'));
+      await stable(fixture);
+
+      expect(documentsService.relinkAnalyses[1]).toEqual({
+        documentId: 'order-doc',
+        links: { customerApi: CUSTOMER_API, orderApi: CUSTOMER_API },
+      });
+      expect(texts(fixture, '.arazzo-import-linked-count')).toEqual(['2 of 2 sources linked']);
+    });
+
+    it('asks to import a missing API first, then matches the sources again', async () => {
+      const fixture = openLinkingStep(ORDER_FULFILMENT, ORDER_FULFILMENT);
+      await stable(fixture);
+
+      expect(texts(fixture, '.arazzo-import-missing')).toEqual([
+        'Order API is not in Microcks yet: import order-api.openapi.yaml first.',
+      ]);
+      (element(fixture).querySelector('.arazzo-import-missing a') as HTMLAnchorElement).click();
+      uploaderHidden.next(undefined);
+
+      expect(uploaderDialog.openArtifactDownloadWithUrl).toHaveBeenCalledWith(ORDER_API_URL);
+      expect(documentsService.relinkAnalyses).toEqual([
+        { documentId: 'order-doc', links: undefined },
+        { documentId: 'order-doc', links: undefined },
+      ]);
+    });
+
+    it('saves the links, replacing those of the overlay, then closes', async () => {
+      const fixture = openLinkingStep(ORDER_FULFILMENT);
+      await stable(fixture);
+
+      importButton(fixture).click();
+
+      expect(documentsService.relinks).toEqual([
+        { documentId: 'order-doc', links: { customerApi: CUSTOMER_API, orderApi: null } },
+      ]);
+      expect(documentsService.imports).toEqual([]);
+      expect(modalRef.hide).toHaveBeenCalled();
+    });
+
+    it('shows why the links are refused, and stays open', async () => {
+      const fixture = openLinkingStep(ORDER_FULFILMENT);
+      await stable(fixture);
+      documentsService.relinkAnswer = throwError(
+        () => new HttpErrorResponse({ status: 400, error: 'Unknown source description: paymentApi' })
+      ) as never;
+
+      importButton(fixture).click();
+      fixture.detectChanges();
+
+      expect(texts(fixture, '.arazzo-import-error')).toEqual(['Unknown source description: paymentApi']);
+      expect(modalRef.hide).not.toHaveBeenCalled();
+      expect(importButton(fixture).disabled).toBeFalse();
+    });
+
+    it('cannot save before the imported document is analysed', () => {
+      const fixture = openLinkingStep();
+
+      expect(importButton(fixture).disabled).toBeTrue();
+    });
   });
 });

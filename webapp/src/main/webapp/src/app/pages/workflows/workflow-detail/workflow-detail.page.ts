@@ -17,7 +17,7 @@ import { ChangeDetectionStrategy, Component, ElementRef, Injector, OnInit, after
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, ParamMap, Router, RouterLink } from '@angular/router';
 
-import { Observable, combineLatest, forkJoin, of } from 'rxjs';
+import { BehaviorSubject, Observable, combineLatest, forkJoin, of } from 'rxjs';
 import { catchError, map, shareReplay, startWith, switchMap } from 'rxjs/operators';
 
 import {
@@ -33,6 +33,7 @@ import { WorkflowRunSummary } from '../../../models/arazzo-run.model';
 import { BsModalService } from 'ngx-bootstrap/modal';
 import { openRunDialog } from '../workflow-run-dialog/workflow-run.dialog';
 import { TimeAgoPipe } from '../../../components/time-ago.pipe';
+import { ImportArazzoDialogComponent } from '../import-arazzo-dialog/import-arazzo-dialog.component';
 import { WorkflowDiagramComponent } from './workflow-diagram/workflow-diagram.component';
 
 /** The steps as cards, or the workflow as a diagram; the URL keeps it as ?view=diagram so a link can be shared. */
@@ -65,14 +66,17 @@ export class WorkflowDetailPageComponent implements OnInit {
 
   state!: Observable<WorkflowState>;
 
+  /** Emits to read the workflow again, once the links of its sources changed. */
+  private readonly reload = new BehaviorSubject<void>(undefined);
+
   constructor(private workflowSvc: ArazzoWorkflowService, private route: ActivatedRoute, private router: Router,
               private host: ElementRef<HTMLElement>, private injector: Injector, private modalService: BsModalService,
               private historySvc: ArazzoRunHistoryService) {
   }
 
   ngOnInit(): void {
-    const workflow = this.route.paramMap.pipe(
-      switchMap((params: ParamMap) =>
+    const workflow = combineLatest([this.route.paramMap, this.reload]).pipe(
+      switchMap(([params]: [ParamMap, void]) =>
         this.workflowSvc.getWorkflow(params.get('documentId')!, params.get('workflowId')!).pipe(
           catchError(() => of(null))
         )),
@@ -158,6 +162,17 @@ export class WorkflowDetailPageComponent implements OnInit {
 
   openRun(workflow: ArazzoWorkflowDetail): void {
     openRunDialog(this.modalService, workflow.documentId, workflow.workflowIds, workflow.workflowId);
+  }
+
+  /** Open the linking step of the import dialog on the document of the workflow, then read the workflow again. */
+  openLinkSources(workflow: ArazzoWorkflowDetail): void {
+    this.modalService
+      .show(ImportArazzoDialogComponent, {
+        class: 'arazzo-import-modal',
+        ariaLabelledBy: 'arazzo-import-title',
+        initialState: { documentId: workflow.documentId, fileName: workflow.fileName },
+      })
+      .onHidden?.subscribe(() => this.reload.next());
   }
 
   /** A value is a runtime expression when it starts with $ or embeds one in braces; otherwise it is a constant. */

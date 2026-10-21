@@ -59,6 +59,7 @@
               <span class="label label-warning" *ngIf="job.serviceRefs">
                 <a (click)="openServiceRefs(job.serviceRefs)">Services</a>
               </span>
+              <app-arazzo-document-ref *ngIf="job.arazzoDocumentRef" [ref]="job.arazzoDocumentRef"></app-arazzo-document-ref>
             </div>
           </div>
         </div>

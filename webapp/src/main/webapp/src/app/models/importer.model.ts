@@ -32,10 +32,21 @@ export type ImportJob = {
   metadata: Metadata;
   secretRef?: SecretRef;
   serviceRefs: ServiceRef[];
+  /** The Arazzo document the last import imported, or whose ArazzoSources overlay it imported; absent for an API. */
+  arazzoDocumentRef?: ArazzoDocumentRef | null;
 }
 
 export type ServiceRef = {
   serviceId: string;
   name: string;
   version: string;
+}
+
+/** The Arazzo document an import job imported, with the source descriptions it links to no API. */
+export type ArazzoDocumentRef = {
+  /** Null when the job imported the overlay of a document not imported yet. */
+  documentId: string | null;
+  title: string;
+  version: string;
+  unlinkedSources: string[];
 }

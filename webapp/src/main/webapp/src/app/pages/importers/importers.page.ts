@@ -61,6 +61,7 @@ import { ImportersService } from '../../services/importers.service';
 import { ServicesService } from '../../services/services.service';
 import { UploaderDialogService } from '../../services/uploader-dialog.service';
 import { ImporterWizardComponent} from './_components/importer.wizard';
+import { ArazzoDocumentRefComponent } from './_components/arazzo-document-ref.component';
 import { ServiceRefsDialogComponent } from './service-refs.dialog';
 
 @Component({
@@ -69,6 +70,7 @@ import { ServiceRefsDialogComponent } from './service-refs.dialog';
   templateUrl: './importers.page.html',
   styleUrls: ['./importers.page.css'],
   imports: [
+    ArazzoDocumentRefComponent,
     CommonModule,
     ConfirmDeleteDialogComponent,
     LabelListComponent,
