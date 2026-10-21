@@ -61,6 +61,8 @@
   color: var(--coherence-accent);
   font-size: inherit;
   line-height: inherit;
+  text-align: left;
+  white-space: normal;
 }
 
 .workflow-run-coherence-outcome {
