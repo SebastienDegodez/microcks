@@ -27,6 +27,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -54,6 +55,13 @@ class ArazzoDocumentReaderTest {
    @Test
    void theSourceDescriptionsOfADocumentAreReadByName() throws IOException {
       assertEquals(List.of("pastryApi"), ArazzoDocumentReader.sourceDescriptionNames(document("pastry.arazzo.yaml")));
+   }
+
+   @ParameterizedTest
+   @CsvSource({ "operation-id-alone, pastryApi", "named-source, orderApi", "dotted-operation-id, orderApi" })
+   void theSourceAStepCallsIsReadFromItsOperationId(String example, String sourceName) throws IOException {
+      assertEquals(Map.of("callOne", List.of(sourceName)),
+            ArazzoDocumentReader.workflowSourceNames(exampleOf("called-sources.arazzo.yaml", example)));
    }
 
    @Test
@@ -133,18 +141,27 @@ class ArazzoDocumentReaderTest {
    }
 
    /**
-    * @param category The fixture of a category, holding one YAML document per example, each announced by a
-    *                 {@code # example: <name>} comment
+    * @param category The category of unsupported features, see {@link #exampleOf(String, String)}
     * @param example  The name of the example
     * @return The parsed document of that example
     */
    private static JsonNode example(String category, String example) throws IOException {
+      return exampleOf("unsupported/" + category + ".arazzo.yaml", example);
+   }
+
+   /**
+    * @param fixture The fixture of a category, holding one YAML document per example, each announced by a
+    *                {@code # example: <name>} comment
+    * @param example The name of the example
+    * @return The parsed document of that example
+    */
+   private static JsonNode exampleOf(String fixture, String example) throws IOException {
       try (InputStream stream = ArazzoDocumentReaderTest.class
-            .getResourceAsStream("/io/github/microcks/util/arazzo/unsupported/" + category + ".arazzo.yaml")) {
+            .getResourceAsStream("/io/github/microcks/util/arazzo/" + fixture)) {
          String marker = "# example: " + example + " ";
          String document = Arrays.stream(new String(stream.readAllBytes(), StandardCharsets.UTF_8).split("\n---\n"))
                .filter(d -> d.contains(marker)).findFirst()
-               .orElseThrow(() -> new IllegalArgumentException(example + " is not in " + category));
+               .orElseThrow(() -> new IllegalArgumentException(example + " is not in " + fixture));
          return new ObjectMapper(new YAMLFactory()).readTree(document);
       }
    }

@@ -18,6 +18,7 @@ package io.github.microcks.domain;
 import org.springframework.data.annotation.Id;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * An Arazzo document imported into Microcks, identified by the title and version of its info object.
@@ -31,6 +32,7 @@ public class ArazzoDocument {
    private String version;
    private List<String> workflowIds;
    private List<String> sourceNames;
+   private Map<String, List<String>> workflowSourceNames;
    private String content;
 
    public String getId() {
@@ -71,6 +73,14 @@ public class ArazzoDocument {
 
    public void setSourceNames(List<String> sourceNames) {
       this.sourceNames = sourceNames;
+   }
+
+   public Map<String, List<String>> getWorkflowSourceNames() {
+      return workflowSourceNames;
+   }
+
+   public void setWorkflowSourceNames(Map<String, List<String>> workflowSourceNames) {
+      this.workflowSourceNames = workflowSourceNames;
    }
 
    public String getContent() {

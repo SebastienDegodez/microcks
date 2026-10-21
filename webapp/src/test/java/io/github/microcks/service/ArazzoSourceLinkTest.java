@@ -64,6 +64,19 @@ class ArazzoSourceLinkTest {
             workflowStatuses("API Pastry scenarios", "1.0.0"));
    }
 
+   @Test
+   void aSourceMappedToAnApiAbsentFromMicrocksStaysUnlinked() throws Exception {
+      apiIsImported("customer-api.openapi.yaml");
+
+      arazzoDocumentService.importArazzoDocument(fixture("order-fulfilment.arazzo.yaml"));
+      arazzoDocumentService.importArazzoSources(fixture("order-fulfilment.arazzo-sources.yaml"));
+
+      assertEquals(List.of("customerApi -> Customer API 1.0.0: linked", "orderApi -> Order API 1.0.0: not linked"),
+            sourceLinks("Order fulfilment", "1.0.0"));
+      assertEquals(List.of("searchThenRead: runnable", "placeOrder: not runnable"),
+            workflowStatuses("Order fulfilment", "1.0.0"));
+   }
+
    private List<String> sourceLinks(String title, String version) {
       return arazzoDocumentService.getSourceLinks(title, version).stream().map(ArazzoSourceLinkTest::describe).toList();
    }

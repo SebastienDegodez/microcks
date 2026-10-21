@@ -35,6 +35,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Service bean for common processing around Arazzo documents.
@@ -92,6 +94,7 @@ public class ArazzoDocumentService {
       document.setVersion(description.version());
       document.setWorkflowIds(description.workflowIds());
       document.setSourceNames(ArazzoDocumentReader.sourceDescriptionNames(parsed));
+      document.setWorkflowSourceNames(ArazzoDocumentReader.workflowSourceNames(parsed));
       document.setContent(content);
       return arazzoDocumentRepository.save(document);
    }
@@ -136,9 +139,12 @@ public class ArazzoDocumentService {
     * @return The status of each workflow, in the order of the document
     */
    public List<ArazzoWorkflowStatus> getWorkflowStatuses(String title, String version) {
-      boolean allSourcesLinked = getSourceLinks(title, version).stream().allMatch(ArazzoSourceLink::linked);
-      return arazzoDocumentRepository.findByTitleAndVersion(title, version).getWorkflowIds().stream()
-            .map(workflowId -> new ArazzoWorkflowStatus(workflowId, allSourcesLinked)).toList();
+      ArazzoDocument document = arazzoDocumentRepository.findByTitleAndVersion(title, version);
+      Set<String> linkedSourceNames = getSourceLinks(title, version).stream().filter(ArazzoSourceLink::linked)
+            .map(ArazzoSourceLink::sourceName).collect(Collectors.toSet());
+      // A workflow is runnable when every source its steps call is linked.
+      return document.getWorkflowIds().stream().map(workflowId -> new ArazzoWorkflowStatus(workflowId,
+            linkedSourceNames.containsAll(document.getWorkflowSourceNames().get(workflowId)))).toList();
    }
 
    private ArazzoSourceLink link(String sourceName, ArazzoSources overlay) {

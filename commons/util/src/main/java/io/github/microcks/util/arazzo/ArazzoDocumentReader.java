@@ -18,7 +18,9 @@ package io.github.microcks.util.arazzo;
 import com.fasterxml.jackson.databind.JsonNode;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Reads an Arazzo document. Shared by the Microcks webapp, which imports documents, and the components that run their
@@ -26,6 +28,8 @@ import java.util.List;
  * @author SebastienDegodez
  */
 public final class ArazzoDocumentReader {
+
+   private static final String SOURCE_DESCRIPTIONS_EXPRESSION = "$sourceDescriptions.";
 
    private ArazzoDocumentReader() {
    }
@@ -63,5 +67,32 @@ public final class ArazzoDocumentReader {
          names.add(sourceDescription.path("name").asText());
       }
       return names;
+   }
+
+   /**
+    * @param document The Arazzo document, parsed from YAML or JSON
+    * @return For each workflow id, the names of the source descriptions its steps call, in the order of the steps
+    */
+   public static Map<String, List<String>> workflowSourceNames(JsonNode document) {
+      List<String> sourceNames = sourceDescriptionNames(document);
+      Map<String, List<String>> workflowSourceNames = new LinkedHashMap<>();
+      for (JsonNode workflow : document.path("workflows")) {
+         List<String> calledSourceNames = new ArrayList<>();
+         for (JsonNode step : workflow.path("steps")) {
+            calledSourceNames.add(calledSourceName(step.path("operationId").asText(), sourceNames));
+         }
+         workflowSourceNames.put(workflow.path("workflowId").asText(), calledSourceNames);
+      }
+      return workflowSourceNames;
+   }
+
+   private static String calledSourceName(String operationId, List<String> sourceNames) {
+      if (operationId.startsWith(SOURCE_DESCRIPTIONS_EXPRESSION)) {
+         // A source name has no dot, an operationId may have some.
+         return operationId.substring(SOURCE_DESCRIPTIONS_EXPRESSION.length(),
+               operationId.indexOf('.', SOURCE_DESCRIPTIONS_EXPRESSION.length()));
+      }
+      // Arazzo requires an operationId to name its source when there are several: alone, it calls the only one.
+      return sourceNames.get(0);
    }
 }
