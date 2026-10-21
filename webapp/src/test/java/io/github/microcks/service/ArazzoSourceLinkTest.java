@@ -20,6 +20,8 @@ import io.github.microcks.domain.ArazzoWorkflowStatus;
 import io.github.microcks.repository.RepositoryTestsConfiguration;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.TestPropertySource;
@@ -75,6 +77,12 @@ class ArazzoSourceLinkTest {
             sourceLinks("Order fulfilment", "1.0.0"));
       assertEquals(List.of("searchThenRead: runnable", "placeOrder: not runnable"),
             workflowStatuses("Order fulfilment", "1.0.0"));
+   }
+
+   @ParameterizedTest
+   @CsvSource({ "pastry.arazzo-sources.yaml, true", "pastry.arazzo.yaml, false", "unparseable.arazzo.yaml, false" })
+   void onlyAnArtifactOfKindArazzoSourcesIsAnOverlay(String fileName, boolean overlay) throws Exception {
+      assertEquals(overlay, arazzoDocumentService.isArazzoSources(fixture(fileName)));
    }
 
    private List<String> sourceLinks(String title, String version) {

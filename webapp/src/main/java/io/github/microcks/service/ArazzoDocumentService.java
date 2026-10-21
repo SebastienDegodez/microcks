@@ -45,6 +45,8 @@ import java.util.stream.Collectors;
 @org.springframework.stereotype.Service
 public class ArazzoDocumentService {
 
+   private static final String ARAZZO_SOURCES_KIND = "ArazzoSources";
+
    private final ArazzoDocumentRepository arazzoDocumentRepository;
    private final ArazzoSourcesRepository arazzoSourcesRepository;
    private final ServiceRepository serviceRepository;
@@ -70,6 +72,21 @@ public class ArazzoDocumentService {
    public boolean isArazzoDocument(String content) {
       try {
          return ArazzoDocumentReader.isArazzoDocument(ObjectMapperFactory.getYamlObjectMapper().readTree(content));
+      } catch (JsonProcessingException jpe) {
+         return false;
+      }
+   }
+
+   /**
+    * Tell whether an uploaded artifact is an ArazzoSources overlay, to import it with this service rather than as an
+    * API.
+    * @param content The artifact as uploaded
+    * @return Whether the artifact is an ArazzoSources overlay
+    */
+   public boolean isArazzoSources(String content) {
+      try {
+         return ARAZZO_SOURCES_KIND
+               .equals(ObjectMapperFactory.getYamlObjectMapper().readTree(content).path("kind").asText());
       } catch (JsonProcessingException jpe) {
          return false;
       }
