@@ -30,6 +30,7 @@ public class ArazzoDocument {
    private String title;
    private String version;
    private List<String> workflowIds;
+   private String content;
 
    public String getId() {
       return id;
@@ -61,5 +62,13 @@ public class ArazzoDocument {
 
    public void setWorkflowIds(List<String> workflowIds) {
       this.workflowIds = workflowIds;
+   }
+
+   public String getContent() {
+      return content;
+   }
+
+   public void setContent(String content) {
+      this.content = content;
    }
 }

@@ -60,6 +60,29 @@ class ArazzoDocumentServiceTest {
    }
 
    @Test
+   void anImportedDocumentIsKeptAsUploaded() throws Exception {
+      String content = fixture("pastry.arazzo.yaml");
+
+      service.importArazzoDocument(content);
+
+      ArazzoDocument imported = repository.findByTitleAndVersion("API Pastry scenarios", "1.0.0");
+      assertNotNull(imported);
+      assertEquals(content, imported.getContent());
+   }
+
+   @Test
+   void aReImportedDocumentIsKeptAsUploadedInItsNewRevision() throws Exception {
+      String revision = fixture("pastry-revision.arazzo.yaml");
+      service.importArazzoDocument(fixture("pastry.arazzo.yaml"));
+
+      service.importArazzoDocument(revision);
+
+      ArazzoDocument imported = repository.findByTitleAndVersion("API Pastry scenarios", "1.0.0");
+      assertNotNull(imported);
+      assertEquals(revision, imported.getContent());
+   }
+
+   @Test
    void anUnsupportedVersionIsRefusedWithItsReason() throws Exception {
       String content = fixture("unsupported-version.arazzo.yaml");
 

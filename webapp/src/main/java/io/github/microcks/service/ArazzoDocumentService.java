@@ -60,6 +60,7 @@ public class ArazzoDocumentService {
       document.setTitle(description.title());
       document.setVersion(description.version());
       document.setWorkflowIds(description.workflowIds());
+      document.setContent(content);
       return arazzoDocumentRepository.save(document);
    }
 
