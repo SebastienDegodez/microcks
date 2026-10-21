@@ -27,6 +27,9 @@ import java.util.Set;
  */
 final class ArazzoSubset {
 
+   /** The runtime expression prefix of an operationId that names its source description. */
+   static final String SOURCE_DESCRIPTIONS_EXPRESSION = "$sourceDescriptions.";
+
    private static final List<String> UNSUPPORTED_WORKFLOW_FIELDS = List.of("dependsOn", "successActions",
          "failureActions");
    private static final List<String> UNSUPPORTED_STEP_FIELDS = List.of("workflowId", "operationPath", "onSuccess",
@@ -49,8 +52,9 @@ final class ArazzoSubset {
       for (JsonNode sourceDescription : document.path("sourceDescriptions")) {
          checkSourceDescription(sourceDescription);
       }
+      boolean severalSourceDescriptions = document.path("sourceDescriptions").size() > 1;
       for (JsonNode workflow : document.path("workflows")) {
-         checkWorkflow(workflow);
+         checkWorkflow(workflow, severalSourceDescriptions);
       }
    }
 
@@ -61,23 +65,31 @@ final class ArazzoSubset {
       }
    }
 
-   private static void checkWorkflow(JsonNode workflow) throws UnsupportedArazzoDocumentException {
+   private static void checkWorkflow(JsonNode workflow, boolean severalSourceDescriptions)
+         throws UnsupportedArazzoDocumentException {
       rejectFields(workflow, UNSUPPORTED_WORKFLOW_FIELDS, "workflow");
       for (JsonNode parameter : workflow.path("parameters")) {
          checkParameter(parameter);
       }
       for (JsonNode step : workflow.path("steps")) {
-         checkStep(step);
+         checkStep(step, severalSourceDescriptions);
       }
    }
 
-   private static void checkStep(JsonNode step) throws UnsupportedArazzoDocumentException {
+   private static void checkStep(JsonNode step, boolean severalSourceDescriptions)
+         throws UnsupportedArazzoDocumentException {
       rejectFields(step, UNSUPPORTED_STEP_FIELDS, "step");
       for (JsonNode parameter : step.path("parameters")) {
          checkParameter(parameter);
       }
       for (JsonNode criterion : step.path("successCriteria")) {
          checkCriterion(criterion);
+      }
+      // Arazzo requires an operationId to name its source description when there are several.
+      String operationId = step.path("operationId").asText();
+      if (severalSourceDescriptions && !operationId.startsWith(SOURCE_DESCRIPTIONS_EXPRESSION)) {
+         throw new UnsupportedArazzoDocumentException(
+               "Ambiguous operationId " + operationId + ": the document has several source descriptions");
       }
    }
 

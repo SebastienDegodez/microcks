@@ -29,8 +29,6 @@ import java.util.Map;
  */
 public final class ArazzoDocumentReader {
 
-   private static final String SOURCE_DESCRIPTIONS_EXPRESSION = "$sourceDescriptions.";
-
    private ArazzoDocumentReader() {
    }
 
@@ -87,10 +85,11 @@ public final class ArazzoDocumentReader {
    }
 
    private static ArazzoOperationCall call(String operationId, List<String> sourceNames) {
-      if (operationId.startsWith(SOURCE_DESCRIPTIONS_EXPRESSION)) {
+      if (operationId.startsWith(ArazzoSubset.SOURCE_DESCRIPTIONS_EXPRESSION)) {
          // A source name has no dot, an operationId may have some.
-         int sourceNameEnd = operationId.indexOf('.', SOURCE_DESCRIPTIONS_EXPRESSION.length());
-         return new ArazzoOperationCall(operationId.substring(SOURCE_DESCRIPTIONS_EXPRESSION.length(), sourceNameEnd),
+         int sourceNameEnd = operationId.indexOf('.', ArazzoSubset.SOURCE_DESCRIPTIONS_EXPRESSION.length());
+         return new ArazzoOperationCall(
+               operationId.substring(ArazzoSubset.SOURCE_DESCRIPTIONS_EXPRESSION.length(), sourceNameEnd),
                operationId.substring(sourceNameEnd + 1));
       }
       // Arazzo requires an operationId to name its source when there are several: alone, it calls the only one.
