@@ -23,5 +23,12 @@ import org.springframework.data.mongodb.repository.MongoRepository;
  * Repository interface for the runs of Arazzo workflows.
  * @author SebastienDegodez
  */
-public interface WorkflowResultRepository extends MongoRepository<WorkflowResult, String> {
+public interface WorkflowResultRepository
+      extends MongoRepository<WorkflowResult, String>, CustomWorkflowResultRepository {
+
+   /**
+    * @param documentId The id of an Arazzo document
+    * @return The run of the workflows of that document with the highest number; null when none ran
+    */
+   WorkflowResult findTopByDocumentIdOrderByNumberDesc(String documentId);
 }

@@ -17,7 +17,6 @@ package io.github.microcks.service;
 
 import io.github.microcks.domain.ArazzoDocument;
 import io.github.microcks.domain.ArazzoDocumentSummary;
-import io.github.microcks.domain.ArazzoLastResult;
 import io.github.microcks.domain.ArazzoSourceLink;
 import io.github.microcks.domain.ArazzoSourceSummary;
 import io.github.microcks.domain.ArazzoSources;
@@ -29,6 +28,7 @@ import io.github.microcks.domain.Resource;
 import io.github.microcks.domain.ResourceType;
 import io.github.microcks.domain.Service;
 import io.github.microcks.domain.ServiceRef;
+import io.github.microcks.domain.WorkflowRunSummary;
 import io.github.microcks.repository.ArazzoDocumentRepository;
 import io.github.microcks.repository.ArazzoSourcesRepository;
 import io.github.microcks.repository.ResourceRepository;
@@ -70,6 +70,7 @@ public class ArazzoDocumentService {
    private final ArazzoSourcesRepository arazzoSourcesRepository;
    private final ServiceRepository serviceRepository;
    private final ResourceRepository resourceRepository;
+   private final ArazzoRunHistoryService arazzoRunHistoryService;
 
    /**
     * Build a new ArazzoDocumentService with its required dependencies.
@@ -77,14 +78,16 @@ public class ArazzoDocumentService {
     * @param arazzoSourcesRepository  The repository of imported ArazzoSources overlays
     * @param serviceRepository        The repository of the APIs the source descriptions are linked to
     * @param resourceRepository       The repository of the contracts that define the operations of these APIs
+    * @param arazzoRunHistoryService  The service reading the runs history, for the last run of each workflow
     */
    public ArazzoDocumentService(ArazzoDocumentRepository arazzoDocumentRepository,
          ArazzoSourcesRepository arazzoSourcesRepository, ServiceRepository serviceRepository,
-         ResourceRepository resourceRepository) {
+         ResourceRepository resourceRepository, ArazzoRunHistoryService arazzoRunHistoryService) {
       this.arazzoDocumentRepository = arazzoDocumentRepository;
       this.arazzoSourcesRepository = arazzoSourcesRepository;
       this.serviceRepository = serviceRepository;
       this.resourceRepository = resourceRepository;
+      this.arazzoRunHistoryService = arazzoRunHistoryService;
    }
 
    /**
@@ -182,12 +185,14 @@ public class ArazzoDocumentService {
       return sources.values().stream().anyMatch(source -> apiName.equals(source.link().apiName()));
    }
 
-   private static ArazzoDocumentSummary summary(ArazzoDocument document, Map<String, ResolvedSource> sources) {
+   private ArazzoDocumentSummary summary(ArazzoDocument document, Map<String, ResolvedSource> sources) {
       List<ArazzoSourceSummary> sourceSummaries = sources.values().stream().map(ResolvedSource::summary).toList();
-      List<ArazzoWorkflowSummary> workflowSummaries = statuses(document, sources).stream()
-            .map(status -> new ArazzoWorkflowSummary(status, description(document, status.workflowId()),
-                  document.getWorkflowCalls().get(status.workflowId()).size(), ArazzoLastResult.NEVER_RUN))
-            .toList();
+      List<ArazzoWorkflowSummary> workflowSummaries = statuses(document, sources).stream().map(status -> {
+         WorkflowRunSummary lastRun = arazzoRunHistoryService.getLastRun(document.getId(), status.workflowId());
+         return new ArazzoWorkflowSummary(status, description(document, status.workflowId()),
+               document.getWorkflowCalls().get(status.workflowId()).size(), ArazzoRunHistoryService.lastResult(lastRun),
+               lastRun);
+      }).toList();
       return new ArazzoDocumentSummary(document.getId(), document.getTitle(), document.getVersion(),
             document.getArazzoVersion(), document.getFileName(), document.getImportDate(), sourceSummaries,
             workflowSummaries);
