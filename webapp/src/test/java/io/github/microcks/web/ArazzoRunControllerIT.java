@@ -99,6 +99,12 @@ class ArazzoRunControllerIT extends AbstractBaseIT {
       assertEquals(List.of("0 readPastry PASSED " + runId + "-0", "2 reprice NOT_RUN none"),
             List.of(describe(run.get("steps").get(0)), describe(run.get("steps").get(1))));
       assertEquals(contract.get("runOutcome").get("outputs"), run.get("outputs"));
+      JsonNode readPastry = run.get("steps").get(0);
+      assertEquals(contract.get("passedStep").get("request").get("url"), readPastry.get("requestUrl"));
+      assertEquals(List.of("name path Eclair Cafe $inputs.pastry", "Accept header application/json constant"),
+            List.of(describeParameter(readPastry.get("parameters").get(0)),
+                  describeParameter(readPastry.get("parameters").get(1))));
+      assertEquals(contract.get("passedStep").get("outputOrigins"), readPastry.get("outputOrigins"));
       assertEquals(200, restTemplate.getForEntity("/api/tests/" + runId + "/messages/" + runId + "-0", String.class)
             .getStatusCode().value());
    }
@@ -164,6 +170,11 @@ class ArazzoRunControllerIT extends AbstractBaseIT {
    private static String describe(JsonNode step) {
       return step.get("index").asInt() + " " + step.get("stepId").asText() + " " + step.get("status").asText() + " "
             + step.path("testCaseId").asText("none");
+   }
+
+   private static String describeParameter(JsonNode parameter) {
+      return parameter.get("name").asText() + " " + parameter.get("in").asText() + " " + parameter.get("value").asText()
+            + " " + parameter.path("expression").asText("constant");
    }
 
    private static HttpEntity<String> json(String body) {

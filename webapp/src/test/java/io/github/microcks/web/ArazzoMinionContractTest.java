@@ -20,6 +20,7 @@ import io.github.microcks.domain.Request;
 import io.github.microcks.domain.Response;
 import io.github.microcks.domain.WorkflowCriterionResult;
 import io.github.microcks.domain.WorkflowExpressionValue;
+import io.github.microcks.domain.WorkflowParameterValue;
 import io.github.microcks.domain.WorkflowRunStatus;
 import io.github.microcks.domain.WorkflowStepOperation;
 import io.github.microcks.domain.WorkflowStepResult;
@@ -106,7 +107,11 @@ class ArazzoMinionContractTest {
                   List.of(new WorkflowExpressionValue("$statusCode", 200),
                         new WorkflowExpressionValue("$response.body#/status", "available")),
                   true)),
-            Map.of("name", "Eclair Cafe", "price", 2.5), null, null), report.toStepResult());
+            Map.of("name", "Eclair Cafe", "price", 2.5), null, null,
+            "http://microcks:8080/rest/API+Pastry+-+2.0/2.0.0/pastry/Eclair%20Cafe",
+            List.of(new WorkflowParameterValue("name", "path", "Eclair Cafe", "$inputs.pastry"),
+                  new WorkflowParameterValue("Accept", "header", "application/json", null)),
+            Map.of("name", "$response.body#/name", "price", "$response.body#/price")), report.toStepResult());
       Request request = report.toRequest();
       assertEquals("readPastry Accept=[application/json] null",
             request.getName() + " " + headers(request.getHeaders()) + " " + request.getContent());
@@ -135,6 +140,10 @@ class ArazzoMinionContractTest {
             step.index() + " " + step.stepId() + " " + step.status() + " " + step.statusCode());
       assertEquals(List.of(new WorkflowCriterionResult("$statusCode == 200",
             List.of(new WorkflowExpressionValue("$statusCode", 400)), false)), step.criteria());
+      assertEquals("http://microcks:8080/rest/API+Pastry+-+2.0/2.0.0/pastry/Baba%20Rhum", step.requestUrl());
+      assertEquals(List.of(new WorkflowParameterValue("name", "path", "Baba Rhum", "$steps.list.outputs.first")),
+            step.parameters());
+      assertEquals(Map.of(), step.outputOrigins());
       assertEquals("400 text/plain The response /name=Baba Rhum does not exist!", report.toResponse().getStatus() + " "
             + report.toResponse().getMediaType() + " " + report.toResponse().getContent());
    }
@@ -143,9 +152,11 @@ class ArazzoMinionContractTest {
    void aStepNotRunIsRecordedWithoutExchange() throws IOException {
       ArazzoStepReportDTO report = JSON.treeToValue(contract().get("notRunStep"), ArazzoStepReportDTO.class);
 
-      assertEquals(new WorkflowStepResult(2, "reprice",
-            new WorkflowStepOperation("pastryApi", "PatchPastry", "PATCH", "/pastry/{name}"),
-            WorkflowStepStatus.NOT_RUN, null, 0, List.of(), Map.of(), null, null), report.toStepResult());
+      assertEquals(
+            new WorkflowStepResult(2, "reprice",
+                  new WorkflowStepOperation("pastryApi", "PatchPastry", "PATCH", "/pastry/{name}"),
+                  WorkflowStepStatus.NOT_RUN, null, 0, List.of(), Map.of(), null, null, null, List.of(), Map.of()),
+            report.toStepResult());
       assertNull(report.toRequest());
       assertNull(report.toResponse());
    }

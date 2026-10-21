@@ -22,6 +22,7 @@ import io.github.microcks.domain.RequestResponsePair;
 import io.github.microcks.domain.Response;
 import io.github.microcks.domain.WorkflowCriterionResult;
 import io.github.microcks.domain.WorkflowExpressionValue;
+import io.github.microcks.domain.WorkflowParameterValue;
 import io.github.microcks.domain.WorkflowResult;
 import io.github.microcks.domain.WorkflowRunStatus;
 import io.github.microcks.domain.WorkflowRunTarget;
@@ -72,6 +73,7 @@ class ArazzoRunTest {
 
    private static final String FIXTURES = "/io/github/microcks/service/arazzo/";
    private static final String MOCKS = "/rest/API+Pastry+-+2.0/2.0.0";
+   private static final String MICROCKS = "http://localhost:8080";
    private static final WorkflowStepOperation GET_PASTRY_BY_NAME = new WorkflowStepOperation("pastryApi",
          "GetPastryByName", "GET", "/pastry/{name}");
 
@@ -167,7 +169,7 @@ class ArazzoRunTest {
                   WorkflowStepStatus.PASSED, 200, Map.of("first", "Baba Rhum")),
             null, null);
       arazzoRunService.recordStep(run.getId(), new WorkflowStepResult(1, "readFirst", GET_PASTRY_BY_NAME,
-            WorkflowStepStatus.FAILED, 400, 5, unmet, Map.of(), null, null), null, null);
+            WorkflowStepStatus.FAILED, 400, 5, unmet, Map.of(), null, null, null, List.of(), Map.of()), null, null);
       arazzoRunService.recordOutcome(run.getId(), WorkflowRunStatus.FAILURE, Map.of(), 13, null);
 
       WorkflowResult failed = arazzoRunService.getRun(run.getId()).orElseThrow();
@@ -175,6 +177,53 @@ class ArazzoRunTest {
       assertEquals(List.of("0 list PASSED", "1 readFirst FAILED"), described(failed));
       assertEquals(unmet, failed.getSteps().get(1).criteria());
       assertEquals(Map.of("first", "Baba Rhum"), failed.getSteps().get(0).outputs());
+   }
+
+   @Test
+   void theFailingStepShowsWhatWasSentAndReceived() throws Exception {
+      ArazzoDocument document = pastryScenariosAreImportedAndLinked("pastry-scenarios.arazzo.yaml");
+      WorkflowResult run = launch(document, "listThenReadFirst", Map.of(), 10000L);
+      Request request = new Request();
+      request.setName("readFirst");
+      Response response = new Response();
+      response.setName("readFirst");
+      response.setStatus("400");
+      response.setContent("The response /name=Baba Rhum does not exist!");
+
+      arazzoRunService.recordStep(run.getId(),
+            new WorkflowStepResult(1, "readFirst", GET_PASTRY_BY_NAME, WorkflowStepStatus.FAILED, 400, 5, List.of(),
+                  Map.of(), null, null, MICROCKS + MOCKS + "/pastry/Baba%20Rhum", List.of(), Map.of()),
+            request, response);
+
+      WorkflowStepResult readFirst = arazzoRunService.getRun(run.getId()).orElseThrow().getSteps().get(0);
+      assertEquals("GET " + MICROCKS + MOCKS + "/pastry/Baba%20Rhum 400",
+            readFirst.operation().method() + " " + readFirst.requestUrl() + " " + readFirst.statusCode());
+      Response received = messageService.getRequestResponseByTestCase(readFirst.testCaseId()).get(0).getResponse();
+      assertEquals("400 The response /name=Baba Rhum does not exist!",
+            received.getStatus() + " " + received.getContent());
+   }
+
+   @Test
+   void valuesPassedBetweenStepsShowTheirOrigin() throws Exception {
+      ArazzoDocument document = pastryScenariosAreImportedAndLinked("pastry-scenarios.arazzo.yaml");
+      WorkflowResult run = launch(document, "listThenReadFirst", Map.of(), 10000L);
+      List<WorkflowParameterValue> sent = List.of(
+            new WorkflowParameterValue("name", "path", "Baba Rhum", "$steps.list.outputs.first"),
+            new WorkflowParameterValue("Accept", "header", "application/json", null));
+
+      arazzoRunService.recordStep(run.getId(),
+            new WorkflowStepResult(0, "list", new WorkflowStepOperation("pastryApi", "GetPastries", "GET", "/pastry"),
+                  WorkflowStepStatus.PASSED, 200, 5, List.of(), Map.of("first", "Baba Rhum"), null, null,
+                  MICROCKS + MOCKS + "/pastry", List.of(), Map.of("first", "$response.body#/0/name")),
+            null, null);
+      arazzoRunService.recordStep(
+            run.getId(), new WorkflowStepResult(1, "readFirst", GET_PASTRY_BY_NAME, WorkflowStepStatus.FAILED, 400, 5,
+                  List.of(), Map.of(), null, null, MICROCKS + MOCKS + "/pastry/Baba%20Rhum", sent, Map.of()),
+            null, null);
+
+      List<WorkflowStepResult> steps = arazzoRunService.getRun(run.getId()).orElseThrow().getSteps();
+      assertEquals(Map.of("first", "$response.body#/0/name"), steps.get(0).outputOrigins());
+      assertEquals(sent, steps.get(1).parameters());
    }
 
    @Test
@@ -399,7 +448,8 @@ class ArazzoRunTest {
 
    private static WorkflowStepResult step(int index, String stepId, WorkflowStepOperation operation,
          WorkflowStepStatus status, Integer statusCode, Map<String, Object> outputs) {
-      return new WorkflowStepResult(index, stepId, operation, status, statusCode, 5, List.of(), outputs, null, null);
+      return new WorkflowStepResult(index, stepId, operation, status, statusCode, 5, List.of(), outputs, null, null,
+            null, List.of(), Map.of());
    }
 
    private static List<String> described(WorkflowResult run) {

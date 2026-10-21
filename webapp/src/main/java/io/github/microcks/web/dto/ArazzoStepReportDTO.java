@@ -20,6 +20,7 @@ import io.github.microcks.domain.Request;
 import io.github.microcks.domain.Response;
 import io.github.microcks.domain.WorkflowCriterionResult;
 import io.github.microcks.domain.WorkflowExpressionValue;
+import io.github.microcks.domain.WorkflowParameterValue;
 import io.github.microcks.domain.WorkflowStepOperation;
 import io.github.microcks.domain.WorkflowStepResult;
 import io.github.microcks.domain.WorkflowStepStatus;
@@ -32,22 +33,24 @@ import java.util.Set;
 
 /**
  * A step of a run, as the Arazzo minion reports it when the step ends.
- * @param index       The place of the step in the execution order of the run, from 0
- * @param stepId      The id of the step in the workflow
- * @param operation   The operation the step called
- * @param status      PASSED, FAILED or NOT_RUN
- * @param statusCode  The status code of its response; null when none
- * @param elapsedTime How long the step took, in milliseconds
- * @param criteria    Its success criteria, as evaluated
- * @param outputs     Its outputs, by name
- * @param request     The request it sent; null when none
- * @param response    The response it received; null when none
- * @param message     Why it failed when no criterion tells it; null otherwise
+ * @param index         The place of the step in the execution order of the run, from 0
+ * @param stepId        The id of the step in the workflow
+ * @param operation     The operation the step called
+ * @param status        PASSED, FAILED or NOT_RUN
+ * @param statusCode    The status code of its response; null when none
+ * @param elapsedTime   How long the step took, in milliseconds
+ * @param criteria      Its success criteria, as evaluated
+ * @param outputs       Its outputs, by name
+ * @param request       The request it sent; null when none
+ * @param response      The response it received; null when none
+ * @param message       Why it failed when no criterion tells it; null otherwise
+ * @param parameters    The parameters it sent, resolved, with the runtime expression each came from
+ * @param outputOrigins The runtime expression each of its outputs came from, by output name
  * @author SebastienDegodez
  */
 public record ArazzoStepReportDTO(int index, String stepId, Operation operation, String status, Integer statusCode,
       long elapsedTime, List<Criterion> criteria, Map<String, Object> outputs, SentRequest request,
-      ReceivedResponse response, String message) {
+      ReceivedResponse response, String message, List<Parameter> parameters, Map<String, String> outputOrigins) {
 
    /**
     * @param sourceName  The source description
@@ -90,6 +93,15 @@ public record ArazzoStepReportDTO(int index, String stepId, Operation operation,
    public record ReceivedResponse(int status, Map<String, List<String>> headers, String body) {
    }
 
+   /**
+    * @param name       The name of a parameter the step sent
+    * @param in         Where it was sent: path, query or header
+    * @param value      The value it was sent with
+    * @param expression The runtime expression the value came from; null for a constant
+    */
+   public record Parameter(String name, String in, Object value, String expression) {
+   }
+
    /** @return The step, as recorded in its run */
    public WorkflowStepResult toStepResult() {
       return new WorkflowStepResult(index, stepId,
@@ -102,7 +114,10 @@ public record ArazzoStepReportDTO(int index, String stepId, Operation operation,
                               .map(value -> new WorkflowExpressionValue(value.expression(), value.value())).toList(),
                         criterion.held()))
                   .toList(),
-            outputs, null, message);
+            outputs, null, message, request == null ? null : request.url(),
+            parameters.stream().map(parameter -> new WorkflowParameterValue(parameter.name(), parameter.in(),
+                  parameter.value(), parameter.expression())).toList(),
+            outputOrigins);
    }
 
    /** @return The request of the step, as Microcks stores the requests of tests; null when it sent none */
