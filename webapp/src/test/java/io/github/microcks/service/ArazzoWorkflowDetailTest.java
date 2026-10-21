@@ -83,6 +83,20 @@ class ArazzoWorkflowDetailTest {
             workflow.steps().stream().map(ArazzoWorkflowDetailTest::describe).toList());
    }
 
+   @Test
+   void dataPassedBetweenStepsIsMadeVisible() throws Exception {
+      ArazzoDocument document = pastryScenariosAreImportedAndLinked();
+
+      ArazzoWorkflowDetail workflow = arazzoWorkflowService.getWorkflowDetail(document.getId(), "readThenReprice")
+            .orElseThrow();
+
+      assertEquals(List.of("readPastry.outputs.name becomes the name path parameter of reprice"),
+            workflow.dataPassings().stream()
+                  .map(passing -> passing.fromStepId() + ".outputs." + passing.outputName() + " becomes the "
+                        + passing.to().target() + " " + passing.to().place() + " parameter of " + passing.to().stepId())
+                  .toList());
+   }
+
    /** Maintainer decision: a step whose operation is not found shows its operationId alone, with the S2 reason. */
    @ParameterizedTest
    @CsvSource(delimiter = ';', value = {

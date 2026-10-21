@@ -15,7 +15,9 @@
  */
 package io.github.microcks.service;
 
+import io.github.microcks.domain.ArazzoDataPassing;
 import io.github.microcks.domain.ArazzoDocument;
+import io.github.microcks.domain.ArazzoExpressionUse;
 import io.github.microcks.domain.ArazzoStepCall;
 import io.github.microcks.domain.ArazzoStepCriterion;
 import io.github.microcks.domain.ArazzoStepDetail;
@@ -25,8 +27,10 @@ import io.github.microcks.domain.ArazzoWorkflowDetail;
 import io.github.microcks.repository.ArazzoDocumentRepository;
 import io.github.microcks.service.ArazzoDocumentService.ResolvedSource;
 import io.github.microcks.util.ObjectMapperFactory;
+import io.github.microcks.util.arazzo.ArazzoDataFlow;
 import io.github.microcks.util.arazzo.ArazzoRequestBody;
 import io.github.microcks.util.arazzo.ArazzoStep;
+import io.github.microcks.util.arazzo.ArazzoUse;
 import io.github.microcks.util.arazzo.ArazzoWorkflow;
 import io.github.microcks.util.arazzo.ArazzoWorkflowReader;
 
@@ -75,7 +79,15 @@ public class ArazzoWorkflowService {
       return new ArazzoWorkflowDetail(document.getId(), document.getTitle(), document.getVersion(),
             document.getWorkflowIds(), sources.values().stream().map(ResolvedSource::link).toList(),
             workflow.workflowId(), workflow.summary(), workflow.description(), List.of(),
-            workflow.steps().stream().map(step -> step(step, sources)).toList(), workflow.outputs(), List.of());
+            workflow.steps().stream().map(step -> step(step, sources)).toList(), workflow.outputs(),
+            ArazzoDataFlow.stepOutputPassings(workflow).stream()
+                  .map(passing -> new ArazzoDataPassing(passing.fromStepId(), passing.outputName(),
+                        expressionUse(passing.use())))
+                  .toList());
+   }
+
+   private static ArazzoExpressionUse expressionUse(ArazzoUse use) {
+      return new ArazzoExpressionUse(use.stepId(), use.place(), use.target());
    }
 
    private static ArazzoStepDetail step(ArazzoStep step, Map<String, ResolvedSource> sources) {
