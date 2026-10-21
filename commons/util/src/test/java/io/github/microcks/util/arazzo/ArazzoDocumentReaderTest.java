@@ -63,6 +63,12 @@ class ArazzoDocumentReaderTest {
       assertEquals(List.of("pastryApi"), ArazzoDocumentReader.sourceDescriptionNames(document("pastry.arazzo.yaml")));
    }
 
+   @Test
+   void theUrlEachSourceDescriptionDeclaresIsReadInTheOrderOfTheDocument() throws IOException {
+      assertEquals("{customerApi=./customer-api.openapi.yaml, orderApi=./order-api.openapi.yaml}", ArazzoDocumentReader
+            .sourceDescriptionUrls(exampleOf("called-sources.arazzo.yaml", "named-source")).toString());
+   }
+
    @ParameterizedTest
    @CsvSource({ "summary, Reads a pastry.", "description, Reads a pastry by its name.",
          "summary-and-description, Reads a pastry.", "none," })
