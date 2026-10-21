@@ -13,6 +13,12 @@
   border-bottom: 1px solid var(--divider);
 }
 
+/* The clearfix of a Bootstrap modal header would take part in the flex layout and centre the title. */
+.arazzo-import-header::before,
+.arazzo-import-header::after {
+  display: none;
+}
+
 .arazzo-import-header .modal-title {
   font-size: 18px;
   font-weight: 400;
@@ -110,6 +116,8 @@ code {
 
 .arazzo-import-sources {
   width: 100%;
+  /* On a narrow screen the table scrolls rather than squashing its columns. */
+  min-width: 640px;
   border: 1px solid var(--divider);
   border-collapse: collapse;
 }
@@ -192,8 +200,11 @@ code {
   list-style: none;
 }
 
+/* A long check wraps under its text, not under its icon. */
 .arazzo-import-checks li {
   margin: 6px 0;
+  padding-left: 22px;
+  text-indent: -22px;
 }
 
 .arazzo-import-checks .fa,

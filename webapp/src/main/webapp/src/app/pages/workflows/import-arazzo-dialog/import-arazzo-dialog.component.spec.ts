@@ -390,6 +390,14 @@ describe('ImportArazzoDialogComponent', () => {
     ]);
   });
 
+  it('counts a single source in the singular', async () => {
+    const fixture = openDialog({ ...ORDER_FULFILMENT, sources: [CUSTOMER_SOURCE_MATCHED] });
+
+    await dropDocument(fixture);
+
+    expect(texts(fixture, '.arazzo-import-linked-count')).toEqual(['1 of 1 source linked']);
+  });
+
   it('tells which workflows are ready to run', async () => {
     const fixture = openDialog(ORDER_FULFILMENT);
 

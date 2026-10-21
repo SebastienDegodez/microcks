@@ -136,7 +136,8 @@
 
   <div class="modal-footer arazzo-import-footer">
     <span *ngIf="valid && analysis" class="arazzo-import-linked-count">
-      {{ linkedCount(analysis) }} of {{ analysis.sources.length }} sources linked
+      {{ linkedCount(analysis) }} of {{ analysis.sources.length }}
+      {{ analysis.sources.length === 1 ? 'source' : 'sources' }} linked
     </span>
     <span *ngIf="importError" class="arazzo-import-error" role="alert">
       <span class="pficon pficon-error-circle-o" aria-hidden="true"></span> {{ importError }}
