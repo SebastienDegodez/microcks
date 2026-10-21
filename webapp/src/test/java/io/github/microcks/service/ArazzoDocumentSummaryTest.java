@@ -24,6 +24,8 @@ import io.github.microcks.repository.RepositoryTestsConfiguration;
 import io.github.microcks.repository.ServiceRepository;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.TestPropertySource;
@@ -73,6 +75,47 @@ class ArazzoDocumentSummaryTest {
       assertEquals(
             List.of("readThenReprice: 2 steps, runnable, NEVER_RUN", "listThenReadFirst: 2 steps, runnable, NEVER_RUN"),
             workflows(documents.get(0)));
+   }
+
+   @Test
+   void aDocumentWithAnUnlinkedSourceSaysSo() throws Exception {
+      apiIsImported("customer-api.openapi.yaml");
+      arazzoDocumentService.importArazzoDocument(fixture("order-fulfilment.arazzo.yaml"), "place-order.arazzo.yaml");
+      arazzoDocumentService.importArazzoSources(fixture("order-fulfilment.arazzo-sources.yaml"));
+
+      List<ArazzoDocumentSummary> documents = arazzoDocumentService.getDocumentSummaries(null);
+
+      assertEquals(List.of("Order fulfilment 1.0.0 (place-order.arazzo.yaml)"),
+            documents.stream().map(ArazzoDocumentSummaryTest::describe).toList());
+      assertEquals(List.of("customerApi -> REST Customer API 1.0.0: linked", "orderApi -> Order API 1.0.0: not linked"),
+            sources(documents.get(0)));
+      assertEquals(
+            List.of("searchThenRead: 2 steps, runnable, NEVER_RUN",
+                  "placeOrder: 2 steps, not runnable [API Order API 1.0.0 not found], NEVER_RUN"),
+            workflows(documents.get(0)));
+   }
+
+   @Test
+   void noDocumentIsListedWhenNoneIsImported() {
+      assertEquals(List.of(), arazzoDocumentService.getDocumentSummaries(null));
+   }
+
+   @ParameterizedTest
+   @CsvSource(value = { "API Pastry - 2.0 | API Pastry scenarios 1.0.0", "Customer API | Order fulfilment 1.0.0",
+         "Order API | Order fulfilment 1.0.0", "Unknown API | ''",
+         "| API Pastry scenarios 1.0.0, Order fulfilment 1.0.0" }, delimiter = '|')
+   void theListCanBeFilteredByApi(String apiName, String listed) throws Exception {
+      apiIsImported("api-pastry-2.0.openapi.yaml");
+      apiIsImported("customer-api.openapi.yaml");
+      arazzoDocumentService.importArazzoDocument(fixture("order-fulfilment.arazzo.yaml"));
+      arazzoDocumentService.importArazzoSources(fixture("order-fulfilment.arazzo-sources.yaml"));
+      arazzoDocumentService.importArazzoDocument(fixture("pastry.arazzo.yaml"));
+      arazzoDocumentService.importArazzoSources(fixture("pastry.arazzo-sources.yaml"));
+
+      List<ArazzoDocumentSummary> documents = arazzoDocumentService.getDocumentSummaries(apiName);
+
+      assertEquals(listed, String.join(", ",
+            documents.stream().map(document -> document.title() + " " + document.version()).toList()));
    }
 
    private static String describe(ArazzoDocumentSummary document) {

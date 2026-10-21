@@ -39,6 +39,8 @@ import io.github.microcks.util.arazzo.ArazzoDocumentReader;
 import io.github.microcks.util.arazzo.ArazzoOperationCall;
 import io.github.microcks.util.arazzo.UnsupportedArazzoDocumentException;
 
+import org.springframework.data.domain.Sort;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.MissingNode;
@@ -155,10 +157,18 @@ public class ArazzoDocumentService {
     */
    public List<ArazzoDocumentSummary> getDocumentSummaries(String apiName) {
       List<ArazzoDocumentSummary> summaries = new ArrayList<>();
-      for (ArazzoDocument document : arazzoDocumentRepository.findAll()) {
-         summaries.add(summary(document, resolveSources(document)));
+      for (ArazzoDocument document : arazzoDocumentRepository.findAll(Sort.by("title", "version"))) {
+         Map<String, ResolvedSource> sources = resolveSources(document);
+         if (apiName == null || mapsToApi(sources, apiName)) {
+            summaries.add(summary(document, sources));
+         }
       }
       return summaries;
+   }
+
+   /** A document uses an API when its overlay maps one of its sources to it, whether this API exists or not. */
+   private static boolean mapsToApi(Map<String, ResolvedSource> sources, String apiName) {
+      return sources.values().stream().anyMatch(source -> apiName.equals(source.link().apiName()));
    }
 
    private static ArazzoDocumentSummary summary(ArazzoDocument document, Map<String, ResolvedSource> sources) {
