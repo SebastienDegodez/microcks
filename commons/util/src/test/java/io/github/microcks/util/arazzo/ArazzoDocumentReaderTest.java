@@ -58,10 +58,12 @@ class ArazzoDocumentReaderTest {
    }
 
    @ParameterizedTest
-   @CsvSource({ "operation-id-alone, pastryApi", "named-source, orderApi", "dotted-operation-id, orderApi" })
-   void theSourceAStepCallsIsReadFromItsOperationId(String example, String sourceName) throws IOException {
-      assertEquals(Map.of("callOne", List.of(sourceName)),
-            ArazzoDocumentReader.workflowSourceNames(exampleOf("called-sources.arazzo.yaml", example)));
+   @CsvSource({ "operation-id-alone, pastryApi, GetPastryByName", "named-source, orderApi, CreateOrder",
+         "dotted-operation-id, orderApi, orders.create" })
+   void theOperationAStepCallsIsReadFromItsOperationId(String example, String sourceName, String operationId)
+         throws IOException {
+      assertEquals(Map.of("callOne", List.of(new ArazzoOperationCall(sourceName, operationId))),
+            ArazzoDocumentReader.workflowCalls(exampleOf("called-sources.arazzo.yaml", example)));
    }
 
    @Test

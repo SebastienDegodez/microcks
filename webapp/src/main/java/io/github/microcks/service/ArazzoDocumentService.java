@@ -18,26 +18,34 @@ package io.github.microcks.service;
 import io.github.microcks.domain.ArazzoDocument;
 import io.github.microcks.domain.ArazzoSourceLink;
 import io.github.microcks.domain.ArazzoSources;
+import io.github.microcks.domain.ArazzoStepCall;
 import io.github.microcks.domain.ArazzoWorkflowStatus;
+import io.github.microcks.domain.Resource;
+import io.github.microcks.domain.ResourceType;
+import io.github.microcks.domain.Service;
 import io.github.microcks.domain.ServiceRef;
 import io.github.microcks.repository.ArazzoDocumentRepository;
 import io.github.microcks.repository.ArazzoSourcesRepository;
+import io.github.microcks.repository.ResourceRepository;
 import io.github.microcks.repository.ServiceRepository;
 import io.github.microcks.util.MockRepositoryImportException;
 import io.github.microcks.util.ObjectMapperFactory;
 import io.github.microcks.util.arazzo.ArazzoDescription;
 import io.github.microcks.util.arazzo.ArazzoDocumentReader;
+import io.github.microcks.util.arazzo.ArazzoOperationCall;
 import io.github.microcks.util.arazzo.UnsupportedArazzoDocumentException;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.MissingNode;
 
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * Service bean for common processing around Arazzo documents.
@@ -52,18 +60,22 @@ public class ArazzoDocumentService {
    private final ArazzoDocumentRepository arazzoDocumentRepository;
    private final ArazzoSourcesRepository arazzoSourcesRepository;
    private final ServiceRepository serviceRepository;
+   private final ResourceRepository resourceRepository;
 
    /**
     * Build a new ArazzoDocumentService with its required dependencies.
     * @param arazzoDocumentRepository The repository of imported Arazzo documents
     * @param arazzoSourcesRepository  The repository of imported ArazzoSources overlays
     * @param serviceRepository        The repository of the APIs the source descriptions are linked to
+    * @param resourceRepository       The repository of the contracts that define the operations of these APIs
     */
    public ArazzoDocumentService(ArazzoDocumentRepository arazzoDocumentRepository,
-         ArazzoSourcesRepository arazzoSourcesRepository, ServiceRepository serviceRepository) {
+         ArazzoSourcesRepository arazzoSourcesRepository, ServiceRepository serviceRepository,
+         ResourceRepository resourceRepository) {
       this.arazzoDocumentRepository = arazzoDocumentRepository;
       this.arazzoSourcesRepository = arazzoSourcesRepository;
       this.serviceRepository = serviceRepository;
+      this.resourceRepository = resourceRepository;
    }
 
    /**
@@ -113,7 +125,7 @@ public class ArazzoDocumentService {
       document.setVersion(description.version());
       document.setWorkflowIds(description.workflowIds());
       document.setSourceNames(ArazzoDocumentReader.sourceDescriptionNames(parsed));
-      document.setWorkflowSourceNames(ArazzoDocumentReader.workflowSourceNames(parsed));
+      document.setWorkflowCalls(stepCalls(ArazzoDocumentReader.workflowCalls(parsed)));
       document.setContent(content);
       return arazzoDocumentRepository.save(document);
    }
@@ -146,9 +158,8 @@ public class ArazzoDocumentService {
     * @return The link of each source description, in the order of the document
     */
    public List<ArazzoSourceLink> getSourceLinks(String title, String version) {
-      ArazzoDocument document = arazzoDocumentRepository.findByTitleAndVersion(title, version);
-      ArazzoSources overlay = arazzoSourcesRepository.findByNameAndVersion(title, version);
-      return document.getSourceNames().stream().map(sourceName -> link(sourceName, overlay)).toList();
+      return resolveSources(arazzoDocumentRepository.findByTitleAndVersion(title, version)).values().stream()
+            .map(ResolvedSource::link).toList();
    }
 
    /**
@@ -159,34 +170,96 @@ public class ArazzoDocumentService {
     */
    public List<ArazzoWorkflowStatus> getWorkflowStatuses(String title, String version) {
       ArazzoDocument document = arazzoDocumentRepository.findByTitleAndVersion(title, version);
-      Map<String, ArazzoSourceLink> links = getSourceLinks(title, version).stream()
-            .collect(Collectors.toMap(ArazzoSourceLink::sourceName, link -> link));
+      Map<String, ResolvedSource> sources = resolveSources(document);
       return document.getWorkflowIds().stream()
-            .map(workflowId -> status(workflowId, document.getWorkflowSourceNames().get(workflowId), links)).toList();
+            .map(workflowId -> status(workflowId, document.getWorkflowCalls().get(workflowId), sources)).toList();
    }
 
-   /** A workflow is runnable when nothing prevents its steps from calling their source; else these are the reasons. */
-   private static ArazzoWorkflowStatus status(String workflowId, List<String> calledSourceNames,
-         Map<String, ArazzoSourceLink> links) {
+   /**
+    * A workflow is runnable when each of its steps calls an operation found in a linked API; else these are the
+    * reasons, in the order of the steps, each given once.
+    */
+   private static ArazzoWorkflowStatus status(String workflowId, List<ArazzoStepCall> calls,
+         Map<String, ResolvedSource> sources) {
       Set<String> reasons = new LinkedHashSet<>();
-      for (String sourceName : calledSourceNames) {
-         ArazzoSourceLink link = links.get(sourceName);
+      for (ArazzoStepCall call : calls) {
+         ResolvedSource source = sources.get(call.sourceName());
+         ArazzoSourceLink link = source.link();
          if (link.apiName() == null) {
             reasons.add(NO_API_NAME_AND_VERSION);
          } else if (!link.linked()) {
             reasons.add("API " + link.apiName() + " " + link.apiVersion() + " not found");
+         } else if (!source.operationIds().contains(call.operationId())) {
+            reasons
+                  .add("Operation " + call.operationId() + " not found in " + link.apiName() + " " + link.apiVersion());
          }
       }
       return new ArazzoWorkflowStatus(workflowId, reasons.isEmpty(), List.copyOf(reasons));
    }
 
-   private ArazzoSourceLink link(String sourceName, ArazzoSources overlay) {
+   private Map<String, ResolvedSource> resolveSources(ArazzoDocument document) {
+      ArazzoSources overlay = arazzoSourcesRepository.findByNameAndVersion(document.getTitle(), document.getVersion());
+      Map<String, ResolvedSource> sources = new LinkedHashMap<>();
+      for (String sourceName : document.getSourceNames()) {
+         sources.put(sourceName, resolve(sourceName, overlay));
+      }
+      return sources;
+   }
+
+   private ResolvedSource resolve(String sourceName, ArazzoSources overlay) {
       ServiceRef api = overlay == null ? null : overlay.getSources().get(sourceName);
       if (api == null) {
-         return new ArazzoSourceLink(sourceName, null, null, false);
+         return new ResolvedSource(new ArazzoSourceLink(sourceName, null, null, false), Set.of());
       }
-      boolean linked = serviceRepository.findByNameAndVersion(api.getName(), api.getVersion()) != null;
-      return new ArazzoSourceLink(sourceName, api.getName(), api.getVersion(), linked);
+      Service service = serviceRepository.findByNameAndVersion(api.getName(), api.getVersion());
+      if (service == null) {
+         return new ResolvedSource(new ArazzoSourceLink(sourceName, api.getName(), api.getVersion(), false), Set.of());
+      }
+      return new ResolvedSource(new ArazzoSourceLink(sourceName, api.getName(), api.getVersion(), true),
+            definedOperationIds(service));
+   }
+
+   /** An API defines the operations whose operationId appears in the main OpenAPI contract Microcks stored for it. */
+   private Set<String> definedOperationIds(Service service) {
+      Set<String> operationIds = new HashSet<>();
+      for (Resource resource : resourceRepository.findMainByServiceId(service.getId())) {
+         if (resource.getType() == ResourceType.OPEN_API_SPEC) {
+            operationIds.addAll(openApiOperationIds(resource.getContent()));
+         }
+      }
+      return operationIds;
+   }
+
+   private static Set<String> openApiOperationIds(String contract) {
+      Set<String> operationIds = new HashSet<>();
+      for (JsonNode pathItem : readContract(contract).path("paths")) {
+         for (JsonNode operation : pathItem) {
+            if (operation.has("operationId")) {
+               operationIds.add(operation.path("operationId").asText());
+            }
+         }
+      }
+      return operationIds;
+   }
+
+   private static JsonNode readContract(String contract) {
+      try {
+         return ObjectMapperFactory.getYamlObjectMapper().readTree(contract);
+      } catch (JsonProcessingException jpe) {
+         // A contract that cannot be read defines no operation.
+         return MissingNode.getInstance();
+      }
+   }
+
+   private static Map<String, List<ArazzoStepCall>> stepCalls(Map<String, List<ArazzoOperationCall>> workflowCalls) {
+      Map<String, List<ArazzoStepCall>> stepCalls = new HashMap<>();
+      workflowCalls.forEach((workflowId, calls) -> stepCalls.put(workflowId,
+            calls.stream().map(call -> new ArazzoStepCall(call.sourceName(), call.operationId())).toList()));
+      return stepCalls;
+   }
+
+   /** A source description with its link and the operationIds the linked API defines. */
+   private record ResolvedSource(ArazzoSourceLink link, Set<String> operationIds) {
    }
 
    private static ArazzoDescription read(JsonNode document) throws MockRepositoryImportException {

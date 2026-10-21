@@ -71,28 +71,29 @@ public final class ArazzoDocumentReader {
 
    /**
     * @param document The Arazzo document, parsed from YAML or JSON
-    * @return For each workflow id, the names of the source descriptions its steps call, in the order of the steps
+    * @return For each workflow id, the operations its steps call, in the order of the steps
     */
-   public static Map<String, List<String>> workflowSourceNames(JsonNode document) {
+   public static Map<String, List<ArazzoOperationCall>> workflowCalls(JsonNode document) {
       List<String> sourceNames = sourceDescriptionNames(document);
-      Map<String, List<String>> workflowSourceNames = new LinkedHashMap<>();
+      Map<String, List<ArazzoOperationCall>> workflowCalls = new LinkedHashMap<>();
       for (JsonNode workflow : document.path("workflows")) {
-         List<String> calledSourceNames = new ArrayList<>();
+         List<ArazzoOperationCall> calls = new ArrayList<>();
          for (JsonNode step : workflow.path("steps")) {
-            calledSourceNames.add(calledSourceName(step.path("operationId").asText(), sourceNames));
+            calls.add(call(step.path("operationId").asText(), sourceNames));
          }
-         workflowSourceNames.put(workflow.path("workflowId").asText(), calledSourceNames);
+         workflowCalls.put(workflow.path("workflowId").asText(), calls);
       }
-      return workflowSourceNames;
+      return workflowCalls;
    }
 
-   private static String calledSourceName(String operationId, List<String> sourceNames) {
+   private static ArazzoOperationCall call(String operationId, List<String> sourceNames) {
       if (operationId.startsWith(SOURCE_DESCRIPTIONS_EXPRESSION)) {
          // A source name has no dot, an operationId may have some.
-         return operationId.substring(SOURCE_DESCRIPTIONS_EXPRESSION.length(),
-               operationId.indexOf('.', SOURCE_DESCRIPTIONS_EXPRESSION.length()));
+         int sourceNameEnd = operationId.indexOf('.', SOURCE_DESCRIPTIONS_EXPRESSION.length());
+         return new ArazzoOperationCall(operationId.substring(SOURCE_DESCRIPTIONS_EXPRESSION.length(), sourceNameEnd),
+               operationId.substring(sourceNameEnd + 1));
       }
       // Arazzo requires an operationId to name its source when there are several: alone, it calls the only one.
-      return sourceNames.get(0);
+      return new ArazzoOperationCall(sourceNames.get(0), operationId);
    }
 }

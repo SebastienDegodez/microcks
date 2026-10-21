@@ -32,7 +32,7 @@ public class ArazzoDocument {
    private String version;
    private List<String> workflowIds;
    private List<String> sourceNames;
-   private Map<String, List<String>> workflowSourceNames;
+   private Map<String, List<ArazzoStepCall>> workflowCalls;
    private String content;
 
    public String getId() {
@@ -75,12 +75,12 @@ public class ArazzoDocument {
       this.sourceNames = sourceNames;
    }
 
-   public Map<String, List<String>> getWorkflowSourceNames() {
-      return workflowSourceNames;
+   public Map<String, List<ArazzoStepCall>> getWorkflowCalls() {
+      return workflowCalls;
    }
 
-   public void setWorkflowSourceNames(Map<String, List<String>> workflowSourceNames) {
-      this.workflowSourceNames = workflowSourceNames;
+   public void setWorkflowCalls(Map<String, List<ArazzoStepCall>> workflowCalls) {
+      this.workflowCalls = workflowCalls;
    }
 
    public String getContent() {

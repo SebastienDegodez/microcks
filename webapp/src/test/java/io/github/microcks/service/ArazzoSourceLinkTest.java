@@ -91,6 +91,20 @@ class ArazzoSourceLinkTest {
             workflowStatuses("Order fulfilment", "1.0.0"));
    }
 
+   @Test
+   void aStepCallingAnOperationTheLinkedApiDoesNotDefineIsReported() throws Exception {
+      apiIsImported("api-pastry-2.0.openapi.yaml");
+      arazzoDocumentService.importArazzoSources(fixture("pastry.arazzo-sources.yaml"));
+
+      arazzoDocumentService.importArazzoDocument(fixture("pastry-delete.arazzo.yaml"));
+
+      assertEquals(List.of("pastryApi -> API Pastry - 2.0 2.0.0: linked"),
+            sourceLinks("API Pastry scenarios", "1.0.0"));
+      assertEquals(
+            List.of("readThenReprice: not runnable [Operation DeletePastry not found in API Pastry - 2.0 2.0.0]"),
+            workflowStatuses("API Pastry scenarios", "1.0.0"));
+   }
+
    @ParameterizedTest
    @CsvSource({ "pastry.arazzo-sources.yaml, true", "pastry.arazzo.yaml, false", "unparseable.arazzo.yaml, false" })
    void onlyAnArtifactOfKindArazzoSourcesIsAnOverlay(String fileName, boolean overlay) throws Exception {
