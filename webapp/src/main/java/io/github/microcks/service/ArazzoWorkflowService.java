@@ -22,6 +22,7 @@ import io.github.microcks.domain.ArazzoExpressionUse;
 import io.github.microcks.domain.ArazzoSourceDescription;
 import io.github.microcks.domain.ArazzoStepCall;
 import io.github.microcks.domain.ArazzoLastResult;
+import io.github.microcks.domain.ArazzoStepAction;
 import io.github.microcks.domain.ArazzoStepCriterion;
 import io.github.microcks.domain.ArazzoStepDetail;
 import io.github.microcks.domain.ArazzoStepOperation;
@@ -34,6 +35,8 @@ import io.github.microcks.domain.ArazzoWorkflowInput;
 import io.github.microcks.repository.ArazzoDocumentRepository;
 import io.github.microcks.service.ArazzoDocumentService.ResolvedSource;
 import io.github.microcks.util.ObjectMapperFactory;
+import io.github.microcks.util.arazzo.ArazzoAction;
+import io.github.microcks.util.arazzo.ArazzoCriterion;
 import io.github.microcks.util.arazzo.ArazzoDataFlow;
 import io.github.microcks.util.arazzo.ArazzoRequestBody;
 import io.github.microcks.util.arazzo.ArazzoStep;
@@ -180,13 +183,22 @@ public class ArazzoWorkflowService {
       return new ArazzoStepDetail(step.stepId(), step.description(),
             ArazzoDocumentService.operationOf(new ArazzoStepCall(step.call().sourceName(), step.call().operationId()),
                   sources),
-            step.parameters().stream().map(
-                  parameter -> new ArazzoStepParameter(parameter.name(), parameter.in(), parameter.value())).toList(),
-            requestBody(step.requestBody()),
-            step.successCriteria().stream().map(
-                  criterion -> new ArazzoStepCriterion(criterion.condition(), criterion.context(), criterion.type()))
+            step.parameters().stream()
+                  .map(parameter -> new ArazzoStepParameter(parameter.name(), parameter.in(), parameter.value()))
                   .toList(),
-            step.outputs());
+            requestBody(step.requestBody()), criteria(step.successCriteria()), step.outputs(),
+            actions(step.onSuccess()), actions(step.onFailure()));
+   }
+
+   private static List<ArazzoStepCriterion> criteria(List<ArazzoCriterion> criteria) {
+      return criteria.stream()
+            .map(criterion -> new ArazzoStepCriterion(criterion.condition(), criterion.context(), criterion.type()))
+            .toList();
+   }
+
+   private static List<ArazzoStepAction> actions(List<ArazzoAction> actions) {
+      return actions.stream().map(action -> new ArazzoStepAction(action.name(), action.type(), action.retryAfter(),
+            action.retryLimit(), criteria(action.criteria()))).toList();
    }
 
    private static ArazzoStepRequestBody requestBody(ArazzoRequestBody requestBody) {
