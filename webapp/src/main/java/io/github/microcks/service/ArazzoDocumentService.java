@@ -44,6 +44,19 @@ public class ArazzoDocumentService {
    }
 
    /**
+    * Tell whether an uploaded artifact is an Arazzo document, to import it with this service rather than as an API.
+    * @param content The artifact as uploaded
+    * @return Whether the artifact is an Arazzo document
+    */
+   public boolean isArazzoDocument(String content) {
+      try {
+         return ArazzoDocumentReader.isArazzoDocument(ObjectMapperFactory.getYamlObjectMapper().readTree(content));
+      } catch (JsonProcessingException jpe) {
+         return false;
+      }
+   }
+
+   /**
     * Import an Arazzo document so that its workflows are kept in Microcks.
     * @param content The document as uploaded, in YAML or JSON
     * @return The imported document

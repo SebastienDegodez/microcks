@@ -31,6 +31,14 @@ public final class ArazzoDocumentReader {
    }
 
    /**
+    * @param document A document parsed from YAML or JSON
+    * @return Whether the document declares the version of Arazzo it uses, as every Arazzo document does
+    */
+   public static boolean isArazzoDocument(JsonNode document) {
+      return document.has("arazzo");
+   }
+
+   /**
     * @param document The Arazzo document, parsed from YAML or JSON
     * @return What identifies the document
     * @throws UnsupportedArazzoDocumentException if the document is outside of the subset Microcks supports

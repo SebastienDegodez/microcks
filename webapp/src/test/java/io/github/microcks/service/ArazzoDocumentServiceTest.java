@@ -21,6 +21,8 @@ import io.github.microcks.repository.RepositoryTestsConfiguration;
 import io.github.microcks.util.MockRepositoryImportException;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.TestPropertySource;
@@ -118,6 +120,13 @@ class ArazzoDocumentServiceTest {
       String content = fixture("unparseable.arazzo.yaml");
 
       assertThrows(MockRepositoryImportException.class, () -> service.importArazzoDocument(content));
+   }
+
+   @ParameterizedTest
+   @CsvSource({ "pastry.arazzo.yaml, true", "pastry.openapi.yaml, false", "unparseable.arazzo.yaml, false" })
+   void onlyADocumentDeclaringAnArazzoVersionIsAnArazzoDocument(String fileName, boolean arazzoDocument)
+         throws Exception {
+      assertEquals(arazzoDocument, service.isArazzoDocument(fixture(fileName)));
    }
 
    private static String fixture(String fileName) throws IOException {
