@@ -32,10 +32,11 @@ import io.github.microcks.util.arazzo.UnsupportedArazzoDocumentException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 
-import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -46,6 +47,7 @@ import java.util.stream.Collectors;
 public class ArazzoDocumentService {
 
    private static final String ARAZZO_SOURCES_KIND = "ArazzoSources";
+   private static final String NO_API_NAME_AND_VERSION = "no API name and version for this source";
 
    private final ArazzoDocumentRepository arazzoDocumentRepository;
    private final ArazzoSourcesRepository arazzoSourcesRepository;
@@ -166,18 +168,23 @@ public class ArazzoDocumentService {
    /** A workflow is runnable when nothing prevents its steps from calling their source; else these are the reasons. */
    private static ArazzoWorkflowStatus status(String workflowId, List<String> calledSourceNames,
          Map<String, ArazzoSourceLink> links) {
-      List<String> reasons = new ArrayList<>();
+      Set<String> reasons = new LinkedHashSet<>();
       for (String sourceName : calledSourceNames) {
          ArazzoSourceLink link = links.get(sourceName);
-         if (!link.linked()) {
+         if (link.apiName() == null) {
+            reasons.add(NO_API_NAME_AND_VERSION);
+         } else if (!link.linked()) {
             reasons.add("API " + link.apiName() + " " + link.apiVersion() + " not found");
          }
       }
-      return new ArazzoWorkflowStatus(workflowId, reasons.isEmpty(), reasons);
+      return new ArazzoWorkflowStatus(workflowId, reasons.isEmpty(), List.copyOf(reasons));
    }
 
    private ArazzoSourceLink link(String sourceName, ArazzoSources overlay) {
-      ServiceRef api = overlay.getSources().get(sourceName);
+      ServiceRef api = overlay == null ? null : overlay.getSources().get(sourceName);
+      if (api == null) {
+         return new ArazzoSourceLink(sourceName, null, null, false);
+      }
       boolean linked = serviceRepository.findByNameAndVersion(api.getName(), api.getVersion()) != null;
       return new ArazzoSourceLink(sourceName, api.getName(), api.getVersion(), linked);
    }

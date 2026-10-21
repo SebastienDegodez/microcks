@@ -79,6 +79,18 @@ class ArazzoSourceLinkTest {
             workflowStatuses("Order fulfilment", "1.0.0"));
    }
 
+   @Test
+   void withoutOverlaySourcesAreNotLinked() throws Exception {
+      arazzoDocumentService.importArazzoDocument(fixture("order-fulfilment.arazzo.yaml"));
+
+      assertEquals(List.of("customerApi: not linked", "orderApi: not linked"),
+            sourceLinks("Order fulfilment", "1.0.0"));
+      assertEquals(
+            List.of("searchThenRead: not runnable [no API name and version for this source]",
+                  "placeOrder: not runnable [no API name and version for this source]"),
+            workflowStatuses("Order fulfilment", "1.0.0"));
+   }
+
    @ParameterizedTest
    @CsvSource({ "pastry.arazzo-sources.yaml, true", "pastry.arazzo.yaml, false", "unparseable.arazzo.yaml, false" })
    void onlyAnArtifactOfKindArazzoSourcesIsAnOverlay(String fileName, boolean overlay) throws Exception {
@@ -95,8 +107,8 @@ class ArazzoSourceLinkTest {
    }
 
    private static String describe(ArazzoSourceLink link) {
-      return link.sourceName() + " -> " + link.apiName() + " " + link.apiVersion() + ": "
-            + (link.linked() ? "linked" : "not linked");
+      String api = link.apiName() == null ? "" : " -> " + link.apiName() + " " + link.apiVersion();
+      return link.sourceName() + api + ": " + (link.linked() ? "linked" : "not linked");
    }
 
    private static String describe(ArazzoWorkflowStatus status) {
