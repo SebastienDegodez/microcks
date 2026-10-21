@@ -16,8 +16,10 @@
 package io.github.microcks.service;
 
 import io.github.microcks.domain.ArazzoSourceLink;
+import io.github.microcks.domain.ArazzoSources;
 import io.github.microcks.domain.ArazzoWorkflowStatus;
 import io.github.microcks.domain.Resource;
+import io.github.microcks.repository.ArazzoSourcesRepository;
 import io.github.microcks.repository.RepositoryTestsConfiguration;
 import io.github.microcks.repository.ResourceRepository;
 import io.github.microcks.repository.ServiceRepository;
@@ -35,6 +37,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -61,6 +65,9 @@ class ArazzoSourceLinkTest {
 
    @Autowired
    private ResourceRepository resourceRepository;
+
+   @Autowired
+   private ArazzoSourcesRepository arazzoSourcesRepository;
 
    @Test
    void theOverlayLinksASourceToTheApiWithThatNameAndVersion() throws Exception {
@@ -174,6 +181,16 @@ class ArazzoSourceLinkTest {
             workflowStatuses("API Pastry scenarios", "1.0.0"));
    }
 
+   @Test
+   void reImportingAnOverlayWithTheSameNameAndVersionReplacesIt() throws Exception {
+      arazzoDocumentService.importArazzoSources(fixture("pastry-previous.arazzo-sources.yaml"));
+
+      arazzoDocumentService.importArazzoSources(fixture("pastry.arazzo-sources.yaml"));
+
+      assertEquals(List.of("API Pastry scenarios 1.0.0: {pastryApi=API Pastry - 2.0 2.0.0}"),
+            arazzoSourcesRepository.findAll().stream().map(ArazzoSourceLinkTest::describe).toList());
+   }
+
    @ParameterizedTest
    @CsvSource({ "pastry.arazzo-sources.yaml, true", "pastry.arazzo.yaml, false", "unparseable.arazzo.yaml, false" })
    void onlyAnArtifactOfKindArazzoSourcesIsAnOverlay(String fileName, boolean overlay) throws Exception {
@@ -192,6 +209,12 @@ class ArazzoSourceLinkTest {
    private static String describe(ArazzoSourceLink link) {
       String api = link.apiName() == null ? "" : " -> " + link.apiName() + " " + link.apiVersion();
       return link.sourceName() + api + ": " + (link.linked() ? "linked" : "not linked");
+   }
+
+   private static String describe(ArazzoSources overlay) {
+      Map<String, String> sources = new TreeMap<>();
+      overlay.getSources().forEach((name, api) -> sources.put(name, api.getName() + " " + api.getVersion()));
+      return overlay.getName() + " " + overlay.getVersion() + ": " + sources;
    }
 
    private static String describe(ArazzoWorkflowStatus status) {

@@ -144,9 +144,15 @@ public class ArazzoDocumentService {
          sources.put(source.getKey(), new ServiceRef(null, source.getValue().path("name").asText(),
                source.getValue().path("version").asText()));
       }
-      ArazzoSources arazzoSources = new ArazzoSources();
-      arazzoSources.setName(overlay.path("metadata").path("name").asText());
-      arazzoSources.setVersion(overlay.path("metadata").path("version").asText());
+      String name = overlay.path("metadata").path("name").asText();
+      String version = overlay.path("metadata").path("version").asText();
+      // Re-importing the same name and version replaces the existing overlay.
+      ArazzoSources arazzoSources = arazzoSourcesRepository.findByNameAndVersion(name, version);
+      if (arazzoSources == null) {
+         arazzoSources = new ArazzoSources();
+      }
+      arazzoSources.setName(name);
+      arazzoSources.setVersion(version);
       arazzoSources.setSources(sources);
       return arazzoSourcesRepository.save(arazzoSources);
    }
