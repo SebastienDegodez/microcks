@@ -34,6 +34,7 @@
     <json-schema-validator.version>1.5.9</json-schema-validator.version>
     <avro.version>1.12.1</avro.version>
     <mockito.version>5.20.0</mockito.version>
+    <archunit.version>1.5.1</archunit.version>
   </properties>
 
   <dependencies>
@@ -93,6 +94,12 @@
     <dependency>
       <groupId>org.junit.platform</groupId>
       <artifactId>junit-platform-launcher</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.tngtech.archunit</groupId>
+      <artifactId>archunit-junit5</artifactId>
+      <version>${archunit.version}</version>
       <scope>test</scope>
     </dependency>
   </dependencies>
