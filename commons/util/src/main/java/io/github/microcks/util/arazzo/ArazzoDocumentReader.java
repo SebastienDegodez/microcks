@@ -57,6 +57,14 @@ public final class ArazzoDocumentReader {
 
    /**
     * @param document The Arazzo document, parsed from YAML or JSON
+    * @return The version of Arazzo the document uses
+    */
+   public static String arazzoVersion(JsonNode document) {
+      return document.path("arazzo").asText();
+   }
+
+   /**
+    * @param document The Arazzo document, parsed from YAML or JSON
     * @return The names of its source descriptions, in the order of the document
     */
    public static List<String> sourceDescriptionNames(JsonNode document) {

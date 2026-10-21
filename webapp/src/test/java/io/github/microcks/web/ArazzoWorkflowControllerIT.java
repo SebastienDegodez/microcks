@@ -58,6 +58,14 @@ class ArazzoWorkflowControllerIT extends AbstractBaseIT {
       JsonNode workflow = new ObjectMapper().readTree(response.getBody());
       assertEquals("readThenReprice [\"readThenReprice\",\"listThenReadFirst\"]",
             workflow.path("workflowId").asText() + " " + workflow.path("workflowIds"));
+      assertEquals("ARAZZO 1.0.1 from pastry-scenarios.arazzo.yaml, imported",
+            "ARAZZO " + workflow.path("arazzoVersion").asText() + " from " + workflow.path("fileName").asText()
+                  + (workflow.path("importDate").isMissingNode() ? "" : ", imported"));
+      assertEquals("API Pastry - 2.0 2.0.0: 3 operations, 3 used by steps",
+            workflow.path("sources").path(0).path("link").path("apiName").asText() + " "
+                  + workflow.path("sources").path(0).path("link").path("apiVersion").asText() + ": "
+                  + workflow.path("sources").path(0).path("operations").asInt() + " operations, "
+                  + workflow.path("sources").path(0).path("usedOperations").asInt() + " used by steps");
       assertEquals("GET /pastry/{name} GetPastryByName", operation(workflow.path("steps").path(0)));
       assertEquals("PATCH /pastry/{name} PatchPastry", operation(workflow.path("steps").path(1)));
       assertEquals("{\"fromStepId\":\"readPastry\",\"outputName\":\"name\",\"to\":{\"stepId\":\"reprice\","

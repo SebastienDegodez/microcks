@@ -18,6 +18,7 @@ package io.github.microcks.service;
 import io.github.microcks.domain.ArazzoDataPassing;
 import io.github.microcks.domain.ArazzoDocument;
 import io.github.microcks.domain.ArazzoExpressionUse;
+import io.github.microcks.domain.ArazzoSourceDescription;
 import io.github.microcks.domain.ArazzoStepCall;
 import io.github.microcks.domain.ArazzoStepCriterion;
 import io.github.microcks.domain.ArazzoStepDetail;
@@ -39,9 +40,11 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.MissingNode;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Service bean reading the workflows of imported Arazzo documents.
@@ -78,7 +81,8 @@ public class ArazzoWorkflowService {
    private ArazzoWorkflowDetail detail(ArazzoDocument document, ArazzoWorkflow workflow) {
       Map<String, ResolvedSource> sources = arazzoDocumentService.resolveSources(document);
       return new ArazzoWorkflowDetail(document.getId(), document.getTitle(), document.getVersion(),
-            document.getWorkflowIds(), sources.values().stream().map(ResolvedSource::link).toList(),
+            document.getArazzoVersion(), document.getFileName(), document.getImportDate(), document.getWorkflowIds(),
+            sources.values().stream().map(source -> sourceDescription(source, document)).toList(),
             workflow.workflowId(), workflow.summary(), workflow.description(), inputs(workflow),
             workflow.steps().stream().map(step -> step(step, sources)).toList(), workflow.outputs(),
             ArazzoDataFlow.stepOutputPassings(workflow).stream()
@@ -94,6 +98,20 @@ public class ArazzoWorkflowService {
 
    private static ArazzoExpressionUse expressionUse(ArazzoUse use) {
       return new ArazzoExpressionUse(use.stepId(), use.place(), use.target());
+   }
+
+   /**
+    * A linked source tells how many operations its API defines, and how many of them the steps of the document call.
+    */
+   private static ArazzoSourceDescription sourceDescription(ResolvedSource source, ArazzoDocument document) {
+      Set<String> usedOperationIds = new HashSet<>();
+      document.getWorkflowCalls().values()
+            .forEach(calls -> calls.stream()
+                  .filter(call -> call.sourceName().equals(source.link().sourceName())
+                        && source.operations().containsKey(call.operationId()))
+                  .forEach(call -> usedOperationIds.add(call.operationId())));
+      return new ArazzoSourceDescription(source.link(), source.serviceId(),
+            ArazzoDocumentService.unlinkedReason(source.link()), source.operations().size(), usedOperationIds.size());
    }
 
    private static ArazzoStepDetail step(ArazzoStep step, Map<String, ResolvedSource> sources) {

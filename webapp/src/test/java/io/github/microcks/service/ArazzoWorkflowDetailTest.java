@@ -16,11 +16,14 @@
 package io.github.microcks.service;
 
 import io.github.microcks.domain.ArazzoDocument;
+import io.github.microcks.domain.ArazzoSourceDescription;
+import io.github.microcks.domain.ArazzoSourceLink;
 import io.github.microcks.domain.ArazzoStepDetail;
 import io.github.microcks.domain.ArazzoStepOperation;
 import io.github.microcks.domain.ArazzoWorkflowDetail;
 import io.github.microcks.repository.ArazzoDocumentRepository;
 import io.github.microcks.repository.RepositoryTestsConfiguration;
+import io.github.microcks.repository.ServiceRepository;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -35,10 +38,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Acceptance tests of reading the steps of an Arazzo workflow, one per acceptance criterion of the story.
@@ -62,6 +67,9 @@ class ArazzoWorkflowDetailTest {
 
    @Autowired
    private ArazzoDocumentRepository arazzoDocumentRepository;
+
+   @Autowired
+   private ServiceRepository serviceRepository;
 
    @Test
    void eachStepShowsItsOperationParametersCriteriaAndOutputs() throws Exception {
@@ -154,12 +162,58 @@ class ArazzoWorkflowDetailTest {
             workflow.title() + " " + workflow.version() + " " + workflow.workflowIds());
       assertEquals("listThenReadFirst: Reads the first pastry of the list. (null)",
             workflow.workflowId() + ": " + workflow.summary() + " (" + workflow.description() + ")");
-      assertEquals(List.of("pastryApi -> API Pastry - 2.0 2.0.0: linked"),
-            workflow.sources().stream().map(link -> link.sourceName() + " -> " + link.apiName() + " "
-                  + link.apiVersion() + ": " + (link.linked() ? "linked" : "not linked")).toList());
       assertEquals(
             List.of("list calls GET /pastry (GetPastries)", "readFirst calls GET /pastry/{name} (GetPastryByName)"),
             workflow.steps().stream().map(step -> step.stepId() + " calls " + describe(step.operation())).toList());
+   }
+
+   /** Mock-up, screen 3: the header gives the Arazzo version, the file and the date of the import. */
+   @Test
+   void theHeaderGivesTheArazzoVersionTheFileAndTheDateOfTheImport() throws Exception {
+      Date before = new Date();
+      ArazzoDocument document = arazzoDocumentService.importArazzoDocument(fixture("pastry-scenarios.arazzo.yaml"),
+            "pastry.arazzo.yaml");
+      Date after = new Date();
+
+      ArazzoWorkflowDetail workflow = arazzoWorkflowService.getWorkflowDetail(document.getId(), "readThenReprice")
+            .orElseThrow();
+
+      assertEquals("ARAZZO 1.0.1 from pastry.arazzo.yaml",
+            "ARAZZO " + workflow.arazzoVersion() + " from " + workflow.fileName());
+      assertTrue(!workflow.importDate().before(before) && !workflow.importDate().after(after),
+            () -> workflow.importDate() + " is not between " + before + " and " + after);
+   }
+
+   /**
+    * Mock-up, screen 3: each source description links to its API with how many of its operations the steps call, or
+    * gives the S2 reason why it is not linked.
+    */
+   @ParameterizedTest
+   @CsvSource(delimiter = ';', value = {
+         "pastry-scenarios.arazzo.yaml; true; true; pastryApi -> API Pastry - 2.0 2.0.0 (linked): 3 operations, 3 "
+               + "used by steps",
+         "pastry-delete.arazzo.yaml; true; true; pastryApi -> API Pastry - 2.0 2.0.0 (linked): 3 operations, 2 used "
+               + "by steps",
+         "pastry-scenarios.arazzo.yaml; false; true; pastryApi -> API Pastry - 2.0 2.0.0: API API Pastry - 2.0 "
+               + "2.0.0 not found",
+         "pastry-scenarios.arazzo.yaml; false; false; pastryApi: no API name and version for this source" })
+   void eachSourceDescriptionGivesItsApiAndTheOperationsStepsCallOrWhyItIsNotLinked(String fixture, boolean apiImported,
+         boolean overlayImported, String source) throws Exception {
+      if (apiImported) {
+         apiIsImported("api-pastry-2.0.openapi.yaml");
+      }
+      if (overlayImported) {
+         arazzoDocumentService.importArazzoSources(fixture("pastry.arazzo-sources.yaml"));
+      }
+      ArazzoDocument document = arazzoDocumentService.importArazzoDocument(fixture(fixture));
+      String serviceId = apiImported ? serviceRepository.findByNameAndVersion("API Pastry - 2.0", "2.0.0").getId()
+            : null;
+
+      ArazzoWorkflowDetail workflow = arazzoWorkflowService.getWorkflowDetail(document.getId(), "readThenReprice")
+            .orElseThrow();
+
+      assertEquals(List.of(source), workflow.sources().stream().map(ArazzoWorkflowDetailTest::describe).toList());
+      assertEquals(serviceId, workflow.sources().get(0).serviceId());
    }
 
    @ParameterizedTest
@@ -199,6 +253,16 @@ class ArazzoWorkflowDetailTest {
       step.successCriteria().forEach(criterion -> lines.add("criterion " + criterion.condition()));
       step.outputs().forEach((name, expression) -> lines.add("output " + name + " = " + expression));
       return lines;
+   }
+
+   private static String describe(ArazzoSourceDescription source) {
+      ArazzoSourceLink link = source.link();
+      String api = link.apiName() == null ? "" : " -> " + link.apiName() + " " + link.apiVersion();
+      if (source.reason() != null) {
+         return link.sourceName() + api + ": " + source.reason();
+      }
+      return link.sourceName() + api + " (" + (link.linked() ? "linked" : "not linked") + "): " + source.operations()
+            + " operations, " + source.usedOperations() + " used by steps";
    }
 
    private static String describe(ArazzoStepOperation operation) {

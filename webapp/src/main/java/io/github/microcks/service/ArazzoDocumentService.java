@@ -40,6 +40,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.MissingNode;
 
+import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -114,6 +115,17 @@ public class ArazzoDocumentService {
     * @throws MockRepositoryImportException if the document cannot be imported
     */
    public ArazzoDocument importArazzoDocument(String content) throws MockRepositoryImportException {
+      return importArazzoDocument(content, null);
+   }
+
+   /**
+    * Import an Arazzo document so that its workflows are kept in Microcks.
+    * @param content  The document as uploaded, in YAML or JSON
+    * @param fileName The name of the file the document is uploaded from, null if unknown
+    * @return The imported document
+    * @throws MockRepositoryImportException if the document cannot be imported
+    */
+   public ArazzoDocument importArazzoDocument(String content, String fileName) throws MockRepositoryImportException {
       JsonNode parsed = parse(content);
       ArazzoDescription description = read(parsed);
       // Re-importing the same title and version updates the existing document.
@@ -128,6 +140,9 @@ public class ArazzoDocumentService {
       document.setSourceNames(ArazzoDocumentReader.sourceDescriptionNames(parsed));
       document.setWorkflowCalls(stepCalls(ArazzoDocumentReader.workflowCalls(parsed)));
       document.setContent(content);
+      document.setArazzoVersion(ArazzoDocumentReader.arazzoVersion(parsed));
+      document.setFileName(fileName);
+      document.setImportDate(new Date());
       return arazzoDocumentRepository.save(document);
    }
 
@@ -206,11 +221,9 @@ public class ArazzoDocumentService {
    static ArazzoStepOperation operationOf(ArazzoStepCall call, Map<String, ResolvedSource> sources) {
       ResolvedSource source = sources.get(call.sourceName());
       ArazzoSourceLink link = source.link();
-      if (link.apiName() == null) {
-         return notFound(call, NO_API_NAME_AND_VERSION);
-      }
-      if (!link.linked()) {
-         return notFound(call, "API " + link.apiName() + " " + link.apiVersion() + " not found");
+      String unlinkedReason = unlinkedReason(link);
+      if (unlinkedReason != null) {
+         return notFound(call, unlinkedReason);
       }
       ArazzoStepOperation operation = source.operations().get(call.operationId());
       if (operation == null) {
@@ -218,6 +231,20 @@ public class ArazzoDocumentService {
                "Operation " + call.operationId() + " not found in " + link.apiName() + " " + link.apiVersion());
       }
       return operation;
+   }
+
+   /**
+    * @param link The link of a source description
+    * @return Why the source is not linked, null when it is linked
+    */
+   static String unlinkedReason(ArazzoSourceLink link) {
+      if (link.apiName() == null) {
+         return NO_API_NAME_AND_VERSION;
+      }
+      if (!link.linked()) {
+         return "API " + link.apiName() + " " + link.apiVersion() + " not found";
+      }
+      return null;
    }
 
    private static ArazzoStepOperation notFound(ArazzoStepCall call, String reason) {
@@ -237,14 +264,15 @@ public class ArazzoDocumentService {
    private ResolvedSource resolve(String sourceName, ArazzoSources overlay) {
       ServiceRef api = overlay == null ? null : overlay.getSources().get(sourceName);
       if (api == null) {
-         return new ResolvedSource(new ArazzoSourceLink(sourceName, null, null, false), Map.of());
+         return new ResolvedSource(new ArazzoSourceLink(sourceName, null, null, false), null, Map.of());
       }
       Service service = serviceRepository.findByNameAndVersion(api.getName(), api.getVersion());
       if (service == null) {
-         return new ResolvedSource(new ArazzoSourceLink(sourceName, api.getName(), api.getVersion(), false), Map.of());
+         return new ResolvedSource(new ArazzoSourceLink(sourceName, api.getName(), api.getVersion(), false), null,
+               Map.of());
       }
       return new ResolvedSource(new ArazzoSourceLink(sourceName, api.getName(), api.getVersion(), true),
-            definedOperations(sourceName, service));
+            service.getId(), definedOperations(sourceName, service));
    }
 
    /** An API defines the operations whose operationId appears in the main OpenAPI contract Microcks stored for it. */
@@ -288,8 +316,8 @@ public class ArazzoDocumentService {
       return stepCalls;
    }
 
-   /** A source description with its link and the operations the linked API defines, by operationId. */
-   record ResolvedSource(ArazzoSourceLink link, Map<String, ArazzoStepOperation> operations) {
+   /** A source description with its link, the linked API and the operations it defines, by operationId. */
+   record ResolvedSource(ArazzoSourceLink link, String serviceId, Map<String, ArazzoStepOperation> operations) {
    }
 
    private static ArazzoDescription read(JsonNode document) throws MockRepositoryImportException {

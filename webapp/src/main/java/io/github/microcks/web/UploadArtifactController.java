@@ -150,7 +150,8 @@ public class UploadArtifactController {
             // Arazzo documents describe workflows across APIs rather than an API: they have their own import.
             String content = new String(Files.readAllBytes(Paths.get(localFile)), StandardCharsets.UTF_8);
             if (arazzoDocumentService.isArazzoDocument(content)) {
-               ArazzoDocument document = arazzoDocumentService.importArazzoDocument(content);
+               ArazzoDocument document = arazzoDocumentService.importArazzoDocument(content,
+                     file.getOriginalFilename());
                return new ResponseEntity<>(document.getTitle() + ":" + document.getVersion(), HttpStatus.CREATED);
             }
             if (arazzoDocumentService.isArazzoSources(content)) {
