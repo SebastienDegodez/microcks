@@ -42,6 +42,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.net.URI;
 import java.nio.channels.Channels;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.charset.StandardCharsets;
@@ -102,6 +103,11 @@ public class UploadArtifactController {
                   secret, true);
             localFile = fileAndHeaders.getLocalFile();
 
+            Optional<String> arazzoArtifact = importArazzoArtifact(localFile, fileNameOf(url));
+            if (arazzoArtifact.isPresent()) {
+               return new ResponseEntity<>("{\"name\": \"" + arazzoArtifact.get() + "\"}", HttpStatus.CREATED);
+            }
+
             // Now try importing services.
             services = serviceService.importServiceDefinition(localFile,
                   new ReferenceResolver(url, secret, true,
@@ -147,16 +153,9 @@ public class UploadArtifactController {
                fos.getChannel().transferFrom(rbc, 0, Long.MAX_VALUE);
             }
 
-            // Arazzo documents describe workflows across APIs rather than an API: they have their own import.
-            String content = new String(Files.readAllBytes(Paths.get(localFile)), StandardCharsets.UTF_8);
-            if (arazzoDocumentService.isArazzoDocument(content)) {
-               ArazzoDocument document = arazzoDocumentService.importArazzoDocument(content,
-                     file.getOriginalFilename());
-               return new ResponseEntity<>(document.getTitle() + ":" + document.getVersion(), HttpStatus.CREATED);
-            }
-            if (arazzoDocumentService.isArazzoSources(content)) {
-               ArazzoSources overlay = arazzoDocumentService.importArazzoSources(content);
-               return new ResponseEntity<>(overlay.getName() + ":" + overlay.getVersion(), HttpStatus.CREATED);
+            Optional<String> arazzoArtifact = importArazzoArtifact(new File(localFile), file.getOriginalFilename());
+            if (arazzoArtifact.isPresent()) {
+               return new ResponseEntity<>(arazzoArtifact.get(), HttpStatus.CREATED);
             }
 
             // Now try importing services.
@@ -187,6 +186,39 @@ public class UploadArtifactController {
          }
       }
       return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+   }
+
+   /**
+    * Arazzo documents and ArazzoSources overlays describe workflows across APIs rather than an API: they have their own
+    * import, whether they are uploaded or downloaded.
+    * @param localFile The artifact, saved to a local file
+    * @param fileName  The name of the file the artifact comes from; null when it is not known
+    * @return The name and version of the imported Arazzo document or overlay, as {@code <name>:<version>}; empty when
+    *         the artifact is neither, to import it as an API
+    * @throws IOException                   if the local file cannot be read
+    * @throws MockRepositoryImportException if the Arazzo document or overlay is refused
+    */
+   private Optional<String> importArazzoArtifact(File localFile, String fileName)
+         throws IOException, MockRepositoryImportException {
+      String content = new String(Files.readAllBytes(localFile.toPath()), StandardCharsets.UTF_8);
+      if (arazzoDocumentService.isArazzoDocument(content)) {
+         ArazzoDocument document = arazzoDocumentService.importArazzoDocument(content, fileName);
+         return Optional.of(document.getTitle() + ":" + document.getVersion());
+      }
+      if (arazzoDocumentService.isArazzoSources(content)) {
+         ArazzoSources overlay = arazzoDocumentService.importArazzoSources(content);
+         return Optional.of(overlay.getName() + ":" + overlay.getVersion());
+      }
+      return Optional.empty();
+   }
+
+   /**
+    * @param url The URL an artifact is downloaded from
+    * @return The name of the downloaded file: the last segment of the path of the URL, decoded, without the query
+    */
+   static String fileNameOf(String url) {
+      String path = URI.create(url).getPath();
+      return path.substring(path.lastIndexOf('/') + 1);
    }
 
    private ReferenceResolver getDefaultReferenceResolver(String fileName) {
