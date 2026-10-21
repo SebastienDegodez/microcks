@@ -15,6 +15,7 @@
  */
 package io.github.microcks.service;
 
+import io.github.microcks.domain.ArazzoDocument;
 import io.github.microcks.domain.ArazzoDocumentSummary;
 import io.github.microcks.domain.ArazzoSourceLink;
 import io.github.microcks.domain.ArazzoSourceSummary;
@@ -93,6 +94,14 @@ class ArazzoDocumentSummaryTest {
             List.of("searchThenRead: 2 steps, runnable, NEVER_RUN",
                   "placeOrder: 2 steps, not runnable [API Order API 1.0.0 not found], NEVER_RUN"),
             workflows(documents.get(0)));
+   }
+
+   @Test
+   void aDocumentImportedWithoutItsFileHasNoFileName() throws Exception {
+      ArazzoDocument imported = arazzoDocumentService.importArazzoDocument(fixture("pastry.arazzo.yaml"));
+
+      assertEquals("API Pastry scenarios 1.0.0 (null)",
+            imported.getTitle() + " " + imported.getVersion() + " (" + imported.getFileName() + ")");
    }
 
    @Test
