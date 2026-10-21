@@ -162,6 +162,7 @@
               </tbody>
             </table>
           </ng-container>
+          <app-workflow-run-coherence *ngIf="run.missingExample?.stepIndex === step.index" [run]="run" [missing]="run.missingExample!"></app-workflow-run-coherence>
         </div>
       </div>
       <p *ngIf="!run.steps.length" class="workflow-run-muted workflow-run-no-step">No step has run yet.</p>
