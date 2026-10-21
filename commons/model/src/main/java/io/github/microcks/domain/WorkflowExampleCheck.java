@@ -30,23 +30,4 @@ import java.util.Map;
  */
 public record WorkflowExampleCheck(String name, Map<String, Object> outputs, List<ArazzoStepExpectation> steps,
       String stopsAt, WorkflowExampleVerdict verdict, List<String> unmetExpectations) {
-
-   /**
-    * @param example A recorded example of a workflow
-    * @return What a run playing the example expects, not judged yet
-    */
-   public static WorkflowExampleCheck expecting(ArazzoWorkflowExample example) {
-      return new WorkflowExampleCheck(example.name(), example.outputs(), example.steps(), example.stopsAt(), null,
-            List.of());
-   }
-
-   /**
-    * @param unmet Each expectation the run does not meet
-    * @return This check once the run ended: the run matches the example when it meets every expectation
-    */
-   public WorkflowExampleCheck judged(List<String> unmet) {
-      return new WorkflowExampleCheck(name, outputs, steps, stopsAt,
-            unmet.isEmpty() ? WorkflowExampleVerdict.MATCHES : WorkflowExampleVerdict.DOES_NOT_MATCH,
-            List.copyOf(unmet));
-   }
 }

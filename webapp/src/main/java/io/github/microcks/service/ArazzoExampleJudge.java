@@ -16,7 +16,9 @@
 package io.github.microcks.service;
 
 import io.github.microcks.domain.ArazzoStepExpectation;
+import io.github.microcks.domain.ArazzoWorkflowExample;
 import io.github.microcks.domain.WorkflowExampleCheck;
+import io.github.microcks.domain.WorkflowExampleVerdict;
 import io.github.microcks.domain.WorkflowResult;
 import io.github.microcks.domain.WorkflowRunStatus;
 import io.github.microcks.domain.WorkflowStepResult;
@@ -57,6 +59,15 @@ final class ArazzoExampleJudge {
    }
 
    /**
+    * @param example A recorded example of a workflow
+    * @return What a run playing the example expects, not judged yet
+    */
+   static WorkflowExampleCheck expecting(ArazzoWorkflowExample example) {
+      return new WorkflowExampleCheck(example.name(), example.outputs(), example.steps(), example.stopsAt(), null,
+            List.of());
+   }
+
+   /**
     * @param example The example a run played, with what it expects
     * @param run     The run, ended
     * @return The example judged on the run
@@ -75,7 +86,10 @@ final class ArazzoExampleJudge {
                + (stop == null ? "the workflow ran to its end" : stop));
       }
       unmet.addAll(unmetOutputs("Output ", example.outputs(), run.getOutputs()));
-      return example.judged(unmet);
+      // As in OpenAPI contract tests, the run matches the example when it meets every expectation.
+      return new WorkflowExampleCheck(example.name(), example.outputs(), example.steps(), example.stopsAt(),
+            unmet.isEmpty() ? WorkflowExampleVerdict.MATCHES : WorkflowExampleVerdict.DOES_NOT_MATCH,
+            List.copyOf(unmet));
    }
 
    /** A step called several times is judged on its last call. */

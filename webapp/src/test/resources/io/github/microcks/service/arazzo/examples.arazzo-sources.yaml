@@ -76,6 +76,10 @@ examples:
       inputs:
         pastry: Tartelette Fraise
         newPrice: 3
+      steps:
+        readPastry:
+          outputs:
+            price: 2.0
       outputs:
         before: 2.0
         after: 3
@@ -232,7 +236,7 @@ examples:
         readFirst:
           status: default
 ---
-# example: status-out-of-range - an example expecting a number that is not an HTTP status
+# example: status-below-range - an example expecting a number below the HTTP statuses
 apiVersion: mocks.microcks.io/v1alpha1
 kind: ArazzoSources
 metadata:
@@ -247,7 +251,43 @@ examples:
     unknown-first-pastry:
       steps:
         readFirst:
-          status: 4040
+          status: 99
+---
+# example: status-above-range - an example expecting a number above the HTTP statuses
+apiVersion: mocks.microcks.io/v1alpha1
+kind: ArazzoSources
+metadata:
+  name: API Pastry scenarios
+  version: 1.0.0
+sources:
+  pastryApi:
+    name: API Pastry - 2.0
+    version: 2.0.0
+examples:
+  listThenReadFirst:
+    unknown-first-pastry:
+      steps:
+        readFirst:
+          status: 600
+---
+# example: status-bounds - an example expecting the lowest and the highest HTTP statuses
+apiVersion: mocks.microcks.io/v1alpha1
+kind: ArazzoSources
+metadata:
+  name: API Pastry scenarios
+  version: 1.0.0
+sources:
+  pastryApi:
+    name: API Pastry - 2.0
+    version: 2.0.0
+examples:
+  listThenReadFirst:
+    unknown-first-pastry:
+      steps:
+        list:
+          status: 100
+        readFirst:
+          status: 599
 ---
 # example: no-document - examples of an Arazzo document that is not imported
 apiVersion: mocks.microcks.io/v1alpha1

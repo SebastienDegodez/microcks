@@ -274,12 +274,11 @@ public class ArazzoDocumentService {
     * @param name    The title of the Arazzo document
     * @param version The version of the Arazzo document
     * @param sources The Microcks API each linked source description is linked to, by name
-    * @return The stored overlay
     */
-   ArazzoSources saveSources(String name, String version, Map<String, ServiceRef> sources) {
+   void saveSources(String name, String version, Map<String, ServiceRef> sources) {
       ArazzoSources arazzoSources = overlayOf(name, version);
       arazzoSources.setSources(sources);
-      return arazzoSourcesRepository.save(arazzoSources);
+      arazzoSourcesRepository.save(arazzoSources);
    }
 
    /** Re-importing the same name and version replaces the existing overlay. */

@@ -200,7 +200,7 @@ public class ArazzoRunService {
             .filter(candidate -> candidate.name().equals(exampleName)).findFirst().orElseThrow(
                   () -> new ArazzoRunRefusedException("Workflow " + workflowId + " has no example " + exampleName));
       return Optional.of(launch(found.get(), workflowId, example.inputs(), timeout, implementations, validateSchema,
-            WorkflowExampleCheck.expecting(example)));
+            ArazzoExampleJudge.expecting(example)));
    }
 
    /**
@@ -225,7 +225,7 @@ public class ArazzoRunService {
       for (ArazzoWorkflowExample example : arazzoDocumentService.getExamples(found.get(), workflowId)) {
          try {
             WorkflowResult run = launch(found.get(), workflowId, example.inputs(), timeout, implementations,
-                  validateSchema, WorkflowExampleCheck.expecting(example));
+                  validateSchema, ArazzoExampleJudge.expecting(example));
             launches.add(new ArazzoExampleLaunch(example.name(), run.getId(), run.getNumber(), null));
          } catch (ArazzoRunRefusedException arre) {
             launches.add(new ArazzoExampleLaunch(example.name(), null, null, arre.getMessage()));

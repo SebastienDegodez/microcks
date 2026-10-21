@@ -110,6 +110,16 @@ class ArazzoWorkflowExamplesTest {
       assertEquals(List.of(), exampleNames(document, "listThenReadFirst"));
    }
 
+   @Test
+   void anExpectedStatusIsAnyExactHttpStatusCode() throws Exception {
+      arazzoDocumentService.importArazzoDocument(fixture("pastry-scenarios.arazzo.yaml"));
+
+      ArazzoSources imported = arazzoDocumentService.importArazzoSources(exampleOf(EXAMPLES, "status-bounds"));
+
+      assertEquals(List.of("listThenReadFirst/unknown-first-pastry steps [list 100, readFirst 599]"),
+            imported.getExamples().stream().map(ArazzoWorkflowExamplesTest::describe).toList());
+   }
+
    /** An overlay with an example that does not fit its workflow is refused whole: nor its links, nor its examples. */
    @ParameterizedTest
    @CsvSource(delimiter = '|', value = {
@@ -121,7 +131,8 @@ class ArazzoWorkflowExamplesTest {
          "unknown-stop | Invalid ArazzoSources overlay: example unknown-first-pastry of listThenReadFirst stops at the unknown step readSecond",
          "status-range | Invalid ArazzoSources overlay: example unknown-first-pastry of listThenReadFirst expects status 4XX at step readFirst, not an exact HTTP status code",
          "status-default | Invalid ArazzoSources overlay: example unknown-first-pastry of listThenReadFirst expects status default at step readFirst, not an exact HTTP status code",
-         "status-out-of-range | Invalid ArazzoSources overlay: example unknown-first-pastry of listThenReadFirst expects status 4040 at step readFirst, not an exact HTTP status code",
+         "status-below-range | Invalid ArazzoSources overlay: example unknown-first-pastry of listThenReadFirst expects status 99 at step readFirst, not an exact HTTP status code",
+         "status-above-range | Invalid ArazzoSources overlay: example unknown-first-pastry of listThenReadFirst expects status 600 at step readFirst, not an exact HTTP status code",
          "no-document | Invalid ArazzoSources overlay: its examples need the Arazzo document Unknown scenarios 1.0.0, which is not imported" })
    void anExampleThatDoesNotFitItsWorkflowRefusesTheWholeOverlay(String example, String reason) throws Exception {
       arazzoDocumentService.importArazzoDocument(fixture("pastry-scenarios.arazzo.yaml"));
