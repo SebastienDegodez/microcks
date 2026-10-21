@@ -22,6 +22,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import io.github.microcks.util.JsonSchemaDialect;
 import io.github.microcks.util.JsonSchemaValidator;
+import io.github.microcks.util.JsonSchemaViolation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.LoaderOptions;
@@ -203,11 +204,34 @@ public class OpenAPISchemaValidator {
     */
    public static List<String> validateJsonMessage(JsonNode specificationNode, JsonNode jsonNode,
          String messagePathPointer, String contentType, String namespace) {
+      return validateJsonMessageWithPointers(specificationNode, jsonNode, messagePathPointer, contentType, namespace)
+            .stream().map(JsonSchemaViolation::message).toList();
+   }
+
+   /**
+    * Validate a Json object representing an OpenAPI message (response or request) against a node representing a full
+    * OpenAPI specification, like {@link #validateJsonMessage(JsonNode, JsonNode, String, String)} does, telling for
+    * each violation the JSON pointer of the part of the message that violates its schema.
+    * @param specificationNode  The OpenAPI full specification as a Jackson node
+    * @param jsonNode           The Json object representing actual message as a Jackson node
+    * @param messagePathPointer A JSON Pointer for accessing expected message definition within spec
+    * @param contentType        The Content-Type of the message to valid
+    * @return The violations; a violation without pointer when the message has no schema in the specification. If empty,
+    *         json object is valid !
+    */
+   public static List<JsonSchemaViolation> validateJsonMessageWithPointers(JsonNode specificationNode,
+         JsonNode jsonNode, String messagePathPointer, String contentType) {
+      return validateJsonMessageWithPointers(specificationNode, jsonNode, messagePathPointer, contentType, null);
+   }
+
+   private static List<JsonSchemaViolation> validateJsonMessageWithPointers(JsonNode specificationNode,
+         JsonNode jsonNode, String messagePathPointer, String contentType, String namespace) {
       // Extract specific content type node for message node.
       JsonNode messageNode = specificationNode.at(messagePathPointer);
       if (messageNode == null || messageNode.isMissingNode()) {
          log.debug("messagePathPointer {} is not a valid JSON Pointer", messagePathPointer);
-         return List.of("messagePathPointer does not represent a valid JSON Pointer in OpenAPI specification");
+         return List.of(specificationViolation(
+               "messagePathPointer does not represent a valid JSON Pointer in OpenAPI specification"));
       }
       // Message node can be just a reference.
       if (messageNode.has("$ref")) {
@@ -218,7 +242,8 @@ public class OpenAPISchemaValidator {
       messageNode = getMessageContentNode(messageNode, contentType);
       if (messageNode == null || messageNode.isMissingNode()) {
          log.debug("content for {} cannot be found into OpenAPI specification", contentType);
-         return List.of("messagePathPointer does not represent an existing JSON Pointer in OpenAPI specification");
+         return List.of(specificationViolation(
+               "messagePathPointer does not represent an existing JSON Pointer in OpenAPI specification"));
       }
 
       // Build a schema object with responseNode schema as root and by importing
@@ -226,12 +251,19 @@ public class OpenAPISchemaValidator {
       JsonNode schemaNode = messageNode.path("schema").deepCopy();
       if (schemaNode == null || schemaNode.isMissingNode()) {
          log.debug("schema for {} cannot be found into OpenAPI specification", messageNode);
-         return List.of("schemaPathPointer does not represent an existing JSON Pointer in OpenAPI specification");
+         return List.of(specificationViolation(
+               "schemaPathPointer does not represent an existing JSON Pointer in OpenAPI specification"));
       }
       ((ObjectNode) schemaNode).set(JSON_SCHEMA_COMPONENTS_ELEMENT,
             specificationNode.path(JSON_SCHEMA_COMPONENTS_ELEMENT).deepCopy());
 
-      return validateJson(schemaNode, jsonNode, namespace, resolveDialect(specificationNode));
+      return JsonSchemaValidator.validateJsonWithPointers(convertOpenAPISchemaToJsonSchema(schemaNode), jsonNode,
+            namespace, resolveDialect(specificationNode));
+   }
+
+   /** A violation that is not about a part of the message, but about the specification it is validated against. */
+   private static JsonSchemaViolation specificationViolation(String message) {
+      return new JsonSchemaViolation(null, message);
    }
 
    /**
