@@ -60,8 +60,12 @@ class ArazzoDocumentControllerIT extends AbstractBaseIT {
 
       assertEquals(1, documents.size());
       JsonNode document = documents.get(0);
-      assertEquals("API Pastry scenarios 1.0.0 (pastry.arazzo.yaml)", document.path("title").asText() + " "
-            + document.path("version").asText() + " (" + document.path("fileName").asText() + ")");
+      assertEquals("API Pastry scenarios 1.0.0 (pastry.arazzo.yaml, Arazzo 1.0.1)",
+            document.path("title").asText() + " " + document.path("version").asText() + " ("
+                  + document.path("fileName").asText() + ", Arazzo " + document.path("arazzoVersion").asText() + ")");
+      assertEquals(
+            arazzoDocumentRepository.findByTitleAndVersion("API Pastry scenarios", "1.0.0").getImportDate().getTime(),
+            document.path("importDate").asLong());
       assertEquals(arazzoDocumentRepository.findByTitleAndVersion("API Pastry scenarios", "1.0.0").getId(),
             document.path("id").asText());
       JsonNode source = document.path("sources").get(0);
@@ -73,12 +77,14 @@ class ArazzoDocumentControllerIT extends AbstractBaseIT {
             source.path("apiId").asText());
       List<String> workflows = new ArrayList<>();
       for (JsonNode workflow : document.path("workflows")) {
-         workflows.add(workflow.path("status").path("workflowId").asText() + ": " + workflow.path("stepCount").asInt()
-               + " steps, runnable " + workflow.path("status").path("runnable").asBoolean() + ", "
-               + workflow.path("lastResult").asText());
+         workflows.add(workflow.path("status").path("workflowId").asText() + ": '"
+               + workflow.path("description").asText() + "' " + workflow.path("stepCount").asInt() + " steps, runnable "
+               + workflow.path("status").path("runnable").asBoolean() + ", " + workflow.path("lastResult").asText());
       }
-      assertEquals(List.of("readThenReprice: 2 steps, runnable true, NEVER_RUN",
-            "listThenReadFirst: 2 steps, runnable true, NEVER_RUN"), workflows);
+      assertEquals(List.of(
+            "readThenReprice: 'Reads a pastry, then changes its price using the name returned by the first call.' "
+                  + "2 steps, runnable true, NEVER_RUN",
+            "listThenReadFirst: 'Reads the first pastry of the list.' 2 steps, runnable true, NEVER_RUN"), workflows);
    }
 
    @Test

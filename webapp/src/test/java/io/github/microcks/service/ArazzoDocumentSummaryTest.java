@@ -36,9 +36,11 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.Date;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 /**
  * Acceptance tests of the list of Arazzo documents the Workflows page shows, one per acceptance criterion of the story.
@@ -63,19 +65,26 @@ class ArazzoDocumentSummaryTest {
    @Test
    void documentsAreListedWithTheirWorkflowsApisAndLastResult() throws Exception {
       apiIsImported("api-pastry-2.0.openapi.yaml");
+      Date beforeImport = new Date();
       arazzoDocumentService.importArazzoDocument(fixture("pastry.arazzo.yaml"), "pastry.arazzo.yaml");
+      Date afterImport = new Date();
       arazzoDocumentService.importArazzoSources(fixture("pastry.arazzo-sources.yaml"));
 
       List<ArazzoDocumentSummary> documents = arazzoDocumentService.getDocumentSummaries(null);
 
-      assertEquals(List.of("API Pastry scenarios 1.0.0 (pastry.arazzo.yaml)"),
+      assertEquals(List.of("API Pastry scenarios 1.0.0 (pastry.arazzo.yaml, Arazzo 1.0.1)"),
             documents.stream().map(ArazzoDocumentSummaryTest::describe).toList());
       assertEquals(List.of("pastryApi -> REST API Pastry - 2.0 2.0.0: linked"), sources(documents.get(0)));
       assertEquals(serviceRepository.findByNameAndVersion("API Pastry - 2.0", "2.0.0").getId(),
             documents.get(0).sources().get(0).apiId());
-      assertEquals(
-            List.of("readThenReprice: 2 steps, runnable, NEVER_RUN", "listThenReadFirst: 2 steps, runnable, NEVER_RUN"),
+      assertEquals(List.of(
+            "readThenReprice: 'Reads a pastry, then changes its price using the name returned by the first call.' "
+                  + "2 steps, runnable, NEVER_RUN",
+            "listThenReadFirst: 'Reads the first pastry of the list.' 2 steps, runnable, NEVER_RUN"),
             workflows(documents.get(0)));
+      Date importDate = documents.get(0).importDate();
+      assertFalse(importDate.before(beforeImport) || importDate.after(afterImport),
+            "imported on " + importDate + ", not between " + beforeImport + " and " + afterImport);
    }
 
    @Test
@@ -86,13 +95,15 @@ class ArazzoDocumentSummaryTest {
 
       List<ArazzoDocumentSummary> documents = arazzoDocumentService.getDocumentSummaries(null);
 
-      assertEquals(List.of("Order fulfilment 1.0.0 (place-order.arazzo.yaml)"),
+      assertEquals(List.of("Order fulfilment 1.0.0 (place-order.arazzo.yaml, Arazzo 1.0.1)"),
             documents.stream().map(ArazzoDocumentSummaryTest::describe).toList());
       assertEquals(List.of("customerApi -> REST Customer API 1.0.0: linked", "orderApi -> Order API 1.0.0: not linked"),
             sources(documents.get(0)));
-      assertEquals(
-            List.of("searchThenRead: 2 steps, runnable, NEVER_RUN",
-                  "placeOrder: 2 steps, not runnable [API Order API 1.0.0 not found], NEVER_RUN"),
+      assertEquals(List.of(
+            "searchThenRead: 'Searches customers by name, then reads the first one found.' 2 steps, runnable, "
+                  + "NEVER_RUN",
+            "placeOrder: 'Reads a customer, then places an order for this customer.' 2 steps, "
+                  + "not runnable [API Order API 1.0.0 not found], NEVER_RUN"),
             workflows(documents.get(0)));
    }
 
@@ -128,7 +139,8 @@ class ArazzoDocumentSummaryTest {
    }
 
    private static String describe(ArazzoDocumentSummary document) {
-      return document.title() + " " + document.version() + " (" + document.fileName() + ")";
+      return document.title() + " " + document.version() + " (" + document.fileName() + ", Arazzo "
+            + document.arazzoVersion() + ")";
    }
 
    private static List<String> sources(ArazzoDocumentSummary document) {
@@ -148,7 +160,7 @@ class ArazzoDocumentSummaryTest {
 
    private static String describe(ArazzoWorkflowSummary workflow) {
       ArazzoWorkflowStatus status = workflow.status();
-      return status.workflowId() + ": " + workflow.stepCount() + " steps, "
+      return status.workflowId() + ": '" + workflow.description() + "' " + workflow.stepCount() + " steps, "
             + (status.runnable() ? "runnable" : "not runnable " + status.reasons()) + ", " + workflow.lastResult();
    }
 

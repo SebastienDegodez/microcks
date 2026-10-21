@@ -17,6 +17,7 @@ package io.github.microcks.domain;
 
 import org.springframework.data.annotation.Id;
 
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 
@@ -30,7 +31,10 @@ public class ArazzoDocument {
    private String id;
    private String title;
    private String version;
+   private String arazzoVersion;
    private String fileName;
+   private Date importDate;
+   private Map<String, String> workflowDescriptions;
    private List<String> workflowIds;
    private List<String> sourceNames;
    private Map<String, List<ArazzoStepCall>> workflowCalls;
@@ -60,12 +64,36 @@ public class ArazzoDocument {
       this.version = version;
    }
 
+   public String getArazzoVersion() {
+      return arazzoVersion;
+   }
+
+   public void setArazzoVersion(String arazzoVersion) {
+      this.arazzoVersion = arazzoVersion;
+   }
+
    public String getFileName() {
       return fileName;
    }
 
    public void setFileName(String fileName) {
       this.fileName = fileName;
+   }
+
+   public Date getImportDate() {
+      return importDate;
+   }
+
+   public void setImportDate(Date importDate) {
+      this.importDate = importDate;
+   }
+
+   public Map<String, String> getWorkflowDescriptions() {
+      return workflowDescriptions;
+   }
+
+   public void setWorkflowDescriptions(Map<String, String> workflowDescriptions) {
+      this.workflowDescriptions = workflowDescriptions;
    }
 
    public List<String> getWorkflowIds() {

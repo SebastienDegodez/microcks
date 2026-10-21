@@ -17,10 +17,12 @@ package io.github.microcks.domain;
 
 /**
  * What the Workflows page shows of a workflow of an Arazzo document.
- * @param status     Whether the workflow can run against the APIs of Microcks, and why not
- * @param stepCount  The number of steps of the workflow
- * @param lastResult How the last run of the workflow went
+ * @param status      Whether the workflow can run against the APIs of Microcks, and why not
+ * @param description The summary of the workflow, or else its description; null when it has none
+ * @param stepCount   The number of steps of the workflow
+ * @param lastResult  How the last run of the workflow went
  * @author SebastienDegodez
  */
-public record ArazzoWorkflowSummary(ArazzoWorkflowStatus status, int stepCount, ArazzoLastResult lastResult) {
+public record ArazzoWorkflowSummary(ArazzoWorkflowStatus status, String description, int stepCount,
+      ArazzoLastResult lastResult) {
 }

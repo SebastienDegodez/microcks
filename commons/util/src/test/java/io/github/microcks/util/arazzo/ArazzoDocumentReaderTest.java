@@ -26,6 +26,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -55,6 +56,19 @@ class ArazzoDocumentReaderTest {
    @Test
    void theSourceDescriptionsOfADocumentAreReadByName() throws IOException {
       assertEquals(List.of("pastryApi"), ArazzoDocumentReader.sourceDescriptionNames(document("pastry.arazzo.yaml")));
+   }
+
+   @Test
+   void theArazzoVersionOfADocumentIsRead() throws IOException {
+      assertEquals("1.0.1", ArazzoDocumentReader.arazzoVersion(document("pastry.arazzo.yaml")));
+   }
+
+   @ParameterizedTest
+   @CsvSource({ "summary, Reads a pastry.", "description, Reads a pastry by its name.",
+         "summary-and-description, Reads a pastry.", "none," })
+   void aWorkflowIsDescribedByItsSummaryOrElseItsDescription(String example, String description) throws IOException {
+      assertEquals(Collections.singletonMap("readOne", description),
+            ArazzoDocumentReader.workflowDescriptions(exampleOf("workflow-descriptions.arazzo.yaml", example)));
    }
 
    @ParameterizedTest

@@ -46,6 +46,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.MissingNode;
 
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -144,7 +145,10 @@ public class ArazzoDocumentService {
       document.setWorkflowIds(description.workflowIds());
       document.setSourceNames(ArazzoDocumentReader.sourceDescriptionNames(parsed));
       document.setWorkflowCalls(stepCalls(ArazzoDocumentReader.workflowCalls(parsed)));
+      document.setArazzoVersion(ArazzoDocumentReader.arazzoVersion(parsed));
       document.setFileName(fileName);
+      document.setImportDate(new Date());
+      document.setWorkflowDescriptions(ArazzoDocumentReader.workflowDescriptions(parsed));
       document.setContent(content);
       return arazzoDocumentRepository.save(document);
    }
@@ -175,10 +179,12 @@ public class ArazzoDocumentService {
       List<ArazzoSourceSummary> sourceSummaries = sources.values().stream().map(ResolvedSource::summary).toList();
       List<ArazzoWorkflowSummary> workflowSummaries = statuses(document, sources).stream()
             .map(status -> new ArazzoWorkflowSummary(status,
+                  document.getWorkflowDescriptions().get(status.workflowId()),
                   document.getWorkflowCalls().get(status.workflowId()).size(), ArazzoLastResult.NEVER_RUN))
             .toList();
       return new ArazzoDocumentSummary(document.getId(), document.getTitle(), document.getVersion(),
-            document.getFileName(), sourceSummaries, workflowSummaries);
+            document.getArazzoVersion(), document.getFileName(), document.getImportDate(), sourceSummaries,
+            workflowSummaries);
    }
 
    /**
