@@ -17,6 +17,7 @@ package io.github.microcks.web;
 
 import io.github.microcks.repository.ArazzoDocumentRepository;
 import io.github.microcks.repository.ArazzoSourcesRepository;
+import io.github.microcks.repository.ServiceRepository;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -25,10 +26,14 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 
+import java.util.Map;
+import java.util.TreeMap;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * Integration tests of reading the steps of an Arazzo workflow through its REST endpoint.
+ * Integration tests of reading the steps of an Arazzo workflow, and the workflows using an API, through their REST
+ * endpoints.
  * @author SebastienDegodez
  */
 class ArazzoWorkflowControllerIT extends AbstractBaseIT {
@@ -40,6 +45,9 @@ class ArazzoWorkflowControllerIT extends AbstractBaseIT {
 
    @Autowired
    private ArazzoSourcesRepository arazzoSourcesRepository;
+
+   @Autowired
+   private ServiceRepository serviceRepository;
 
    @AfterEach
    void deleteDocumentsAndOverlays() {
@@ -87,6 +95,42 @@ class ArazzoWorkflowControllerIT extends AbstractBaseIT {
             .getForEntity("/api/arazzo/documents/" + documentId + "/workflows/unknown", String.class);
 
       assertEquals(404, response.getStatusCode().value());
+   }
+
+   @Test
+   void theWorkflowsUsingAnApiAreReadWithTheNumberOfWorkflowsCallingEachOperation() throws Exception {
+      String documentId = pastryScenariosAreUploadedAndLinked();
+
+      ResponseEntity<String> response = restTemplate.getForEntity(
+            "/api/arazzo/services/" + serviceId("API Pastry - 2.0", "2.0.0") + "/workflows", String.class);
+
+      assertEquals(200, response.getStatusCode().value());
+      JsonNode usage = new ObjectMapper().readTree(response.getBody());
+      assertEquals(
+            "[{\"id\":\"" + documentId + "\",\"title\":\"API Pastry scenarios\",\"version\":\"1.0.0\","
+                  + "\"workflows\":[{\"workflowId\":\"readThenReprice\",\"lastResult\":\"NEVER_RUN\"},"
+                  + "{\"workflowId\":\"listThenReadFirst\",\"lastResult\":\"NEVER_RUN\"}]}]",
+            usage.path("documents").toString());
+      Map<String, Integer> counts = new TreeMap<>();
+      usage.path("operationWorkflowCounts").properties()
+            .forEach(count -> counts.put(count.getKey(), count.getValue().asInt()));
+      assertEquals("{GET /pastry=1, GET /pastry/{name}=2, PATCH /pastry/{name}=1}", counts.toString());
+   }
+
+   @Test
+   void anApiUsedByNoWorkflowHasNoWorkflowAndNoOperationCount() throws Exception {
+      pastryScenariosAreUploadedAndLinked();
+      uploadArtifactFile("target/test-classes/io/github/microcks/util/soapui/HelloAPI-soapui-project.xml", true);
+
+      ResponseEntity<String> response = restTemplate
+            .getForEntity("/api/arazzo/services/" + serviceId("Hello API Mock", "0.8") + "/workflows", String.class);
+
+      assertEquals(200, response.getStatusCode().value());
+      assertEquals("{\"documents\":[],\"operationWorkflowCounts\":{}}", response.getBody());
+   }
+
+   private String serviceId(String apiName, String apiVersion) {
+      return serviceRepository.findByNameAndVersion(apiName, apiVersion).getId();
    }
 
    private String pastryScenariosAreUploadedAndLinked() {

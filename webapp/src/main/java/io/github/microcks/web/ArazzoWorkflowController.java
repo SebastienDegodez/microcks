@@ -15,6 +15,7 @@
  */
 package io.github.microcks.web;
 
+import io.github.microcks.domain.ArazzoApiUsage;
 import io.github.microcks.domain.ArazzoWorkflowDetail;
 import io.github.microcks.service.ArazzoWorkflowService;
 
@@ -46,5 +47,15 @@ public class ArazzoWorkflowController {
    public ResponseEntity<ArazzoWorkflowDetail> getWorkflowDetail(@PathVariable("documentId") String documentId,
          @PathVariable("workflowId") String workflowId) {
       return ResponseEntity.of(arazzoWorkflowService.getWorkflowDetail(documentId, workflowId));
+   }
+
+   /**
+    * Tell which workflows use an API, and how many workflows call each of its operations, for the page of this API.
+    * @param serviceId The id of the API
+    * @return The workflows using the API, by document, with the number of workflows calling each of its operations
+    */
+   @GetMapping(value = "/services/{serviceId}/workflows")
+   public ArazzoApiUsage getApiUsage(@PathVariable("serviceId") String serviceId) {
+      return arazzoWorkflowService.getApiUsage(serviceId);
    }
 }

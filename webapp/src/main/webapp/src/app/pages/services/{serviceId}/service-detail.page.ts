@@ -63,7 +63,9 @@ import {
   EventMessage,
 } from '../../../models/service.model';
 import { TestConformanceMetric } from '../../../models/metric.model';
+import { ArazzoApiUsage } from '../../../models/arazzo-api-usage.model';
 import { AICopilotService } from '../../../services/aicopilot.service';
+import { ArazzoWorkflowService } from '../../../services/arazzo-workflow.service';
 import { IAuthenticationService } from '../../../services/auth.service';
 import { ConfigService } from '../../../services/config.service';
 import { ContractsService } from '../../../services/contracts.service';
@@ -101,6 +103,8 @@ export class ServiceDetailPageComponent implements OnInit {
   resolvedServiceView!: ServiceView;
   contracts?: Observable<Contract[]>;
   serviceTestConformanceMetric?: Observable<TestConformanceMetric>;
+  /** The Arazzo workflows using this API; unknown until read, and the page stays as is without them. */
+  apiUsage?: ArazzoApiUsage;
   operations?: Operation[];
   selectedOperation?: Operation;
   operationsListConfig!: ListConfig;
@@ -121,6 +125,7 @@ export class ServiceDetailPageComponent implements OnInit {
     private authService: IAuthenticationService,
     protected config: ConfigService,
     private copilotSvc: AICopilotService,
+    private arazzoWorkflowSvc: ArazzoWorkflowService,
     private modalService: BsModalService,
     protected notificationService: NotificationService,
     private route: ActivatedRoute,
@@ -153,6 +158,7 @@ export class ServiceDetailPageComponent implements OnInit {
         return this.sortOperations(o1, o2);
       });
       this.updateAICopilotSamplesFlag(view);
+      this.loadApiUsage(view.service.id);
       // If deep-link operation present, expand it now that operations are loaded
       if (this.qpOperationName) {
         this.expandOperation(this.qpOperationName);
@@ -213,6 +219,22 @@ export class ServiceDetailPageComponent implements OnInit {
     });
     // Then trigger view reevaluation to update the samples list and the notifications toaster.
     this.ref.detectChanges();
+  }
+
+  private loadApiUsage(serviceId: string): void {
+    // Without the workflows using this API, the page stays as it is.
+    this.arazzoWorkflowSvc.getApiUsage(serviceId).subscribe({
+      next: (usage) => {
+        this.apiUsage = usage;
+        this.ref.markForCheck();
+      },
+      error: () => undefined,
+    });
+  }
+
+  /** How many Arazzo workflows call an operation; 0 when none does. */
+  public workflowCount(operation: Operation): number {
+    return this.apiUsage?.operationWorkflowCounts[operation.name] ?? 0;
   }
 
   // Expand operation row in the list if names match

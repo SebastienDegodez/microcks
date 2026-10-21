@@ -17,6 +17,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
+import { ArazzoApiUsage } from '../models/arazzo-api-usage.model';
 import { ArazzoWorkflowDetail } from '../models/arazzo-workflow.model';
 
 @Injectable({ providedIn: 'root' })
@@ -29,5 +30,13 @@ export class ArazzoWorkflowService {
   public getWorkflow(documentId: string, workflowId: string): Observable<ArazzoWorkflowDetail> {
     return this.http.get<ArazzoWorkflowDetail>(this.rootUrl + '/documents/' + encodeURIComponent(documentId)
       + '/workflows/' + encodeURIComponent(workflowId));
+  }
+
+  /**
+   * Tell which workflows use an API, and how many workflows call each of its operations.
+   * @param serviceId The id of the API
+   */
+  public getApiUsage(serviceId: string): Observable<ArazzoApiUsage> {
+    return this.http.get<ArazzoApiUsage>(this.rootUrl + '/services/' + encodeURIComponent(serviceId) + '/workflows');
   }
 }

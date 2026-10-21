@@ -76,6 +76,22 @@
           <a [routerLink]="['/metrics/invocations', view.service.name, view.service.version]">Mocks invocations <i
               class="glyphicon glyphicon-signal"></i></a>
         </dd>
+        <ng-container *ngIf="apiUsage?.documents?.length">
+          <dt>Workflows:</dt>
+          <dd class="service-workflows">
+            <div *ngFor="let document of apiUsage!.documents; let last = last">
+              <span *ngFor="let workflow of document.workflows" class="service-workflow">
+                <span *ngIf="workflow.lastResult === 'NEVER_RUN'" class="fa fa-circle-o service-workflow-never-run"
+                  role="img" aria-label="Never run" title="Never run"></span>
+                <a [routerLink]="['/workflows', document.id, workflow.workflowId]">{{ workflow.workflowId }}</a>
+              </span>
+              <div class="service-workflows-document">
+                in {{ document.title }} {{ document.version }}<ng-container *ngIf="last"> ·
+                  <a routerLink="/workflows">View Workflows</a></ng-container>
+              </div>
+            </div>
+          </dd>
+        </ng-container>
         <span *ngIf="isMCPAvailable()">
           <dt>MCP Server:</dt>
           <dd>
@@ -200,6 +216,10 @@
             </div>
           </div>
           <div class="list-pf-additional-content">
+            <div *ngIf="workflowCount(item) as count" class="service-operation-workflows">
+              <span class="pficon pficon-process-automation"> </span>
+              <strong> {{ count }}</strong> workflow(s)
+            </div>
             <div>
               <span class="pficon pficon-image"> </span>
               <strong> {{ view.messagesMap[item.name].length }}</strong> sample(s)
