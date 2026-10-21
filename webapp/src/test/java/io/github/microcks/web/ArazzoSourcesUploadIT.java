@@ -73,8 +73,9 @@ class ArazzoSourcesUploadIT extends AbstractBaseIT {
       assertEquals(List.of("customerApi -> Customer API 1.0.0: linked", "orderApi -> Order API 1.0.0: not linked"),
             arazzoDocumentService.getSourceLinks("Order fulfilment", "1.0.0").stream()
                   .map(ArazzoSourcesUploadIT::describe).toList());
-      assertEquals(List.of("searchThenRead: runnable", "placeOrder: not runnable"), arazzoDocumentService
-            .getWorkflowStatuses("Order fulfilment", "1.0.0").stream().map(ArazzoSourcesUploadIT::describe).toList());
+      assertEquals(List.of("searchThenRead: runnable", "placeOrder: not runnable [API Order API 1.0.0 not found]"),
+            arazzoDocumentService.getWorkflowStatuses("Order fulfilment", "1.0.0").stream()
+                  .map(ArazzoSourcesUploadIT::describe).toList());
    }
 
    private ResponseEntity<String> upload(String fixture) {
@@ -92,6 +93,6 @@ class ArazzoSourcesUploadIT extends AbstractBaseIT {
    }
 
    private static String describe(ArazzoWorkflowStatus status) {
-      return status.workflowId() + ": " + (status.runnable() ? "runnable" : "not runnable");
+      return status.workflowId() + ": " + (status.runnable() ? "runnable" : "not runnable " + status.reasons());
    }
 }

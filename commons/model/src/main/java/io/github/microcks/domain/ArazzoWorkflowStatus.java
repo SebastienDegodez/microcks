@@ -15,11 +15,14 @@
  */
 package io.github.microcks.domain;
 
+import java.util.List;
+
 /**
  * Whether a workflow of an Arazzo document can run against the APIs of Microcks.
  * @param workflowId The id of the workflow in the Arazzo document
- * @param runnable   Whether every source the workflow calls is linked to a Microcks API
+ * @param runnable   Whether every operation the workflow calls is found in a linked Microcks API
+ * @param reasons    Why the workflow is not runnable, in the order of its steps; empty when it is runnable
  * @author SebastienDegodez
  */
-public record ArazzoWorkflowStatus(String workflowId, boolean runnable) {
+public record ArazzoWorkflowStatus(String workflowId, boolean runnable, List<String> reasons) {
 }

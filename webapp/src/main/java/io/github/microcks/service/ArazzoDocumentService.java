@@ -32,10 +32,10 @@ import io.github.microcks.util.arazzo.UnsupportedArazzoDocumentException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -157,11 +157,23 @@ public class ArazzoDocumentService {
     */
    public List<ArazzoWorkflowStatus> getWorkflowStatuses(String title, String version) {
       ArazzoDocument document = arazzoDocumentRepository.findByTitleAndVersion(title, version);
-      Set<String> linkedSourceNames = getSourceLinks(title, version).stream().filter(ArazzoSourceLink::linked)
-            .map(ArazzoSourceLink::sourceName).collect(Collectors.toSet());
-      // A workflow is runnable when every source its steps call is linked.
-      return document.getWorkflowIds().stream().map(workflowId -> new ArazzoWorkflowStatus(workflowId,
-            linkedSourceNames.containsAll(document.getWorkflowSourceNames().get(workflowId)))).toList();
+      Map<String, ArazzoSourceLink> links = getSourceLinks(title, version).stream()
+            .collect(Collectors.toMap(ArazzoSourceLink::sourceName, link -> link));
+      return document.getWorkflowIds().stream()
+            .map(workflowId -> status(workflowId, document.getWorkflowSourceNames().get(workflowId), links)).toList();
+   }
+
+   /** A workflow is runnable when nothing prevents its steps from calling their source; else these are the reasons. */
+   private static ArazzoWorkflowStatus status(String workflowId, List<String> calledSourceNames,
+         Map<String, ArazzoSourceLink> links) {
+      List<String> reasons = new ArrayList<>();
+      for (String sourceName : calledSourceNames) {
+         ArazzoSourceLink link = links.get(sourceName);
+         if (!link.linked()) {
+            reasons.add("API " + link.apiName() + " " + link.apiVersion() + " not found");
+         }
+      }
+      return new ArazzoWorkflowStatus(workflowId, reasons.isEmpty(), reasons);
    }
 
    private ArazzoSourceLink link(String sourceName, ArazzoSources overlay) {

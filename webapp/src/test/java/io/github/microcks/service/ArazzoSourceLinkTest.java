@@ -75,7 +75,7 @@ class ArazzoSourceLinkTest {
 
       assertEquals(List.of("customerApi -> Customer API 1.0.0: linked", "orderApi -> Order API 1.0.0: not linked"),
             sourceLinks("Order fulfilment", "1.0.0"));
-      assertEquals(List.of("searchThenRead: runnable", "placeOrder: not runnable"),
+      assertEquals(List.of("searchThenRead: runnable", "placeOrder: not runnable [API Order API 1.0.0 not found]"),
             workflowStatuses("Order fulfilment", "1.0.0"));
    }
 
@@ -100,7 +100,7 @@ class ArazzoSourceLinkTest {
    }
 
    private static String describe(ArazzoWorkflowStatus status) {
-      return status.workflowId() + ": " + (status.runnable() ? "runnable" : "not runnable");
+      return status.workflowId() + ": " + (status.runnable() ? "runnable" : "not runnable " + status.reasons());
    }
 
    private void apiIsImported(String fileName) throws Exception {
