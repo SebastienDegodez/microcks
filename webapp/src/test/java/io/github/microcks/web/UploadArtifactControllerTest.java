@@ -16,6 +16,7 @@
 package io.github.microcks.web;
 
 import io.github.microcks.repository.SecretRepository;
+import io.github.microcks.service.ArazzoDocumentService;
 import io.github.microcks.service.ArtifactInfo;
 import io.github.microcks.service.ServiceService;
 import io.github.microcks.util.MockRepositoryImportException;
@@ -43,6 +44,9 @@ class UploadArtifactControllerTest {
 
    @Mock
    private SecretRepository secretRepository;
+
+   @Mock
+   private ArazzoDocumentService arazzoDocumentService;
 
    @InjectMocks
    private UploadArtifactController sut;

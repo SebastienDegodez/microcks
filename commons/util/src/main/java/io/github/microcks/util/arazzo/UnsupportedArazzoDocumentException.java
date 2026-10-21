@@ -16,7 +16,8 @@
 package io.github.microcks.util.arazzo;
 
 /**
- * Refuses an Arazzo document that uses a version or a feature outside the subset Microcks supports.
+ * Refuses an Arazzo document that is invalid Arazzo, or that uses a version or a feature outside the subset Microcks
+ * supports.
  * @author SebastienDegodez
  */
 public class UnsupportedArazzoDocumentException extends Exception {

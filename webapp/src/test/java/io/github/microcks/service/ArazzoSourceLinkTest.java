@@ -23,6 +23,7 @@ import io.github.microcks.repository.ArazzoSourcesRepository;
 import io.github.microcks.repository.RepositoryTestsConfiguration;
 import io.github.microcks.repository.ResourceRepository;
 import io.github.microcks.repository.ServiceRepository;
+import io.github.microcks.util.MockRepositoryImportException;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -36,11 +37,13 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Acceptance tests of the link between the source descriptions of an Arazzo document and the APIs of Microcks, one per
@@ -191,6 +194,24 @@ class ArazzoSourceLinkTest {
             arazzoSourcesRepository.findAll().stream().map(ArazzoSourceLinkTest::describe).toList());
    }
 
+   /**
+    * An overlay is matched to its Arazzo document by its metadata name and version: without them, it links nothing and
+    * is refused rather than kept.
+    */
+   @ParameterizedTest
+   @CsvSource({ "no-metadata, Invalid ArazzoSources overlay: metadata.name is required",
+         "no-metadata-name, Invalid ArazzoSources overlay: metadata.name is required",
+         "no-metadata-version, Invalid ArazzoSources overlay: metadata.version is required" })
+   void anOverlayThatNamesNoDocumentIsRefusedWithItsReason(String example, String reason) throws Exception {
+      String content = exampleOf("invalid.arazzo-sources.yaml", example);
+
+      MockRepositoryImportException refusal = assertThrows(MockRepositoryImportException.class,
+            () -> arazzoDocumentService.importArazzoSources(content));
+
+      assertEquals(reason, refusal.getMessage());
+      assertEquals(0, arazzoSourcesRepository.count());
+   }
+
    @ParameterizedTest
    @CsvSource({ "pastry.arazzo-sources.yaml, true", "pastry.arazzo.yaml, false", "unparseable.arazzo.yaml, false" })
    void onlyAnArtifactOfKindArazzoSourcesIsAnOverlay(String fileName, boolean overlay) throws Exception {
@@ -230,5 +251,17 @@ class ArazzoSourceLinkTest {
       try (InputStream stream = ArazzoSourceLinkTest.class.getResourceAsStream(FIXTURES + fileName)) {
          return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
       }
+   }
+
+   /**
+    * @param fileName The fixture of a category, holding one YAML document per example, each announced by a
+    *                 {@code # example: <name> - <what>} comment
+    * @param example  The name of the example
+    * @return The YAML document of that example
+    */
+   private static String exampleOf(String fileName, String example) throws IOException {
+      String marker = "# example: " + example + " ";
+      return Arrays.stream(fixture(fileName).split("\n---\n")).filter(document -> document.contains(marker)).findFirst()
+            .orElseThrow(() -> new IllegalArgumentException(example + " is not in " + fileName));
    }
 }

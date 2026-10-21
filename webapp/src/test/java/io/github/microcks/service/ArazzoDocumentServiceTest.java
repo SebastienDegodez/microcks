@@ -106,6 +106,17 @@ class ArazzoDocumentServiceTest {
    }
 
    @Test
+   void aDocumentWithoutTheInfoArazzoRequiresIsRefusedWithItsReason() throws Exception {
+      String content = fixture("no-info.arazzo.yaml");
+
+      MockRepositoryImportException refusal = assertThrows(MockRepositoryImportException.class,
+            () -> service.importArazzoDocument(content, "uuid_order_workflow.arazzo.yaml"));
+
+      assertEquals("Invalid Arazzo document: info.title is required", refusal.getMessage());
+      assertEquals(0, repository.count());
+   }
+
+   @Test
    void reImportingTheSameTitleAndVersionUpdatesTheDocument() throws Exception {
       service.importArazzoDocument(fixture("pastry.arazzo.yaml"));
 
