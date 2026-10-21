@@ -81,6 +81,8 @@ export type ArazzoWorkflowInput = {
   usedBy: ArazzoExpressionUse[];
   /** The JSON schema type the workflow declares for the input, such as number. */
   type?: string;
+  /** Whether a run needs the input: the steps or outputs use it, or the inputs schema requires it. */
+  required?: boolean;
 };
 
 /** An output of a step that a later step uses. */

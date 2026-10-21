@@ -53,9 +53,11 @@ function workflow(workflowId: string, inputs: ArazzoWorkflowDetail['inputs'], ru
 
 const WORKFLOWS: Record<string, ArazzoWorkflowDetail> = {
   readThenReprice: workflow('readThenReprice', [
-    { name: 'pastry', type: 'string', usedBy: [{ stepId: 'readPastry', place: 'path', target: 'name' }] },
+    { name: 'pastry', type: 'string', usedBy: [{ stepId: 'readPastry', place: 'path', target: 'name' }],
+      required: true },
     { name: 'newPrice', type: 'number', usedBy: [{ stepId: 'reprice', place: 'body', target: '/price' },
-        { stepId: 'reprice', place: 'criterion' }] }
+        { stepId: 'reprice', place: 'criterion' }], required: true },
+    { name: 'note', type: 'string', usedBy: [], required: false }
   ]),
   listThenReadFirst: workflow('listThenReadFirst', []),
   deletePastry: workflow('deletePastry', [], false)
@@ -139,9 +141,9 @@ describe('WorkflowRunDialogComponent', () => {
   it('asks for each input with its type and where the workflow uses it', () => {
     open();
 
-    expect(texts('.workflow-run-input-name')).toEqual(['pastry', 'newPrice']);
+    expect(texts('.workflow-run-input-name')).toEqual(['pastry', 'newPrice', 'note']);
     expect(Array.from(dialog().querySelectorAll('.workflow-run-input input'))
-      .map(input => (input as HTMLInputElement).type)).toEqual(['text', 'number']);
+      .map(input => (input as HTMLInputElement).type)).toEqual(['text', 'number', 'text']);
     expect(texts('.workflow-run-input-use'))
       .toEqual(['Path parameter name of readPastry', 'Body /price of reprice, and its success criterion']);
   });
@@ -213,6 +215,48 @@ describe('WorkflowRunDialogComponent', () => {
     expect(texts('.workflow-run-error')).toEqual(['Workflow readThenReprice cannot run: no API']);
     expect(modalRef.hide).not.toHaveBeenCalled();
     expect(runButton().disabled).toBeFalse();
+  });
+
+  it('tells which inputs a run needs', () => {
+    open();
+
+    expect(Array.from(dialog().querySelectorAll('.workflow-run-input input'))
+      .map(input => (input as HTMLInputElement).required)).toEqual([true, true, false]);
+  });
+
+  it('refuses a run missing an input, naming it and marking it until it is given', async () => {
+    open();
+    runs.launchRun.and.returnValue(throwError(() => ({ error: 'Missing input: newPrice' })));
+    await fixture.whenStable();
+
+    type('#workflow-run-input-pastry', 'Eclair Cafe');
+    runButton().click();
+    fixture.detectChanges();
+
+    expect(runs.launchRun).toHaveBeenCalledWith('doc-1', 'readThenReprice', { pastry: 'Eclair Cafe' }, 10000);
+    expect(texts('.workflow-run-error')).toEqual(['Missing input: newPrice']);
+    expect(texts('.workflow-run-input.has-error .workflow-run-input-name')).toEqual(['newPrice']);
+    expect(dialog().querySelector('#workflow-run-input-newPrice')?.getAttribute('aria-invalid')).toEqual('true');
+    expect(modalRef.hide).not.toHaveBeenCalled();
+
+    type('#workflow-run-input-newPrice', '2.6');
+
+    expect(texts('.workflow-run-input.has-error .workflow-run-input-name')).toEqual([]);
+  });
+
+  it('marks no input before a run is refused, nor after another workflow is chosen', () => {
+    open();
+    runs.launchRun.and.returnValue(throwError(() => ({ error: 'Missing inputs: pastry, newPrice' })));
+
+    expect(dialog().querySelectorAll('.workflow-run-input.has-error').length).toEqual(0);
+    runButton().click();
+    fixture.detectChanges();
+    expect(texts('.workflow-run-input.has-error .workflow-run-input-name')).toEqual(['pastry', 'newPrice']);
+
+    select('listThenReadFirst');
+    select('readThenReprice');
+
+    expect(dialog().querySelectorAll('.workflow-run-input.has-error').length).toEqual(0);
   });
 
   it('closes without running', () => {

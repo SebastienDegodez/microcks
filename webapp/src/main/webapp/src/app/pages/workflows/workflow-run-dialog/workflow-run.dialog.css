@@ -130,6 +130,11 @@ code.workflow-run-chip {
   font-size: 12px;
 }
 
+/* An input a refused run needed, still empty. */
+.workflow-run-input.has-error .form-control {
+  border-color: var(--status-danger);
+}
+
 .workflow-run-no-input,
 .workflow-run-not-runnable {
   color: var(--text-secondary);
