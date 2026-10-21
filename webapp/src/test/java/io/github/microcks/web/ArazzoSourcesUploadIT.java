@@ -17,6 +17,7 @@ package io.github.microcks.web;
 
 import io.github.microcks.domain.ArazzoSourceLink;
 import io.github.microcks.domain.ArazzoWorkflowStatus;
+import io.github.microcks.domain.Service;
 import io.github.microcks.repository.ArazzoDocumentRepository;
 import io.github.microcks.repository.ArazzoSourcesRepository;
 import io.github.microcks.service.ArazzoDocumentService;
@@ -59,6 +60,11 @@ class ArazzoSourcesUploadIT extends AbstractBaseIT {
    void deleteDocumentsAndOverlays() {
       arazzoDocumentRepository.deleteAll();
       arazzoSourcesRepository.deleteAll();
+      // Order API is missing at the start of each test.
+      Service orderApi = serviceRepository.findByNameAndVersion("Order API", "1.0.0");
+      if (orderApi != null) {
+         serviceRepository.delete(orderApi);
+      }
    }
 
    @Test
@@ -76,6 +82,18 @@ class ArazzoSourcesUploadIT extends AbstractBaseIT {
       assertEquals(List.of("searchThenRead: runnable", "placeOrder: not runnable [API Order API 1.0.0 not found]"),
             arazzoDocumentService.getWorkflowStatuses("Order fulfilment", "1.0.0").stream()
                   .map(ArazzoSourcesUploadIT::describe).toList());
+   }
+
+   @Test
+   void uploadingTheMissingApiLaterMakesItsWorkflowsRunnable() {
+      uploadArtifactFile(FIXTURES + "customer-api.openapi.yaml", true);
+      uploadArtifactFile(FIXTURES + "order-fulfilment.arazzo.yaml", true);
+      upload("order-fulfilment.arazzo-sources.yaml");
+
+      uploadArtifactFile(FIXTURES + "order-api.openapi.yaml", true);
+
+      assertEquals(List.of("searchThenRead: runnable", "placeOrder: runnable"), arazzoDocumentService
+            .getWorkflowStatuses("Order fulfilment", "1.0.0").stream().map(ArazzoSourcesUploadIT::describe).toList());
    }
 
    private ResponseEntity<String> upload(String fixture) {
