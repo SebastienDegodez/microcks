@@ -19,19 +19,37 @@ import { RouterLink } from '@angular/router';
 import { ArazzoDocumentRef } from '../../../models/importer.model';
 
 /**
- * The Arazzo document an import job imported, next to the labels of the job: a link to the Workflows page, and the
- * sources of the document that are still linked to no API.
+ * The Arazzo document an import job imported, under the URL of the job: its title and version, and the sources of the
+ * document its last import left linked to no API.
  */
 @Component({
   selector: 'app-arazzo-document-ref',
   template: `
-    <span class="label label-warning" [title]="'Arazzo document ' + ref().title + ' ' + ref().version">
-      <a [routerLink]="['/workflows']">Workflows</a>
-    </span>
-    @if (unlinkedCount() > 0) {
-      <span class="label label-warning" [title]="unlinkedTitle()">
-        {{ unlinkedCount() }} {{ unlinkedCount() === 1 ? 'source' : 'sources' }} not linked
-      </span>
+    <div class="arazzo-document-ref">
+      <span class="pficon pficon-process-automation" aria-hidden="true"></span>
+      Arazzo document <a [routerLink]="['/workflows']">{{ ref().title }} {{ ref().version }}</a>
+    </div>
+    @if (ref().unlinkedSources.length > 0) {
+      <div class="arazzo-document-ref-unlinked">
+        <span class="pficon pficon-warning-triangle-o" aria-hidden="true"></span>
+        {{ unlinkedSources() }} not linked at the last import: link
+        {{ ref().unlinkedSources.length === 1 ? 'it' : 'them' }} from the
+        <a [routerLink]="['/workflows']">Workflows page</a>
+      </div>
+    }
+  `,
+  styles: `
+    .arazzo-document-ref,
+    .arazzo-document-ref-unlinked {
+      margin-top: 4px;
+      font-size: 12px;
+    }
+    .arazzo-document-ref .pficon,
+    .arazzo-document-ref-unlinked .pficon {
+      margin-right: 4px;
+    }
+    .arazzo-document-ref-unlinked {
+      color: var(--warning-text);
     }
   `,
   imports: [RouterLink],
@@ -39,13 +57,9 @@ import { ArazzoDocumentRef } from '../../../models/importer.model';
 export class ArazzoDocumentRefComponent {
   ref = input.required<ArazzoDocumentRef>();
 
-  unlinkedCount = computed(() => this.ref().unlinkedSources.length);
-
-  unlinkedTitle = computed(
-    () =>
-      this.ref().unlinkedSources.join(', ') +
-      ' not linked: link ' +
-      (this.unlinkedCount() === 1 ? 'it' : 'them') +
-      ' from the Workflows page'
-  );
+  /** "orderApi", "customerApi and orderApi", "a, b and c". */
+  unlinkedSources = computed(() => {
+    const names = this.ref().unlinkedSources;
+    return names.length < 2 ? names.join('') : names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1];
+  });
 }

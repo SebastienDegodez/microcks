@@ -20,7 +20,8 @@ import { ArazzoDocumentRef } from '../../../models/importer.model';
 import { ArazzoDocumentRefComponent } from './arazzo-document-ref.component';
 
 describe('ArazzoDocumentRefComponent', () => {
-  function show(ref: ArazzoDocumentRef): ComponentFixture<ArazzoDocumentRefComponent> {
+  function show(unlinkedSources: string[]): ComponentFixture<ArazzoDocumentRefComponent> {
+    const ref: ArazzoDocumentRef = { documentId: 'order-doc', title: 'Order fulfilment', version: '1.0.0', unlinkedSources };
     TestBed.configureTestingModule({ imports: [ArazzoDocumentRefComponent], providers: [provideRouter([])] });
     const fixture = TestBed.createComponent(ArazzoDocumentRefComponent);
     fixture.componentRef.setInput('ref', ref);
@@ -28,46 +29,35 @@ describe('ArazzoDocumentRefComponent', () => {
     return fixture;
   }
 
-  function labels(fixture: ComponentFixture<ArazzoDocumentRefComponent>): { text: string; title: string | null }[] {
-    return Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('.label')).map((label) => ({
-      text: (label.textContent ?? '').replace(/\s+/g, ' ').trim(),
-      title: label.getAttribute('title'),
-    }));
+  function text(fixture: ComponentFixture<ArazzoDocumentRefComponent>, selector: string): string {
+    const node = (fixture.nativeElement as HTMLElement).querySelector(selector);
+    return (node?.textContent ?? '').replace(/\s+/g, ' ').trim();
   }
 
-  it('links the Arazzo document a job imported to the Workflows page', () => {
-    const fixture = show({ documentId: 'order-doc', title: 'Order fulfilment', version: '1.0.0', unlinkedSources: [] });
+  it('names the Arazzo document a job imported, linked to the Workflows page', () => {
+    const fixture = show([]);
 
-    expect(labels(fixture)).toEqual([{ text: 'Workflows', title: 'Arazzo document Order fulfilment 1.0.0' }]);
-    const link = (fixture.nativeElement as HTMLElement).querySelector('.label a') as HTMLAnchorElement;
+    expect(text(fixture, '.arazzo-document-ref')).toBe('Arazzo document Order fulfilment 1.0.0');
+    const link = (fixture.nativeElement as HTMLElement).querySelector('.arazzo-document-ref a') as HTMLAnchorElement;
     expect(link.getAttribute('href')).toBe('/workflows');
+    expect((fixture.nativeElement as HTMLElement).querySelector('.arazzo-document-ref-unlinked')).toBeNull();
   });
 
-  it('tells which sources of the document are linked to no API', () => {
-    const fixture = show({
-      documentId: 'order-doc',
-      title: 'Order fulfilment',
-      version: '1.0.0',
-      unlinkedSources: ['customerApi', 'orderApi'],
-    });
+  it('tells which source of the document its last import left linked to no API', () => {
+    const fixture = show(['orderApi']);
 
-    expect(labels(fixture)[1]).toEqual({
-      text: '2 sources not linked',
-      title: 'customerApi, orderApi not linked: link them from the Workflows page',
-    });
+    expect(text(fixture, '.arazzo-document-ref-unlinked')).toBe(
+      'orderApi not linked at the last import: link it from the Workflows page'
+    );
+    const link = (fixture.nativeElement as HTMLElement).querySelector('.arazzo-document-ref-unlinked a');
+    expect(link?.getAttribute('href')).toBe('/workflows');
   });
 
-  it('counts a single source not linked in the singular', () => {
-    const fixture = show({
-      documentId: 'order-doc',
-      title: 'Order fulfilment',
-      version: '1.0.0',
-      unlinkedSources: ['orderApi'],
-    });
+  it('names every source linked to no API', () => {
+    const fixture = show(['customerApi', 'orderApi', 'paymentApi']);
 
-    expect(labels(fixture)[1]).toEqual({
-      text: '1 source not linked',
-      title: 'orderApi not linked: link it from the Workflows page',
-    });
+    expect(text(fixture, '.arazzo-document-ref-unlinked')).toBe(
+      'customerApi, orderApi and paymentApi not linked at the last import: link them from the Workflows page'
+    );
   });
 });
