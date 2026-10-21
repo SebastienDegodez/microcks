@@ -60,6 +60,17 @@ class ArazzoDocumentServiceTest {
    }
 
    @Test
+   void anUnsupportedVersionIsRefusedWithItsReason() throws Exception {
+      String content = fixture("unsupported-version.arazzo.yaml");
+
+      MockRepositoryImportException refusal = assertThrows(MockRepositoryImportException.class,
+            () -> service.importArazzoDocument(content));
+
+      assertEquals("Unsupported Arazzo version: 2.0.0", refusal.getMessage());
+      assertEquals(0, repository.count());
+   }
+
+   @Test
    void aDocumentThatIsNeitherYamlNorJsonIsRefused() throws Exception {
       String content = fixture("unparseable.arazzo.yaml");
 

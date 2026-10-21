@@ -33,8 +33,10 @@ public final class ArazzoDocumentReader {
    /**
     * @param document The Arazzo document, parsed from YAML or JSON
     * @return What identifies the document
+    * @throws UnsupportedArazzoDocumentException if the document is outside of the subset Microcks supports
     */
-   public static ArazzoDescription read(JsonNode document) {
+   public static ArazzoDescription read(JsonNode document) throws UnsupportedArazzoDocumentException {
+      ArazzoSubset.check(document);
       JsonNode info = document.path("info");
       List<String> workflowIds = new ArrayList<>();
       for (JsonNode workflow : document.path("workflows")) {

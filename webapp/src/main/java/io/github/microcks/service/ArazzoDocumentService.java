@@ -21,6 +21,7 @@ import io.github.microcks.util.MockRepositoryImportException;
 import io.github.microcks.util.ObjectMapperFactory;
 import io.github.microcks.util.arazzo.ArazzoDescription;
 import io.github.microcks.util.arazzo.ArazzoDocumentReader;
+import io.github.microcks.util.arazzo.UnsupportedArazzoDocumentException;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -49,12 +50,20 @@ public class ArazzoDocumentService {
     * @throws MockRepositoryImportException if the document cannot be imported
     */
    public ArazzoDocument importArazzoDocument(String content) throws MockRepositoryImportException {
-      ArazzoDescription description = ArazzoDocumentReader.read(parse(content));
+      ArazzoDescription description = read(parse(content));
       ArazzoDocument document = new ArazzoDocument();
       document.setTitle(description.title());
       document.setVersion(description.version());
       document.setWorkflowIds(description.workflowIds());
       return arazzoDocumentRepository.save(document);
+   }
+
+   private static ArazzoDescription read(JsonNode document) throws MockRepositoryImportException {
+      try {
+         return ArazzoDocumentReader.read(document);
+      } catch (UnsupportedArazzoDocumentException uade) {
+         throw new MockRepositoryImportException(uade.getMessage(), uade);
+      }
    }
 
    private static JsonNode parse(String content) throws MockRepositoryImportException {
