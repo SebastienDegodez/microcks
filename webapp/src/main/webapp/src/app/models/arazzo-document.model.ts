@@ -49,10 +49,11 @@ export interface ArazzoDocumentSummary {
   id: string;
   title: string;
   version: string;
-  arazzoVersion: string;
+  /** Unknown for a document imported before it was kept. */
+  arazzoVersion: string | null;
   fileName: string | null;
-  /** When the document was last imported, in milliseconds since the epoch. */
-  importDate: number;
+  /** When the document was last imported, in milliseconds since the epoch; unknown for a document imported before it was kept. */
+  importDate: number | null;
   sources: ArazzoSourceSummary[];
   workflows: ArazzoWorkflowSummary[];
 }

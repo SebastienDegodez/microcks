@@ -72,13 +72,16 @@
               <a class="workflows-document-title" role="button" tabindex="0" (click)="toggle(document)"
                 (keydown.enter)="toggle(document)">{{ document.title }}</a>
               <span class="workflows-document-version">{{ document.version }}</span>
-              <span class="workflows-arazzo-chip">ARAZZO {{ document.arazzoVersion }}</span>
+              <span *ngIf="document.arazzoVersion" class="workflows-arazzo-chip">ARAZZO {{ document.arazzoVersion }}</span>
             </div>
             <div class="workflows-document-file">
-              <ng-container *ngIf="document.fileName">{{ document.fileName }} · </ng-container>
-              imported {{ importedOn(document) | timeAgo }}
+              <ng-container *ngIf="document.fileName">{{ document.fileName }}</ng-container>
+              <ng-container *ngIf="importedOn(document) as importDate">
+                <ng-container *ngIf="document.fileName"> · </ng-container>imported {{ importDate | timeAgo }}
+              </ng-container>
               <ng-container *ngIf="!isExpanded(document)">
-                · {{ document.workflows.length }} {{ document.workflows.length === 1 ? 'workflow' : 'workflows' }}
+                <ng-container *ngIf="document.fileName || document.importDate != null"> · </ng-container>
+                {{ document.workflows.length }} {{ document.workflows.length === 1 ? 'workflow' : 'workflows' }}
               </ng-container>
             </div>
           </div>

@@ -170,6 +170,12 @@ public class ArazzoDocumentService {
       return summaries;
    }
 
+   /** A document stored before workflow descriptions were kept has none. */
+   private static String description(ArazzoDocument document, String workflowId) {
+      Map<String, String> descriptions = document.getWorkflowDescriptions();
+      return descriptions == null ? null : descriptions.get(workflowId);
+   }
+
    /** A document uses an API when its overlay maps one of its sources to it, whether this API exists or not. */
    private static boolean mapsToApi(Map<String, ResolvedSource> sources, String apiName) {
       return sources.values().stream().anyMatch(source -> apiName.equals(source.link().apiName()));
@@ -178,8 +184,7 @@ public class ArazzoDocumentService {
    private static ArazzoDocumentSummary summary(ArazzoDocument document, Map<String, ResolvedSource> sources) {
       List<ArazzoSourceSummary> sourceSummaries = sources.values().stream().map(ResolvedSource::summary).toList();
       List<ArazzoWorkflowSummary> workflowSummaries = statuses(document, sources).stream()
-            .map(status -> new ArazzoWorkflowSummary(status,
-                  document.getWorkflowDescriptions().get(status.workflowId()),
+            .map(status -> new ArazzoWorkflowSummary(status, description(document, status.workflowId()),
                   document.getWorkflowCalls().get(status.workflowId()).size(), ArazzoLastResult.NEVER_RUN))
             .toList();
       return new ArazzoDocumentSummary(document.getId(), document.getTitle(), document.getVersion(),

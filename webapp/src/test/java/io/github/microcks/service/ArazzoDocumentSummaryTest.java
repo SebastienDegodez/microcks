@@ -21,6 +21,7 @@ import io.github.microcks.domain.ArazzoSourceLink;
 import io.github.microcks.domain.ArazzoSourceSummary;
 import io.github.microcks.domain.ArazzoWorkflowStatus;
 import io.github.microcks.domain.ArazzoWorkflowSummary;
+import io.github.microcks.repository.ArazzoDocumentRepository;
 import io.github.microcks.repository.RepositoryTestsConfiguration;
 import io.github.microcks.repository.ServiceRepository;
 
@@ -41,6 +42,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
  * Acceptance tests of the list of Arazzo documents the Workflows page shows, one per acceptance criterion of the story.
@@ -61,6 +63,9 @@ class ArazzoDocumentSummaryTest {
 
    @Autowired
    private ServiceRepository serviceRepository;
+
+   @Autowired
+   private ArazzoDocumentRepository arazzoDocumentRepository;
 
    @Test
    void documentsAreListedWithTheirWorkflowsApisAndLastResult() throws Exception {
@@ -113,6 +118,27 @@ class ArazzoDocumentSummaryTest {
 
       assertEquals("API Pastry scenarios 1.0.0 (null)",
             imported.getTitle() + " " + imported.getVersion() + " (" + imported.getFileName() + ")");
+   }
+
+   @Test
+   void aDocumentStoredBeforeTheWorkflowsPageIsListedWithoutWhatWasNotStored() throws Exception {
+      arazzoDocumentService.importArazzoDocument(fixture("pastry.arazzo.yaml"), "pastry.arazzo.yaml");
+      ArazzoDocument storedBefore = arazzoDocumentRepository.findByTitleAndVersion("API Pastry scenarios", "1.0.0");
+      storedBefore.setArazzoVersion(null);
+      storedBefore.setFileName(null);
+      storedBefore.setImportDate(null);
+      storedBefore.setWorkflowDescriptions(null);
+      arazzoDocumentRepository.save(storedBefore);
+
+      List<ArazzoDocumentSummary> documents = arazzoDocumentService.getDocumentSummaries(null);
+
+      assertEquals(List.of("API Pastry scenarios 1.0.0 (null, Arazzo null)"),
+            documents.stream().map(ArazzoDocumentSummaryTest::describe).toList());
+      assertNull(documents.get(0).importDate());
+      assertEquals(List.of(
+            "readThenReprice: 'null' 2 steps, not runnable [no API name and version for this source], NEVER_RUN",
+            "listThenReadFirst: 'null' 2 steps, not runnable [no API name and version for this source], NEVER_RUN"),
+            workflows(documents.get(0)));
    }
 
    @Test

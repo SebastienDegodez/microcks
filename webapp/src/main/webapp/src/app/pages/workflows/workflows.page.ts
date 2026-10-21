@@ -122,8 +122,9 @@ export class WorkflowsPageComponent implements OnInit, OnDestroy {
     return source.apiType ? API_CHIPS[source.apiType] : null;
   }
 
-  importedOn(document: ArazzoDocumentSummary): string {
-    return new Date(document.importDate).toISOString();
+  /** When the document was imported, for the timeAgo pipe; null when it is not known. */
+  importedOn(document: ArazzoDocumentSummary): string | null {
+    return document.importDate == null ? null : new Date(document.importDate).toISOString();
   }
 
   /** Before workflows run, every workflow of a document has never run. */

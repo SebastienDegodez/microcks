@@ -176,6 +176,26 @@ describe('WorkflowsPageComponent', () => {
     expect(texts(fixture, '.workflows-workflow-reasons')).toEqual(['Not runnable: API Order API 1.0.0 not found']);
   });
 
+  it('shows nothing of what a document stored before this page did not keep', () => {
+    const fixture = openPage([
+      {
+        ...PASTRY_SCENARIOS,
+        arazzoVersion: null,
+        fileName: null,
+        importDate: null,
+        workflows: PASTRY_SCENARIOS.workflows.map((workflow) => ({ ...workflow, description: null })),
+      },
+    ]);
+
+    expect(element(fixture).querySelectorAll('.workflows-arazzo-chip').length).toBe(0);
+    expect(texts(fixture, '.workflows-document-file')).toEqual(['']);
+    expect(texts(fixture, '.workflows-workflow-meta')).toEqual(['2 steps', '2 steps']);
+
+    (element(fixture).querySelector('.workflows-document-toggle') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    expect(texts(fixture, '.workflows-document-file')).toEqual(['2 workflows']);
+  });
+
   it('explains what workflows are and offers to import an Arazzo document when none is imported', () => {
     const fixture = openPage([]);
 
