@@ -88,12 +88,17 @@ public class ArazzoWorkflowService {
             ArazzoDataFlow.stepOutputPassings(workflow).stream()
                   .map(passing -> new ArazzoDataPassing(passing.fromStepId(), passing.outputName(),
                         expressionUse(passing.use())))
-                  .toList());
+                  .toList(),
+            ArazzoDocumentService.status(workflow.workflowId(), document.getWorkflowCalls().get(workflow.workflowId()),
+                  sources));
    }
 
    private static List<ArazzoWorkflowInput> inputs(ArazzoWorkflow workflow) {
-      return ArazzoDataFlow.inputUses(workflow).entrySet().stream().map(input -> new ArazzoWorkflowInput(input.getKey(),
-            input.getValue().stream().map(ArazzoWorkflowService::expressionUse).toList())).toList();
+      return ArazzoDataFlow.inputUses(workflow).entrySet().stream()
+            .map(input -> new ArazzoWorkflowInput(input.getKey(),
+                  input.getValue().stream().map(ArazzoWorkflowService::expressionUse).toList(),
+                  workflow.inputTypes().get(input.getKey())))
+            .toList();
    }
 
    private static ArazzoExpressionUse expressionUse(ArazzoUse use) {

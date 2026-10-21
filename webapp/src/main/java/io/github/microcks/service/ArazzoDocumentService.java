@@ -251,7 +251,7 @@ public class ArazzoDocumentService {
     * A workflow is runnable when each of its steps calls an operation found in a linked API; else these are the
     * reasons, in the order of the steps, each given once.
     */
-   private static ArazzoWorkflowStatus status(String workflowId, List<ArazzoStepCall> calls,
+   static ArazzoWorkflowStatus status(String workflowId, List<ArazzoStepCall> calls,
          Map<String, ResolvedSource> sources) {
       Set<String> reasons = new LinkedHashSet<>();
       for (ArazzoStepCall call : calls) {

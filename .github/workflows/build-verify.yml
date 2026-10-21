@@ -128,9 +128,14 @@ jobs:
 
       - name: Run Integration tests
         run: |
+          # The webapp runs Arazzo workflows end to end with the packaged Arazzo minion.
+          cd ${{github.workspace}}
+          mvn -B -q -DskipTests package -pl minions/arazzo -am
           cd ${{github.workspace}}/webapp
           mvn -Pit test
           cd ${{github.workspace}}/minions/async
+          mvn -Pit test
+          cd ${{github.workspace}}/minions/arazzo
           mvn -Pit test
 
   fuzzing-tests:
