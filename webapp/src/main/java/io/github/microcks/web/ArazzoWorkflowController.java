@@ -17,7 +17,6 @@ package io.github.microcks.web;
 
 import io.github.microcks.domain.ArazzoWorkflowDetail;
 import io.github.microcks.service.ArazzoWorkflowService;
-import io.github.microcks.util.SafeLogger;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -33,9 +32,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/arazzo")
 public class ArazzoWorkflowController {
 
-   /** A safe logger for filtering user-controlled data in diagnostic messages. */
-   private static final SafeLogger log = SafeLogger.getLogger(ArazzoWorkflowController.class);
-
    private final ArazzoWorkflowService arazzoWorkflowService;
 
    /**
@@ -49,7 +45,6 @@ public class ArazzoWorkflowController {
    @GetMapping(value = "/documents/{documentId}/workflows/{workflowId}")
    public ResponseEntity<ArazzoWorkflowDetail> getWorkflowDetail(@PathVariable("documentId") String documentId,
          @PathVariable("workflowId") String workflowId) {
-      log.debug("Reading workflow {} of Arazzo document {}", workflowId, documentId);
       return ResponseEntity.of(arazzoWorkflowService.getWorkflowDetail(documentId, workflowId));
    }
 }
