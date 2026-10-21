@@ -52,6 +52,11 @@ class ArazzoDocumentReaderTest {
    }
 
    @Test
+   void theSourceDescriptionsOfADocumentAreReadByName() throws IOException {
+      assertEquals(List.of("pastryApi"), ArazzoDocumentReader.sourceDescriptionNames(document("pastry.arazzo.yaml")));
+   }
+
+   @Test
    void anUnsupportedVersionIsRefusedWithItsReason() throws IOException {
       assertRefused(document("unsupported-version.arazzo.yaml"), "Unsupported Arazzo version: 2.0.0");
    }

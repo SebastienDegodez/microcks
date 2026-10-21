@@ -52,4 +52,16 @@ public final class ArazzoDocumentReader {
       }
       return new ArazzoDescription(info.path("title").asText(), info.path("version").asText(), workflowIds);
    }
+
+   /**
+    * @param document The Arazzo document, parsed from YAML or JSON
+    * @return The names of its source descriptions, in the order of the document
+    */
+   public static List<String> sourceDescriptionNames(JsonNode document) {
+      List<String> names = new ArrayList<>();
+      for (JsonNode sourceDescription : document.path("sourceDescriptions")) {
+         names.add(sourceDescription.path("name").asText());
+      }
+      return names;
+   }
 }
