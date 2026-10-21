@@ -1,0 +1,119 @@
+/*
+ * Copyright The Microcks Authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *  http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package io.github.microcks.util.arazzo;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+/**
+ * Tests of the subset of Arazzo that Microcks supports. The webapp import tests cover one example of each acceptance
+ * criterion; this reader is shared with the components that run workflows, so every refused feature is covered here.
+ * <p>
+ * All the features below are valid Arazzo 1.0.1: they are refused ONLY TEMPORARILY, until the workflow runner executes
+ * them. A document using one of them is refused rather than imported, because a run that silently skipped them would
+ * report a result the journey does not have: an ignored retry fails a run that should pass, an ignored dependsOn runs
+ * workflows in the wrong order. When a story makes the runner handle one of them, it removes its example from these
+ * tests and from ArazzoSubset.
+ * @author SebastienDegodez
+ */
+class ArazzoDocumentReaderTest {
+
+   /**
+    * Temporary refusal: success and failure actions, nested workflows and operationPath are listed under "Later" in the
+    * Arazzo epic. The runner only calls one operation per step, by operationId, and moves on to the next step.
+    */
+   @ParameterizedTest
+   @CsvSource({ "on-failure, onFailure", "on-success, onSuccess", "operation-path, operationPath",
+         "nested-workflow, workflowId" })
+   void aStepFieldOutsideTheSupportedSubsetIsRefusedWithItsReason(String example, String field) throws IOException {
+      assertRefused(example("step-fields", example), "Unsupported step field: " + field);
+   }
+
+   /**
+    * Temporary refusal: dependsOn and the default success and failure actions of a workflow are listed under "Later" in
+    * the Arazzo epic. The runner plays one workflow at a time, step after step.
+    */
+   @ParameterizedTest
+   @CsvSource({ "depends-on, dependsOn", "success-actions, successActions", "failure-actions, failureActions" })
+   void aWorkflowFieldOutsideTheSupportedSubsetIsRefusedWithItsReason(String example, String field) throws IOException {
+      assertRefused(example("workflow-fields", example), "Unsupported workflow field: " + field);
+   }
+
+   /**
+    * Temporary refusal: AsyncAPI source descriptions come with Arazzo 1.1 and are listed under "Later" in the Arazzo
+    * epic (microcks/microcks#1665). The runner only calls HTTP operations of OpenAPI descriptions.
+    */
+   @Test
+   void aSourceDescriptionTypeOutsideTheSupportedSubsetIsRefusedWithItsReason() throws IOException {
+      assertRefused(example("source-descriptions", "asyncapi"), "Unsupported source description type: asyncapi");
+   }
+
+   /**
+    * Temporary refusal: the runner only sends parameters in the path, the query string and the headers. Cookies are not
+    * planned by a story yet.
+    */
+   @ParameterizedTest
+   @CsvSource({ "step-cookie", "workflow-cookie" })
+   void aParameterLocationOutsideTheSupportedSubsetIsRefusedWithItsReason(String example) throws IOException {
+      assertRefused(example("parameters", example), "Unsupported parameter location: cookie");
+   }
+
+   /**
+    * Temporary refusal: the runner only evaluates simple and regex criteria. JSONPath and XPath criteria are not
+    * planned by a story yet.
+    */
+   @ParameterizedTest
+   @CsvSource({ "jsonpath", "xpath" })
+   void aCriterionTypeOutsideTheSupportedSubsetIsRefusedWithItsReason(String type) throws IOException {
+      assertRefused(example("criteria", type), "Unsupported criterion type: " + type);
+   }
+
+   private static void assertRefused(JsonNode document, String reason) {
+      UnsupportedArazzoDocumentException refusal = assertThrows(UnsupportedArazzoDocumentException.class,
+            () -> ArazzoDocumentReader.read(document));
+
+      assertEquals(reason, refusal.getMessage());
+   }
+
+   /**
+    * @param category The fixture of a category, holding one YAML document per example, each announced by a
+    *                 {@code # example: <name>} comment
+    * @param example  The name of the example
+    * @return The parsed document of that example
+    */
+   private static JsonNode example(String category, String example) throws IOException {
+      try (InputStream stream = ArazzoDocumentReaderTest.class
+            .getResourceAsStream("/io/github/microcks/util/arazzo/unsupported/" + category + ".arazzo.yaml")) {
+         String marker = "# example: " + example + " ";
+         String document = Arrays.stream(new String(stream.readAllBytes(), StandardCharsets.UTF_8).split("\n---\n"))
+               .filter(d -> d.contains(marker)).findFirst()
+               .orElseThrow(() -> new IllegalArgumentException(example + " is not in " + category));
+         return new ObjectMapper(new YAMLFactory()).readTree(document);
+      }
+   }
+}

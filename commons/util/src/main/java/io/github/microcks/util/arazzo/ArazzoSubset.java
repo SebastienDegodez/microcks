@@ -18,6 +18,7 @@ package io.github.microcks.util.arazzo;
 import com.fasterxml.jackson.databind.JsonNode;
 
 import java.util.List;
+import java.util.Set;
 
 /**
  * The part of the Arazzo specification Microcks supports. A document outside of it is refused rather than partly
@@ -26,7 +27,12 @@ import java.util.List;
  */
 final class ArazzoSubset {
 
-   private static final List<String> UNSUPPORTED_STEP_FIELDS = List.of("onFailure");
+   private static final List<String> UNSUPPORTED_WORKFLOW_FIELDS = List.of("dependsOn", "successActions",
+         "failureActions");
+   private static final List<String> UNSUPPORTED_STEP_FIELDS = List.of("workflowId", "operationPath", "onSuccess",
+         "onFailure");
+   private static final Set<String> PARAMETER_LOCATIONS = Set.of("path", "query", "header");
+   private static final Set<String> CRITERION_TYPES = Set.of("simple", "regex");
 
    private ArazzoSubset() {
    }
@@ -40,14 +46,52 @@ final class ArazzoSubset {
       if (!arazzoVersion.startsWith("1.")) {
          throw new UnsupportedArazzoDocumentException("Unsupported Arazzo version: " + arazzoVersion);
       }
+      for (JsonNode sourceDescription : document.path("sourceDescriptions")) {
+         checkSourceDescription(sourceDescription);
+      }
       for (JsonNode workflow : document.path("workflows")) {
          checkWorkflow(workflow);
       }
    }
 
+   private static void checkSourceDescription(JsonNode sourceDescription) throws UnsupportedArazzoDocumentException {
+      String type = sourceDescription.path("type").asText("openapi");
+      if (!type.equals("openapi")) {
+         throw new UnsupportedArazzoDocumentException("Unsupported source description type: " + type);
+      }
+   }
+
    private static void checkWorkflow(JsonNode workflow) throws UnsupportedArazzoDocumentException {
+      rejectFields(workflow, UNSUPPORTED_WORKFLOW_FIELDS, "workflow");
+      for (JsonNode parameter : workflow.path("parameters")) {
+         checkParameter(parameter);
+      }
       for (JsonNode step : workflow.path("steps")) {
-         rejectFields(step, UNSUPPORTED_STEP_FIELDS, "step");
+         checkStep(step);
+      }
+   }
+
+   private static void checkStep(JsonNode step) throws UnsupportedArazzoDocumentException {
+      rejectFields(step, UNSUPPORTED_STEP_FIELDS, "step");
+      for (JsonNode parameter : step.path("parameters")) {
+         checkParameter(parameter);
+      }
+      for (JsonNode criterion : step.path("successCriteria")) {
+         checkCriterion(criterion);
+      }
+   }
+
+   private static void checkParameter(JsonNode parameter) throws UnsupportedArazzoDocumentException {
+      String location = parameter.path("in").asText();
+      if (!PARAMETER_LOCATIONS.contains(location)) {
+         throw new UnsupportedArazzoDocumentException("Unsupported parameter location: " + location);
+      }
+   }
+
+   private static void checkCriterion(JsonNode criterion) throws UnsupportedArazzoDocumentException {
+      String type = criterion.path("type").asText("simple");
+      if (!CRITERION_TYPES.contains(type)) {
+         throw new UnsupportedArazzoDocumentException("Unsupported criterion type: " + type);
       }
    }
 
