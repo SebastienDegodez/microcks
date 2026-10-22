@@ -67,6 +67,7 @@ class ArazzoSessionRecorderTest {
             responseHeaders, "{\"id\": \"o-42\"}".getBytes(StandardCharsets.UTF_8)));
 
       ArazzoSessionCall call = recorded("s-1");
+      assertEquals("dryRun=false", call.getQueryString());
       assertEquals(
             List.of("Order API", "1.0.0", "POST /orders", "POST", "/orders",
                   "http://localhost/rest/Order+API/1.0.0/orders?dryRun=false", "{\"customerId\": \"c-7\"}", "201",

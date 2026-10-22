@@ -19,6 +19,8 @@ import io.github.microcks.domain.ArazzoDocument;
 import io.github.microcks.domain.ArazzoSession;
 import io.github.microcks.domain.ArazzoSessionCall;
 import io.github.microcks.domain.Header;
+import io.github.microcks.domain.Request;
+import io.github.microcks.domain.Response;
 import io.github.microcks.domain.WorkflowParameterValue;
 import io.github.microcks.domain.WorkflowResult;
 import io.github.microcks.domain.WorkflowRunOrigin;
@@ -27,9 +29,13 @@ import io.github.microcks.domain.WorkflowRunSummary;
 import io.github.microcks.domain.WorkflowSessionCall;
 import io.github.microcks.domain.WorkflowStepResult;
 import io.github.microcks.repository.RepositoryTestsConfiguration;
+import io.github.microcks.repository.RequestRepository;
+import io.github.microcks.repository.ResponseRepository;
 import io.github.microcks.repository.WorkflowRunFilter;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.TestPropertySource;
@@ -41,6 +47,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -79,6 +86,12 @@ class ArazzoSessionVerificationTest {
    @Autowired
    private ServiceService serviceService;
 
+   @Autowired
+   private RequestRepository requestRepository;
+
+   @Autowired
+   private ResponseRepository responseRepository;
+
    /** Walking skeleton: a call the saga service makes in its session is matched to its step, in the history. */
    @Test
    void aCallMadeInTheSessionIsMatchedToItsStepAndTheVerificationJoinsTheHistory() throws Exception {
@@ -87,9 +100,15 @@ class ArazzoSessionVerificationTest {
 
       arazzoSessionService.recordCall(session.getId(), createOrder());
 
+      Date before = new Date();
       WorkflowResult verification = arazzoSessionService.verify(session.getId()).orElseThrow();
       assertEquals(WorkflowRunOrigin.SESSION, verification.getOrigin());
       assertEquals(session.getId(), verification.getSession().sessionId());
+      assertEquals(List.of(saga.getId(), "Order saga", "1.0.0", SAGA, "MOCKS", "{}", "1"),
+            List.of(verification.getDocumentId(), verification.getDocumentTitle(), verification.getDocumentVersion(),
+                  verification.getWorkflowId(), String.valueOf(verification.getTarget()),
+                  String.valueOf(verification.getInputs()), String.valueOf(verification.getNumber())));
+      assertTrue(!verification.getStartedDate().before(before), "started before the verification");
       WorkflowStepResult createOrder = verification.getSteps().get(0);
       assertEquals("0 createOrder PASSED 201", createOrder.index() + " " + createOrder.stepId() + " "
             + createOrder.status() + " " + createOrder.statusCode());
@@ -191,6 +210,40 @@ class ArazzoSessionVerificationTest {
             "2 chargePayment FAILED `chargePayment` request does not conform to Payment API 1.0.0: "
                   + "the request body does not follow its schema at /amount: string found, number expected",
             described(verification).get(2));
+   }
+
+   /** A matched step keeps the exchange of its call, as the step of a run keeps its own, for the run page. */
+   @Test
+   void aMatchedStepKeepsTheExchangeOfItsCall() throws Exception {
+      ArazzoSession session = sessionOnTheSaga();
+      record(session, createOrder());
+
+      WorkflowResult verification = arazzoSessionService.verify(session.getId()).orElseThrow();
+
+      String testCaseId = verification.getSteps().get(0).testCaseId();
+      assertEquals(verification.getId() + "-0", testCaseId);
+      Request request = requestRepository.findByTestCaseId(testCaseId).get(0);
+      Response response = responseRepository.findById(request.getResponseId()).orElseThrow();
+      assertEquals(List.of("createOrder", createOrder().getRequestBody(), "[Content-Type]"), List.of(request.getName(),
+            request.getContent(), request.getHeaders().stream().map(Header::getName).toList().toString()));
+      assertEquals(List.of("createOrder", "201", createOrder().getResponseBody(), "[Content-Type]"),
+            List.of(response.getName(), response.getStatus(), response.getContent(),
+                  response.getHeaders().stream().map(Header::getName).toList().toString()));
+   }
+
+   /** A number sent from an output is compared by value, whatever its type: 25 is 25.0, 30.0 is not. */
+   @ParameterizedTest
+   @CsvSource(delimiter = '|', value = { "25 | 2 chargePayment PASSED",
+         "30.0 | 2 chargePayment FAILED `chargePayment` body `/amount` should come from "
+               + "`$steps.createOrder.outputs.amount` (25.0), got 30.0" })
+   void aNumberSentFromAnOutputIsComparedByValue(String amount, String verdict) throws Exception {
+      ArazzoSession session = sessionOnTheSaga();
+      ArazzoSessionCall charge = chargePayment("o-42");
+      charge.setRequestBody("{\"orderId\": \"o-42\", \"amount\": " + amount + "}");
+
+      record(session, createOrder(), reserveStock("o-42"), charge, confirmOrder("o-42"));
+
+      assertEquals(verdict, described(arazzoSessionService.verify(session.getId()).orElseThrow()).get(2));
    }
 
    /** AC-04: a step the service never calls fails the verification as missing. */

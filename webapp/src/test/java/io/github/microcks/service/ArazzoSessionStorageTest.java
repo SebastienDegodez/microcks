@@ -37,6 +37,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests of how long the sessions and their calls are kept, and how many calls a session records: an open session
@@ -79,8 +80,13 @@ class ArazzoSessionStorageTest {
    void anOpenSessionAndItsCallsExpireAfterTheMaximumDuration() throws Exception {
       ArazzoSession session = arazzoSessionService.openSession(saga.getId(), "placeOrderSaga").orElseThrow();
 
+      Date before = new Date();
       arazzoSessionService.recordCall(session.getId(), new ArazzoSessionCall());
+      Date after = new Date();
 
+      Date received = arazzoSessionCallRepository.findBySessionIdOrderByIndexAsc(session.getId()).get(0)
+            .getReceivedDate();
+      assertTrue(!received.before(before) && !received.after(after), () -> received + " is not when it was received");
       ArazzoSession stored = arazzoSessionRepository.findById(session.getId()).orElseThrow();
       assertNull(stored.getClosedDate());
       assertEquals(120_000L, stored.getExpireAt().getTime() - stored.getOpenedDate().getTime());
@@ -107,7 +113,7 @@ class ArazzoSessionStorageTest {
       arazzoSessionService.closeSession(session.getId());
       Date closedDate = arazzoSessionRepository.findById(session.getId()).orElseThrow().getClosedDate();
 
-      arazzoSessionService.closeSession(session.getId());
+      assertTrue(arazzoSessionService.closeSession(session.getId()));
 
       assertEquals(closedDate, arazzoSessionRepository.findById(session.getId()).orElseThrow().getClosedDate());
    }

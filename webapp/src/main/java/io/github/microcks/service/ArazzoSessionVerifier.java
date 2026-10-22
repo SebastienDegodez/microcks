@@ -103,7 +103,7 @@ final class ArazzoSessionVerifier {
             continue;
          }
          List<String> failures = new ArrayList<>();
-         outOfOrder(step, call, prerequisites.get(step.step().stepId()), callOfStep).ifPresent(failures::add);
+         outOfOrder(step, call, prerequisites.get(step.step().stepId()), callOfStep, calls).ifPresent(failures::add);
          // The values the call carries are checked against the outputs of the steps before it in the workflow.
          ReceivedCall before = new ReceivedCall(Map.of(), Map.copyOf(stepOutputs), null);
          ArazzoReceivedRequest request = requestOf(step, call);
@@ -140,8 +140,8 @@ final class ArazzoSessionVerifier {
     */
    static Map<String, Object> workflowOutputs(Map<String, String> expressions, List<StepVerdict> verdicts) {
       Map<String, Map<String, Object>> stepOutputs = new LinkedHashMap<>();
-      verdicts.stream().filter(verdict -> verdict.call() != null)
-            .forEach(verdict -> stepOutputs.put(verdict.expected().step().stepId(), verdict.outputs()));
+      // A missing step has no outputs: the outputs of the workflow coming from it have no value.
+      verdicts.forEach(verdict -> stepOutputs.put(verdict.expected().step().stepId(), verdict.outputs()));
       return evaluated(expressions, new ReceivedCall(Map.of(), stepOutputs, null));
    }
 
@@ -195,9 +195,7 @@ final class ArazzoSessionVerifier {
    }
 
    private static ArazzoReceivedRequest requestOf(ExpectedStep step, ArazzoSessionCall call) {
-      String url = call.getRequestUrl();
-      String query = url == null || !url.contains("?") ? null : url.substring(url.indexOf('?') + 1);
-      return new ArazzoReceivedRequest(step.operation().path(), call.getPath(), query,
+      return new ArazzoReceivedRequest(step.operation().path(), call.getPath(), call.getQueryString(),
             headersOf(call.getRequestHeaders()), call.getRequestBody());
    }
 
@@ -260,14 +258,15 @@ final class ArazzoSessionVerifier {
    }
 
    /**
-    * A call received before the call of one of the prerequisites of its step is out of order: it names the first such
-    * prerequisite. A prerequisite without call is missing on its own and does not count here.
+    * A call is in order when the calls of the prerequisites of its step were all received before it; else it names the
+    * first prerequisite whose call was not. A prerequisite without call is missing on its own and does not count here.
     */
    private static Optional<String> outOfOrder(ExpectedStep step, ArazzoSessionCall call, List<String> prerequisites,
-         Map<String, ArazzoSessionCall> callOfStep) {
+         Map<String, ArazzoSessionCall> callOfStep, List<ArazzoSessionCall> calls) {
+      List<ArazzoSessionCall> receivedBefore = calls.subList(0, calls.indexOf(call));
       return prerequisites.stream()
             .filter(prerequisite -> callOfStep.containsKey(prerequisite)
-                  && callOfStep.get(prerequisite).getIndex() > call.getIndex())
+                  && !receivedBefore.contains(callOfStep.get(prerequisite)))
             .map(prerequisite -> "step `" + prerequisite + "` expected before `" + step.step().stepId() + "`")
             .findFirst();
    }
