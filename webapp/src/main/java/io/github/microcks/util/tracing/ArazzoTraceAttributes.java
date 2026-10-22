@@ -46,7 +46,7 @@ public final class ArazzoTraceAttributes {
    private static final String ATTEMPT = "microcks-arazzo-attempt";
 
    /** The carrier is the value of the baggage header. */
-   private static final TextMapGetter<String> BAGGAGE = new TextMapGetter<>() {
+   static final TextMapGetter<String> BAGGAGE = new TextMapGetter<>() {
       @Override
       public Iterable<String> keys(String baggage) {
          return List.of(BAGGAGE_HEADER);
