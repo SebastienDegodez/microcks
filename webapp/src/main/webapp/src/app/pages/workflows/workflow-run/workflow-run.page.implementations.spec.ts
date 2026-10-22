@@ -70,6 +70,7 @@ describe('WorkflowRunPageComponent of a run against implementations', () => {
       'Target Implementations · pastryApi → http://localhost:8080',
       'Secret pastry-staging-token',
       'Inputs None declared',
+      'Schema validation Off',
       'Outputs None declared'
     ]);
     expect(texts('.workflow-run-target-source code')).toEqual(['pastryApi', 'http://localhost:8080']);

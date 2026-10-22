@@ -183,7 +183,7 @@ describe('WorkflowRunDialogComponent', () => {
     fixture.detectChanges();
     runButton().click();
 
-    expect(runs.launchRun).toHaveBeenCalledWith('doc-1', 'readThenReprice', {}, 10000, false);
+    expect(runs.launchRun).toHaveBeenCalledWith('doc-1', 'readThenReprice', {}, 10000, undefined, false);
   });
 
   it('runs the workflow with its inputs and timeout, then opens the run', async () => {
@@ -198,7 +198,7 @@ describe('WorkflowRunDialogComponent', () => {
     runButton().click();
 
     expect(runs.launchRun).toHaveBeenCalledWith('doc-1', 'readThenReprice', { pastry: 'Eclair Cafe', newPrice: 2.6 },
-      5000, true);
+      5000, undefined, true);
     expect(modalRef.hide).toHaveBeenCalled();
     expect(router.navigate).toHaveBeenCalledWith(['/workflows/runs', 'run-1']);
   });
@@ -211,7 +211,8 @@ describe('WorkflowRunDialogComponent', () => {
     type('#workflow-run-input-pastry', 'Eclair Cafe');
     runButton().click();
 
-    expect(runs.launchRun).toHaveBeenCalledWith('doc-1', 'readThenReprice', { pastry: 'Eclair Cafe' }, 10000, true);
+    expect(runs.launchRun).toHaveBeenCalledWith('doc-1', 'readThenReprice', { pastry: 'Eclair Cafe' }, 10000, undefined,
+      true);
   });
 
   it('does not run a workflow that cannot run, and tells why', () => {
@@ -250,7 +251,8 @@ describe('WorkflowRunDialogComponent', () => {
     runButton().click();
     fixture.detectChanges();
 
-    expect(runs.launchRun).toHaveBeenCalledWith('doc-1', 'readThenReprice', { pastry: 'Eclair Cafe' }, 10000, true);
+    expect(runs.launchRun).toHaveBeenCalledWith('doc-1', 'readThenReprice', { pastry: 'Eclair Cafe' }, 10000, undefined,
+      true);
     expect(texts('.workflow-run-error')).toEqual(['Missing input: newPrice']);
     expect(texts('.workflow-run-input.has-error .workflow-run-input-name')).toEqual(['newPrice']);
     expect(dialog().querySelector('#workflow-run-input-newPrice')?.getAttribute('aria-invalid')).toEqual('true');

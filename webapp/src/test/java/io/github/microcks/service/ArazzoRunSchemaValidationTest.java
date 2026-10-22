@@ -170,7 +170,7 @@ class ArazzoRunSchemaValidationTest {
                   WorkflowStepStatus.FAILED, 200, 6,
                   List.of(new WorkflowCriterionResult("$statusCode == 200",
                         List.of(new WorkflowExpressionValue("$statusCode", 200)), true)),
-                  Map.of(), null, reason),
+                  Map.of(), null, reason, null, List.of(), Map.of()),
             null, null);
       arazzoRunService.recordOutcome(run.getId(), WorkflowRunStatus.FAILURE, Map.of(), 12, null);
 

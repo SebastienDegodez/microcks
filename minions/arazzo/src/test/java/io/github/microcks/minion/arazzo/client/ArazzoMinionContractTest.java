@@ -166,7 +166,8 @@ class ArazzoMinionContractTest {
             new HttpCall("PATCH", URI.create("http://pastry.example/api/pastry/Eclair%20Cafe"),
                   Map.of("Content-Type", "application/json"), "{\"price\":2.6}"),
             new HttpOutcome(200, Map.of("Content-Type", List.of("application/json")), "{\"price\": \"2.6\"}"),
-            "/price does not match the Pastry schema: string found, number expected");
+            "/price does not match the Pastry schema: string found, number expected",
+            List.of(new ParameterValue("name", "path", "Eclair Cafe", "$steps.readPastry.outputs.name")), Map.of());
 
       assertEquals(contract().get("nonConformantStep"), written(StepReportDTO.from(nonConformant)));
    }
