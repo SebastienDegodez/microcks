@@ -19,8 +19,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
+import com.sun.net.httpserver.HttpServer;
+
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
@@ -43,6 +47,8 @@ class ResponseSchemaValidationTest {
          + "\"status\":\"available\"}";
    private static final boolean VALIDATION_ON = true;
    private static final boolean VALIDATION_OFF = false;
+   private static final String PASTRY_SCHEMA = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},"
+         + "\"price\":{\"type\":\"number\"}}}";
 
    private final PastryImplementation implementation = new PastryImplementation()
          .answer("GET /pastry/Eclair%20Cafe", 200, JSON, ECLAIR_CAFE)
@@ -161,6 +167,40 @@ class ResponseSchemaValidationTest {
       runner.run(run("readOnly", Map.of("pastry", "Eclair Cafe"), contract, VALIDATION_ON), reporter);
 
       assertEquals("0 readPastry FAILED 200", described(reporter).get(0));
+      assertEquals(message, reporter.step("readPastry").message());
+   }
+
+   @ParameterizedTest
+   @CsvSource(delimiter = '|', value = { "{\"name\":\"Eclair Cafe\",\"price\":2.5} | PASSED | ",
+         "{\"name\":\"Eclair Cafe\",\"price\":\"2.5\"} | FAILED | "
+               + "/price does not match the pastry-schema.json schema: string found, number expected" })
+   void theRelativeReferencesOfAContractResolveAgainstItsBaseUrl(String body, StepStatus stepStatus, String message)
+         throws IOException {
+      HttpServer resources = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
+      resources.createContext("/api/resources/pastry-schema.json", exchange -> {
+         byte[] schema = PASTRY_SCHEMA.getBytes(StandardCharsets.UTF_8);
+         exchange.getResponseHeaders().add("Content-Type", JSON);
+         exchange.sendResponseHeaders(200, schema.length);
+         exchange.getResponseBody().write(schema);
+         exchange.close();
+      });
+      resources.start();
+      try {
+         implementation.answer("GET /pastry/Eclair%20Cafe", 200, JSON, body);
+         String contractBaseUrl = "http://localhost:" + resources.getAddress().getPort() + "/api/resources/";
+
+         runner.run(
+               new RunSpecification("run-1", "readOnly", exampleOf("pastry-journeys"), Map.of("pastry", "Eclair Cafe"),
+                     Map.of("pastryApi",
+                           new SourceTarget(PastryImplementation.BASE_URL, RunFixtures.PASTRY_OPERATIONS,
+                                 exampleOf("api-pastry-split-contract"), contractBaseUrl)),
+                     RunFixtures.TIMEOUT, VALIDATION_ON),
+               reporter);
+      } finally {
+         resources.stop(0);
+      }
+
+      assertEquals(stepStatus, reporter.step("readPastry").status());
       assertEquals(message, reporter.step("readPastry").message());
    }
 

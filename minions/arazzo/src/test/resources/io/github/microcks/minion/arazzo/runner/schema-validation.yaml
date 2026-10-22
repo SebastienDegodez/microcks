@@ -214,6 +214,29 @@ definitions:
       message:
         type: string
 ---
+# example: api-pastry-split-contract - API Pastry whose Pastry schema is in a file next to its contract, pastry-schema.json
+openapi: 3.0.2
+info:
+  title: API Pastry - split
+  version: 2.0.0
+paths:
+  /pastry/{name}:
+    get:
+      operationId: GetPastryByName
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Pastry with specified name
+          content:
+            application/json:
+              schema:
+                $ref: 'pastry-schema.json'
+---
 # example: unreadable-contract - a contract that is not YAML
 openapi: [3.0.2
 ---

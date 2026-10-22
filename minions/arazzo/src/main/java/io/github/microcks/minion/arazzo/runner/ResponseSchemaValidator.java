@@ -56,7 +56,7 @@ final class ResponseSchemaValidator {
          return Optional.of("No OpenAPI contract of source " + sourceName + " to validate the response against");
       }
       Optional<OpenAPIResponseValidator> contract = contracts.computeIfAbsent(sourceName,
-            name -> read(source.openApiContract()));
+            name -> read(source.openApiContract(), source.openApiContractBaseUrl()));
       if (contract.isEmpty()) {
          return Optional.of("The OpenAPI contract of source " + sourceName + " cannot be read");
       }
@@ -111,9 +111,11 @@ final class ResponseSchemaValidator {
             .flatMap(header -> header.getValue().stream()).findFirst().orElse(null);
    }
 
-   private static Optional<OpenAPIResponseValidator> read(String contract) {
+   /** The validator of a contract, whose relative references resolve against its base URL. */
+   private static Optional<OpenAPIResponseValidator> read(String contract, String baseUrl) {
       try {
-         return Optional.of(OpenAPIResponseValidator.of(OpenAPISchemaValidator.getJsonNodeForSchema(contract), null));
+         return Optional
+               .of(OpenAPIResponseValidator.of(OpenAPISchemaValidator.getJsonNodeForSchema(contract), baseUrl));
       } catch (IOException unreadable) {
          return Optional.empty();
       }
