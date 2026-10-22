@@ -359,6 +359,29 @@
   font-size: 12px;
 }
 
+/* S15: the verification of a session, the calls it received, and the call of each step. */
+.workflow-run-session-calls {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.workflow-run-session-call {
+  margin-bottom: 4px;
+}
+
+.workflow-run-session-call-index,
+.workflow-run-step-call {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.workflow-run-session-failure ul {
+  margin: 4px 0 0;
+}
+
 /* S27: a run played by an application through the Mock URL of its workflow. */
 .arazzo-run-origin {
   display: inline-block;

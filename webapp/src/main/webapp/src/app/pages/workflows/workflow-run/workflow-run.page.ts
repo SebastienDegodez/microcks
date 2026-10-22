@@ -27,6 +27,7 @@ import {
   WorkflowCriterionResult,
   WorkflowExampleCheck,
   WorkflowResult,
+  WorkflowSessionCall,
   WorkflowStepResult
 } from '../../../models/arazzo-run.model';
 import { RequestResponsePair } from '../../../models/service.model';
@@ -102,6 +103,21 @@ export class WorkflowRunPageComponent implements OnInit {
       case 'FAILURE': return 'failed';
       default: return 'in progress';
     }
+  }
+
+  /** Whether the result is the verification of the calls an application made to the mocks in a session. */
+  isSession(run: WorkflowResult): boolean {
+    return run.origin === 'SESSION';
+  }
+
+  /** The failed steps of a verification: its calls do not stop at a failure, so each failed step tells why. */
+  failedSteps(run: WorkflowResult): WorkflowStepResult[] {
+    return run.steps.filter(step => step.status === 'FAILED');
+  }
+
+  /** The call a session received for a step of its verification; null for a run, or a step that received none. */
+  callOf(run: WorkflowResult, step: WorkflowStepResult): WorkflowSessionCall | null {
+    return run.session?.calls.find(call => call.stepId === step.stepId) ?? null;
   }
 
   /** When the run started, for the time-ago pipe. */
