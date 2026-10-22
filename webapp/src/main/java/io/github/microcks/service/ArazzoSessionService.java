@@ -37,6 +37,7 @@ import io.github.microcks.repository.ArazzoSessionRepository;
 import io.github.microcks.repository.WorkflowResultRepository;
 import io.github.microcks.service.ArazzoDocumentService.ResolvedSource;
 import io.github.microcks.service.ArazzoSessionVerifier.ExpectedStep;
+import io.github.microcks.service.ArazzoSessionVerifier.LinkedApi;
 import io.github.microcks.service.ArazzoSessionVerifier.StepVerdict;
 import io.github.microcks.util.arazzo.ArazzoStep;
 import io.github.microcks.util.arazzo.ArazzoWorkflow;
@@ -216,6 +217,7 @@ public class ArazzoSessionService {
       Map<String, Object> inputs = session.getInputs() == null ? Map.of() : session.getInputs();
       List<StepVerdict> verdicts = ArazzoSessionVerifier.verify(workflowOf(document, session.getWorkflowId()),
             expectedSteps(document, session, sources), calls, inputs, validationResourceUrl);
+      Map<Long, String> unexpected = ArazzoSessionVerifier.unexpectedCalls(verdicts, calls, linkedApis(sources));
 
       WorkflowResult result = new WorkflowResult();
       result.setDocumentId(document.getId());
@@ -246,13 +248,14 @@ public class ArazzoSessionService {
          saved.setMessage("session reached " + session.getCallCount() + " calls, " + dropped
                + (dropped == 1 ? " call was" : " calls were") + " not recorded");
       }
-      saved.setStatus(dropped == 0 && verdicts.stream().allMatch(verdict -> verdict.failures().isEmpty())
-            ? WorkflowRunStatus.SUCCESS
-            : WorkflowRunStatus.FAILURE);
-      saved.setSession(new WorkflowSessionCheck(session.getId(),
-            calls.stream().map(call -> new WorkflowSessionCall(call.getIndex(), call.getServiceName(),
-                  call.getServiceVersion(), call.getMethod(), call.getPath(), stepOfCall.get(call.getIndex())))
-                  .toList()));
+      saved.setStatus(
+            dropped == 0 && verdicts.stream().allMatch(verdict -> verdict.failures().isEmpty()) && unexpected.isEmpty()
+                  ? WorkflowRunStatus.SUCCESS
+                  : WorkflowRunStatus.FAILURE);
+      saved.setSession(new WorkflowSessionCheck(session.getId(), calls.stream()
+            .map(call -> new WorkflowSessionCall(call.getIndex(), call.getServiceName(), call.getServiceVersion(),
+                  call.getMethod(), call.getPath(), stepOfCall.get(call.getIndex()), unexpected.get(call.getIndex())))
+            .toList()));
       return workflowResultRepository.save(saved);
    }
 
@@ -270,6 +273,18 @@ public class ArazzoSessionService {
                contracts.computeIfAbsent(source.link().sourceName(), sourceName -> contractOf(source))));
       }
       return steps;
+   }
+
+   /** The APIs the sources of a document are linked to, each with the operationIds of its operations. */
+   private static List<LinkedApi> linkedApis(Map<String, ResolvedSource> sources) {
+      List<LinkedApi> linkedApis = new ArrayList<>();
+      sources.values().stream().filter(source -> source.api() != null).forEach(source -> {
+         Map<String, String> operationIds = new HashMap<>();
+         source.operations().values().forEach(
+               operation -> operationIds.put(operation.method() + " " + operation.path(), operation.operationId()));
+         linkedApis.add(new LinkedApi(source.link().apiName(), source.link().apiVersion(), operationIds));
+      });
+      return linkedApis;
    }
 
    /** The main OpenAPI contract of the API a source is linked to, read; null when it has none or it cannot be read. */
