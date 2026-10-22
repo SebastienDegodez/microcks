@@ -17,6 +17,7 @@ package io.github.microcks.domain;
 
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.Indexed;
+import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.util.Date;
 import java.util.HashSet;
@@ -27,6 +28,7 @@ import java.util.Set;
  * Its order index is given on receipt, from 0: two calls are ordered by their index, never by their date.
  * @author SebastienDegodez
  */
+@Document
 public class ArazzoSessionCall {
 
    @Id

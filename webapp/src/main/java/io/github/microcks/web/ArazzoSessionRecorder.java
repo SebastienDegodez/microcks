@@ -18,24 +18,38 @@ package io.github.microcks.web;
 import io.github.microcks.domain.ArazzoSessionCall;
 import io.github.microcks.domain.Header;
 import io.github.microcks.service.ArazzoSessionService;
+import io.github.microcks.util.grpc.GrpcMetadataUtil;
+import io.github.microcks.util.tracing.ArazzoSessionCarrier;
+import io.github.microcks.util.tracing.ArazzoTraceAttributes;
 
+import io.grpc.Metadata;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 
 /**
- * Records the mock invocations naming a verification session in that session, as the mocks received and answered them.
- * An invocation naming no session is left as it is.
+ * Records the REST and gRPC mock invocations naming a verification session in that session, as the mocks received and
+ * answered them. An invocation naming no session is left as it is.
  * @author SebastienDegodez
  */
 @Component
 public class ArazzoSessionRecorder {
+
+   /** The method a gRPC call is recorded with, as it has no HTTP one. */
+   static final String GRPC = "GRPC";
+
+   private static final Metadata.Key<String> SESSION_KEY = Metadata.Key.of(ArazzoSessionCarrier.SESSION_HEADER,
+         Metadata.ASCII_STRING_MARSHALLER);
+   private static final Metadata.Key<String> BAGGAGE_KEY = Metadata.Key.of(ArazzoTraceAttributes.BAGGAGE_HEADER,
+         Metadata.ASCII_STRING_MARSHALLER);
 
    private final ArazzoSessionService arazzoSessionService;
 
@@ -72,6 +86,54 @@ public class ArazzoSessionRecorder {
                response.content() == null ? null : new String(response.content(), StandardCharsets.UTF_8));
          arazzoSessionService.recordCall(sessionId, call);
       });
+   }
+
+   /**
+    * Record a gRPC mock invocation in the session its metadata names, if any.
+    * @param ic       The service and operation the invocation was dispatched to
+    * @param metadata The metadata of the invocation; null when it has none
+    * @param body     The request message, as JSON
+    * @param response The response of the mocks
+    */
+   public void recordGrpc(MockInvocationContext ic, Metadata metadata, String body, GrpcResponseResult response) {
+      if (metadata == null) {
+         return;
+      }
+      ArazzoSessionCarrier.sessionId(metadata.get(SESSION_KEY), listOf(metadata.getAll(BAGGAGE_KEY)))
+            .ifPresent(sessionId -> {
+               ArazzoSessionCall call = new ArazzoSessionCall();
+               call.setServiceName(ic.service().getName());
+               call.setServiceVersion(ic.service().getVersion());
+               call.setOperationName(ic.operation().getName());
+               call.setMethod(GRPC);
+               call.setPath(ic.operation().getName());
+               call.setRequestHeaders(headersOf(metadata));
+               call.setRequestBody(body);
+               call.setResponseStatus(response.status().getCode().value());
+               call.setResponseBody(response.isError() ? response.errorDescription() : response.content());
+               arazzoSessionService.recordCall(sessionId, call);
+            });
+   }
+
+   /** The text entries of gRPC metadata, but the remote address Microcks adds itself. */
+   private static Set<Header> headersOf(Metadata metadata) {
+      Set<Header> headers = new LinkedHashSet<>();
+      for (String key : metadata.keys()) {
+         if (!key.endsWith(Metadata.BINARY_HEADER_SUFFIX)
+               && !key.equals(GrpcMetadataUtil.REMOTE_ADDR_METADATA_KEY.name())) {
+            headers.add(new Header(key,
+                  new HashSet<>(listOf(metadata.getAll(Metadata.Key.of(key, Metadata.ASCII_STRING_MARSHALLER))))));
+         }
+      }
+      return headers;
+   }
+
+   private static List<String> listOf(Iterable<String> values) {
+      List<String> list = new ArrayList<>();
+      if (values != null) {
+         values.forEach(list::add);
+      }
+      return list;
    }
 
    private static Set<Header> headersOf(HttpServletRequest request) {

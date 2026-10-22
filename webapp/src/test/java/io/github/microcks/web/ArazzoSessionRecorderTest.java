@@ -21,6 +21,8 @@ import io.github.microcks.domain.Operation;
 import io.github.microcks.domain.Service;
 import io.github.microcks.service.ArazzoSessionService;
 
+import io.grpc.Metadata;
+import io.grpc.Status;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -100,6 +102,53 @@ class ArazzoSessionRecorderTest {
       recorder.recordRest(placeOrder(), request, null, new ResponseResult(HttpStatus.CREATED, null, null));
 
       assertEquals("POST /orders", recorded("s-2").getOperationName());
+   }
+
+   @ParameterizedTest
+   @CsvSource(delimiter = '|', value = { "x-microcks-session | s-3", "baggage | microcks-session=s-3" })
+   void aGrpcInvocationNamingASessionInItsMetadataIsRecorded(String key, String value) {
+      Metadata metadata = new Metadata();
+      metadata.put(Metadata.Key.of(key, Metadata.ASCII_STRING_MARSHALLER), value);
+
+      recorder.recordGrpc(reserveStockOverGrpc(), metadata, "{\"orderId\": \"o-42\"}",
+            new GrpcResponseResult(Status.OK, "{\"id\": \"r-9\"}", null));
+
+      ArazzoSessionCall call = recorded("s-3");
+      assertEquals(
+            List.of("Stock Service", "v1", "ReserveStock", "GRPC", "ReserveStock", "{\"orderId\": \"o-42\"}", "0",
+                  "{\"id\": \"r-9\"}", "[" + key + "=[" + value + "]]"),
+            List.of(call.getServiceName(), call.getServiceVersion(), call.getOperationName(), call.getMethod(),
+                  call.getPath(), call.getRequestBody(), String.valueOf(call.getResponseStatus()),
+                  call.getResponseBody(), described(call.getRequestHeaders()).toString()));
+   }
+
+   @Test
+   void aFailedGrpcInvocationIsRecordedWithItsStatusAndDescription() {
+      Metadata metadata = new Metadata();
+      metadata.put(Metadata.Key.of("x-microcks-session", Metadata.ASCII_STRING_MARSHALLER), "s-3");
+
+      recorder.recordGrpc(reserveStockOverGrpc(), metadata, "{}",
+            new GrpcResponseResult(Status.NOT_FOUND, null, "No response found"));
+
+      ArazzoSessionCall call = recorded("s-3");
+      assertEquals("5 No response found", call.getResponseStatus() + " " + call.getResponseBody());
+   }
+
+   @Test
+   void aGrpcInvocationNamingNoSessionIsNotRecorded() {
+      recorder.recordGrpc(reserveStockOverGrpc(), new Metadata(), "{}", new GrpcResponseResult(Status.OK, "{}", null));
+      recorder.recordGrpc(reserveStockOverGrpc(), null, "{}", new GrpcResponseResult(Status.OK, "{}", null));
+
+      verify(arazzoSessionService, never()).recordCall(anyString(), any());
+   }
+
+   private static MockInvocationContext reserveStockOverGrpc() {
+      Service service = new Service();
+      service.setName("Stock Service");
+      service.setVersion("v1");
+      Operation operation = new Operation();
+      operation.setName("ReserveStock");
+      return new MockInvocationContext(service, operation, null);
    }
 
    @ParameterizedTest

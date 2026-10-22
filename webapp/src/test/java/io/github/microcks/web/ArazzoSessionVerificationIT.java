@@ -15,6 +15,8 @@
  */
 package io.github.microcks.web;
 
+import io.github.microcks.domain.ArazzoSession;
+import io.github.microcks.domain.ArazzoSessionCall;
 import io.github.microcks.repository.ArazzoDocumentRepository;
 import io.github.microcks.repository.ArazzoSessionCallRepository;
 import io.github.microcks.repository.ArazzoSessionRepository;
@@ -28,6 +30,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.index.IndexField;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -75,6 +79,9 @@ class ArazzoSessionVerificationIT extends AbstractBaseIT {
 
    @Autowired
    private ArazzoSessionCallRepository arazzoSessionCallRepository;
+
+   @Autowired
+   private MongoTemplate mongoTemplate;
 
    @TempDir
    private Path uploads;
@@ -208,6 +215,22 @@ class ArazzoSessionVerificationIT extends AbstractBaseIT {
 
       JsonNode verification = verify(sessionId);
       assertEquals(1, verification.get("session").get("calls").size(), verification.toPrettyString());
+   }
+
+   /** The sessions and their calls expire through TTL indexes, so that their collections stay bounded. */
+   @Test
+   void theSessionsAndTheirCallsHaveTtlIndexes() throws Exception {
+      for (Class<?> collection : List.of(ArazzoSession.class, ArazzoSessionCall.class)) {
+         List<String> ttlIndexes = List.of();
+         // The indexes are ensured in the background once Microcks has started.
+         for (int attempt = 0; attempt < 50 && ttlIndexes.isEmpty(); attempt++) {
+            ttlIndexes = mongoTemplate.indexOps(collection).getIndexInfo().stream()
+                  .filter(index -> index.getExpireAfter().isPresent())
+                  .flatMap(index -> index.getIndexFields().stream().map(IndexField::getKey)).toList();
+            Thread.sleep(100);
+         }
+         assertEquals(List.of("expireAt"), ttlIndexes, collection.getSimpleName());
+      }
    }
 
    /** A session on an unknown workflow is refused, telling why in plain text. */
