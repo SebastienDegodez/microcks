@@ -95,6 +95,9 @@
               <div class="workflow-step-heading">
                 <span class="workflow-step-title">
                   <span class="workflow-step-number">{{ index + 1 }}</span>&ngsp;<span class="workflow-step-id">{{ step.stepId }}</span>
+                  <span *ngFor="let dependency of step.dependsOn" class="workflow-depends-on" [attr.title]="'Comes after ' + dependency">
+                    <span class="fa fa-level-up" aria-hidden="true"></span>&ngsp;depends on&ngsp;<code>{{ dependency }}</code>
+                  </span>
                 </span>
                 <span class="workflow-step-operation">
                   <ng-container *ngIf="!step.operation.reason && !step.messaging">

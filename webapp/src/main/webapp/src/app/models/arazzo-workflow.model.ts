@@ -101,6 +101,13 @@ export type ArazzoStepDetail = {
   onFailure?: ArazzoStepAction[];
   /** What the step sends or receives, for a step of an AsyncAPI source; absent for an HTTP step. */
   messaging?: ArazzoStepMessaging;
+  /** The steps the step declares it depends on (dependsOn, Arazzo 1.1), in the order of the document. */
+  dependsOn?: string[];
+  /**
+   * The steps the step must come after, in the order of the workflow: those it depends on and those whose outputs it
+   * uses, or every step listed before it when it declares no dependsOn. Absent, every step listed before it.
+   */
+  prerequisites?: string[];
 };
 
 /** Where a step uses a runtime expression: place is path, query, header, body, criterion or correlationId. */
