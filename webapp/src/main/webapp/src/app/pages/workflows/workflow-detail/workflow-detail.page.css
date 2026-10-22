@@ -253,6 +253,27 @@
   color: var(--text-strong);
 }
 
+/* A step a step declares it depends on (dependsOn, Arazzo 1.1): a compact metadata chip next to its id. */
+.workflow-depends-on {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 0 8px;
+  border: 1px solid var(--surface-border);
+  border-radius: 10px;
+  background: var(--surface-muted);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.workflow-depends-on code {
+  padding: 0;
+  background: transparent;
+  color: var(--text-strong);
+  font-size: 12px;
+}
+
 .workflow-endpoint {
   margin: 0 8px;
   font-family: SFMono-Regular, Menlo, Monaco, Consolas, monospace;

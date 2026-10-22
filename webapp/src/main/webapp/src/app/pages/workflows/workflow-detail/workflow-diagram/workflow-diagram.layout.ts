@@ -36,7 +36,8 @@ export type DiagramNode = DiagramBox & {
 export type DiagramLabel = DiagramBox & { lines: string[]; align: 'start' | 'end' };
 
 /**
- * A sequence edge goes from a node to the next one; a data edge brings a value to a step, on one side; a retry edge
+ * A sequence edge goes from a node to the next one, or from a step to a step that must come after it when steps declare
+ * dependsOn; a data edge brings a value to a step, on one side; a retry edge
  * loops on the step it calls again; an end edge leaves the step whose action ends the workflow.
  */
 export type DiagramEdge = {
@@ -82,16 +83,24 @@ const LABEL_PADDING_X = 6;
 const LABEL_PADDING_Y = 3;
 
 /**
- * Lays the workflow out as a top-down flow chart: the inputs, each step in order, then the outputs, in one column
- * linked by sequence edges. Each value given to a step is a data edge curving on a side of the column: values of
- * the workflow inputs on the left, step outputs on the right, each with a label telling where the value goes.
- * The actions of a step sit right next to it, on the right: a loop for a retry, a short exit for each action ending
- * the workflow, each labelled; the data edges of the right side then curve beyond them.
+ * Lays the workflow out as a top-down flow chart.
+ *
+ * When every step comes after all the steps listed before it, as in a workflow without dependsOn, the inputs, each
+ * step in order, then the outputs stand in one column linked by sequence edges. Each value given to a step is a data
+ * edge curving on a side of the column: values of the workflow inputs on the left, step outputs on the right, each
+ * with a label telling where the value goes. The actions of a step sit right next to it, on the right: a loop for a
+ * retry, a short exit for each action ending the workflow, each labelled; the data edges of the right side then curve
+ * beyond them.
+ *
+ * When a step declares dependsOn (Arazzo 1.1) and comes after fewer steps, see {@link layoutDependencies}.
  *
  * Node heights are estimated from their text; the heights measured once rendered (by node id) replace them.
  */
 export function layoutWorkflowDiagram(workflow: ArazzoWorkflowDetail,
                                       measuredHeights: Record<string, number> = {}): WorkflowDiagram {
+  if (dependsOnRelaxesTheOrder(workflow)) {
+    return layoutDependencies(workflow, measuredHeights);
+  }
   const nodes = placeNodes(workflow, measuredHeights);
   const flows = dataFlows(workflow, nodes);
   const left = sideExtent(flows.filter(flow => flow.side === 'left'), 0);
@@ -308,4 +317,105 @@ function separateLabels(labels: DiagramLabel[]): void {
       .forEach(other => label.y = Math.max(label.y, other.y + other.height + 4));
     placed.push(label);
   });
+}
+
+/** The room between two steps of a row, besides the room the actions of a step take on its right. */
+const COLUMN_GAP = 24;
+
+/** The steps a step must come after: those the workflow page gives, or else every step listed before it. */
+function prerequisitesOf(workflow: ArazzoWorkflowDetail, index: number): string[] {
+  return workflow.steps[index].prerequisites ?? workflow.steps.slice(0, index).map(step => step.stepId);
+}
+
+/**
+ * Whether a step comes after fewer steps than all those listed before it, as dependsOn lets it. A step only comes after
+ * steps listed before it: Microcks refuses a document whose step depends on a step listed after it.
+ */
+function dependsOnRelaxesTheOrder(workflow: ArazzoWorkflowDetail): boolean {
+  return workflow.steps.some((_step, index) => prerequisitesOf(workflow, index).length !== index);
+}
+
+/**
+ * Lays out a workflow whose steps declare dependsOn: each step stands one row below the lowest step it must come after,
+ * the steps of a row side by side in the order of the list, each row centred under the inputs. A sequence edge comes to
+ * a step from each step it must come after that no other of them already comes after, from the inputs to a step that
+ * comes after none, and goes to the outputs from each step no step comes after. The actions of a step sit next to it,
+ * as in one column, with room for them before the next step of its row. The values given to the steps are not drawn:
+ * the Steps view and the Inputs panel tell where each one goes.
+ */
+function layoutDependencies(workflow: ArazzoWorkflowDetail, measuredHeights: Record<string, number>): WorkflowDiagram {
+  const nodes = placeNodes(workflow, measuredHeights);
+  const steps = nodes.filter(node => node.step);
+  const prerequisites = new Map(steps.map(node =>
+    [node.id, prerequisitesOf(workflow, node.index!).map(stepId => 'step:' + stepId)]));
+  const rows: DiagramNode[][] = [[nodes[0]]];
+  const rowOf = new Map<string, number>();
+  steps.forEach(node => {
+    const row = 1 + Math.max(0, ...prerequisites.get(node.id)!.map(id => rowOf.get(id) ?? 0));
+    rowOf.set(node.id, row);
+    rows[row] = [...(rows[row] ?? []), node];
+  });
+  rows.push([nodes[nodes.length - 1]]);
+
+  steps.forEach(node => node.x = 0);
+  const actionsReach = Math.max(0, ...actionEdges(steps).map(edge => edge.label!.x + edge.label!.width - NODE_WIDTH));
+  const gap = COLUMN_GAP + actionsReach;
+  const rowWidth = (row: DiagramNode[]) => row.length * NODE_WIDTH + (row.length - 1) * gap;
+  const width = Math.max(...rows.map(rowWidth));
+  let y = MARGIN;
+  rows.forEach(row => {
+    const left = MARGIN + (width - rowWidth(row)) / 2;
+    row.forEach((node, column) => {
+      node.x = left + column * (NODE_WIDTH + gap);
+      node.y = y;
+    });
+    y += Math.max(...row.map(node => node.height)) + NODE_GAP;
+  });
+
+  const edges = [...dependencyEdges(nodes, prerequisites), ...actionEdges(nodes)];
+  const boxes = [...nodes, ...edges.filter(edge => edge.label).map(edge => edge.label!)];
+  return {
+    width: Math.max(...boxes.map(box => box.x + box.width)) + MARGIN,
+    height: Math.max(...boxes.map(box => box.y + box.height)) + MARGIN,
+    nodes,
+    edges
+  };
+}
+
+/** The sequence edges of a workflow whose steps declare dependsOn, by step in the order of the list, then the outputs. */
+function dependencyEdges(nodes: DiagramNode[], prerequisites: Map<string, string[]>): DiagramEdge[] {
+  const steps = nodes.filter(node => node.step);
+  const byId = new Map(nodes.map(node => [node.id, node]));
+  const reachedFrom = (id: string): Set<string> => {
+    const reached = new Set<string>();
+    const toFollow = [...(prerequisites.get(id) ?? [])];
+    while (toFollow.length) {
+      const next = toFollow.pop()!;
+      if (!reached.has(next)) {
+        reached.add(next);
+        toFollow.push(...(prerequisites.get(next) ?? []));
+      }
+    }
+    return reached;
+  };
+  const edges: DiagramEdge[] = [];
+  steps.forEach(node => {
+    const direct = prerequisites.get(node.id)!.filter(id => byId.has(id));
+    const kept = direct.filter(id => !direct.some(other => reachedFrom(other).has(id)));
+    (kept.length ? kept.map(id => byId.get(id)!) : [nodes[0]]).forEach(from => edges.push(dependencyEdge(from, node)));
+  });
+  steps.filter(node => !steps.some(other => prerequisites.get(other.id)!.includes(node.id)))
+    .forEach(node => edges.push(dependencyEdge(node, nodes[nodes.length - 1])));
+  return edges;
+}
+
+/** From the bottom middle of a node to the top middle of a node below it, bending half way above the lower one. */
+function dependencyEdge(from: DiagramNode, to: DiagramNode): DiagramEdge {
+  const fromX = from.x + from.width / 2;
+  const toX = to.x + to.width / 2;
+  const bottom = from.y + from.height;
+  const bend = to.y - NODE_GAP / 2;
+  const path = fromX === toX ? `M ${fromX} ${bottom} L ${toX} ${to.y}`
+    : `M ${fromX} ${bottom} C ${fromX} ${bend} ${toX} ${bend} ${toX} ${to.y}`;
+  return { kind: 'sequence', from: from.id, to: to.id, path };
 }
