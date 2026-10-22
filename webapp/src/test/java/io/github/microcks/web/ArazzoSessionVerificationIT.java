@@ -38,6 +38,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -113,6 +114,68 @@ class ArazzoSessionVerificationIT extends AbstractBaseIT {
       assertEquals("0 Order API POST /orders createOrder",
             call.get("index").asInt() + " " + call.get("apiName").asText() + " " + call.get("method").asText() + " "
                   + call.get("path").asText() + " " + call.get("stepId").asText());
+   }
+
+   /** AC-01: the saga service makes the 4 calls of the saga through the mocks; each step is matched in order. */
+   @Test
+   void theCallsOfTheSagaPassStepByStep() throws Exception {
+      String sessionId = openSession();
+
+      placeOrder(sessionId);
+      reserveStock(sessionId);
+      chargePayment(sessionId);
+      confirmOrder(sessionId);
+
+      JsonNode verification = verify(sessionId);
+      assertEquals("SUCCESS", verification.get("status").asText(), verification.toPrettyString());
+      assertEquals(List.of("createOrder PASSED", "reserveStock PASSED", "chargePayment PASSED", "confirmOrder PASSED"),
+            described(verification));
+   }
+
+   /** AC-02: the saga service charges the order before reserving its items; the verification fails. */
+   @Test
+   void aCallOutOfOrderFailsTheVerification() throws Exception {
+      String sessionId = openSession();
+
+      placeOrder(sessionId);
+      chargePayment(sessionId);
+      reserveStock(sessionId);
+      confirmOrder(sessionId);
+
+      JsonNode verification = verify(sessionId);
+      assertEquals("FAILURE", verification.get("status").asText(), verification.toPrettyString());
+      assertEquals(List.of("createOrder PASSED", "reserveStock PASSED", "chargePayment FAILED", "confirmOrder PASSED"),
+            described(verification));
+      assertEquals("step `reserveStock` expected before `chargePayment`",
+            verification.get("steps").get(2).get("message").asText());
+   }
+
+   private void placeOrder(String sessionId) {
+      assertEquals(201,
+            callMocks(sessionId, "Order+API", "/orders",
+                  "{\"customerId\": \"c-7\", \"items\": [{\"sku\": \"ABC-1\", \"quantity\": 2}], \"amount\": 25.0}")
+                        .getStatusCode().value());
+   }
+
+   private void reserveStock(String sessionId) {
+      assertEquals(201, callMocks(sessionId, "Stock+API", "/reservations", "{\"orderId\": \"o-42\", \"items\": []}")
+            .getStatusCode().value());
+   }
+
+   private void chargePayment(String sessionId) {
+      assertEquals(201, callMocks(sessionId, "Payment+API", "/payments", "{\"orderId\": \"o-42\", \"amount\": 25.0}")
+            .getStatusCode().value());
+   }
+
+   private void confirmOrder(String sessionId) {
+      assertEquals(200, callMocks(sessionId, "Order+API", "/orders/o-42/confirm", null).getStatusCode().value());
+   }
+
+   private static List<String> described(JsonNode verification) {
+      List<String> steps = new ArrayList<>();
+      verification.get("steps")
+            .forEach(step -> steps.add(step.get("stepId").asText() + " " + step.get("status").asText()));
+      return steps;
    }
 
    /** Open a session on placeOrderSaga as a test does, checking the exchange against the published API. */

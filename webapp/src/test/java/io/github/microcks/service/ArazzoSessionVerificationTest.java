@@ -21,6 +21,7 @@ import io.github.microcks.domain.ArazzoSessionCall;
 import io.github.microcks.domain.Header;
 import io.github.microcks.domain.WorkflowResult;
 import io.github.microcks.domain.WorkflowRunOrigin;
+import io.github.microcks.domain.WorkflowRunStatus;
 import io.github.microcks.domain.WorkflowRunSummary;
 import io.github.microcks.domain.WorkflowSessionCall;
 import io.github.microcks.domain.WorkflowStepResult;
@@ -43,6 +44,7 @@ import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
  * Acceptance tests of verifying that an application, an order saga service, followed the workflow placeOrderSaga of
@@ -91,6 +93,102 @@ class ArazzoSessionVerificationTest {
             new WorkflowRunFilter(null, null, null), 0, 20);
       assertEquals(List.of(verification.getId() + " " + WorkflowRunOrigin.SESSION),
             history.stream().map(run -> run.id() + " " + run.origin()).toList());
+   }
+
+   /** AC-01: the 4 calls of the saga, in the order of the workflow, pass step by step. */
+   @Test
+   void callsMatchingTheWorkflowPassStepByStep() throws Exception {
+      ArazzoSession session = sessionOnTheSaga();
+
+      record(session, createOrder(), reserveStock("o-42"), chargePayment("o-42"), confirmOrder("o-42"));
+
+      WorkflowResult verification = arazzoSessionService.verify(session.getId()).orElseThrow();
+      assertEquals(WorkflowRunStatus.SUCCESS, verification.getStatus());
+      assertEquals(
+            List.of("0 createOrder PASSED", "1 reserveStock PASSED", "2 chargePayment PASSED", "3 confirmOrder PASSED"),
+            described(verification));
+      assertEquals(List.of("0 createOrder", "1 reserveStock", "2 chargePayment", "3 confirmOrder"),
+            verification.getSession().calls().stream().map(call -> call.index() + " " + call.stepId()).toList());
+   }
+
+   /** AC-02: a call out of order fails the verification, naming the step expected before it. */
+   @Test
+   void aCallOutOfOrderFailsTheVerification() throws Exception {
+      ArazzoSession session = sessionOnTheSaga();
+
+      record(session, createOrder(), chargePayment("o-42"), reserveStock("o-42"), confirmOrder("o-42"));
+
+      WorkflowResult verification = arazzoSessionService.verify(session.getId()).orElseThrow();
+      assertEquals(WorkflowRunStatus.FAILURE, verification.getStatus());
+      assertEquals(List.of("0 createOrder PASSED", "1 reserveStock PASSED",
+            "2 chargePayment FAILED step `reserveStock` expected before `chargePayment`", "3 confirmOrder PASSED"),
+            described(verification));
+   }
+
+   /** AC-04: a step the service never calls fails the verification as missing. */
+   @Test
+   void aMissingStepFailsTheVerification() throws Exception {
+      ArazzoSession session = sessionOnTheSaga();
+
+      record(session, createOrder(), reserveStock("o-42"), chargePayment("o-42"));
+
+      WorkflowResult verification = arazzoSessionService.verify(session.getId()).orElseThrow();
+      assertEquals(WorkflowRunStatus.FAILURE, verification.getStatus());
+      assertEquals(List.of("0 createOrder PASSED", "1 reserveStock PASSED", "2 chargePayment PASSED",
+            "3 confirmOrder FAILED step `confirmOrder` missing"), described(verification));
+      WorkflowStepResult confirmOrder = verification.getSteps().get(3);
+      assertNull(confirmOrder.statusCode());
+      assertNull(confirmOrder.testCaseId());
+   }
+
+   /** A call to an operation no step calls, or a second call of an operation, is matched to no step. */
+   @Test
+   void aCallNoStepTakesIsMatchedToNone() throws Exception {
+      ArazzoSession session = sessionOnTheSaga();
+
+      record(session, createOrder(), createOrder(), reserveStock("o-42"), chargePayment("o-42"),
+            call("Payment API", "GET /payments", "/payments", null, 200, "[]"), confirmOrder("o-42"));
+
+      WorkflowResult verification = arazzoSessionService.verify(session.getId()).orElseThrow();
+      assertEquals(WorkflowRunStatus.SUCCESS, verification.getStatus());
+      assertEquals(Arrays.asList("createOrder", null, "reserveStock", "chargePayment", null, "confirmOrder"),
+            verification.getSession().calls().stream().map(WorkflowSessionCall::stepId).toList());
+   }
+
+   private ArazzoSession sessionOnTheSaga() throws Exception {
+      ArazzoDocument saga = orderSagaIsImportedAndLinked();
+      return arazzoSessionService.openSession(saga.getId(), SAGA).orElseThrow();
+   }
+
+   private void record(ArazzoSession session, ArazzoSessionCall... calls) {
+      for (ArazzoSessionCall call : calls) {
+         arazzoSessionService.recordCall(session.getId(), call);
+      }
+   }
+
+   /** Each step as index, id and status, then the reason it failed when it did. */
+   private static List<String> described(WorkflowResult verification) {
+      return verification.getSteps().stream().map(step -> step.index() + " " + step.stepId() + " " + step.status()
+            + (step.message() == null ? "" : " " + step.message())).toList();
+   }
+
+   /** The service reserves the items of an order; the mock answers with reservation r-9. */
+   private static ArazzoSessionCall reserveStock(String orderId) {
+      return call("Stock API", "POST /reservations", "/reservations",
+            "{\"orderId\": \"" + orderId + "\", \"items\": [{\"sku\": \"ABC-1\", \"quantity\": 2}]}", 201,
+            "{\"id\": \"r-9\", \"orderId\": \"o-42\"}");
+   }
+
+   /** The service charges an order 25.0; the mock answers with payment p-3. */
+   private static ArazzoSessionCall chargePayment(String orderId) {
+      return call("Payment API", "POST /payments", "/payments", "{\"orderId\": \"" + orderId + "\", \"amount\": 25.0}",
+            201, "{\"id\": \"p-3\", \"orderId\": \"o-42\", \"status\": \"CHARGED\"}");
+   }
+
+   /** The service confirms an order; the mock answers with order o-42, confirmed. */
+   private static ArazzoSessionCall confirmOrder(String orderId) {
+      return call("Order API", "POST /orders/{orderId}/confirm", "/orders/" + orderId + "/confirm", null, 200,
+            "{\"id\": \"o-42\", \"status\": \"CONFIRMED\"}");
    }
 
    /** The order saga service places order o-42 for customer c-7; the mock answers with order o-42. */

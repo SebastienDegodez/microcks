@@ -127,7 +127,8 @@ public class ArazzoSessionService {
    private WorkflowResult verify(ArazzoSession session, ArazzoDocument document) {
       Map<String, ResolvedSource> sources = arazzoDocumentService.resolveSources(document);
       List<ArazzoSessionCall> calls = arazzoSessionCallRepository.findBySessionIdOrderByIndexAsc(session.getId());
-      List<StepVerdict> verdicts = ArazzoSessionVerifier.verify(expectedSteps(document, session, sources), calls);
+      List<StepVerdict> verdicts = ArazzoSessionVerifier.verify(expectedSteps(document, session, sources), calls,
+            ArazzoCallOrder.STRICT);
 
       WorkflowResult result = new WorkflowResult();
       result.setDocumentId(document.getId());
@@ -139,7 +140,6 @@ public class ArazzoSessionService {
       result.setStartedDate(new Date());
       result.setNumber(arazzoRunService.nextNumber(document.getId()));
       result.setOrigin(WorkflowRunOrigin.SESSION);
-      result.setStatus(WorkflowRunStatus.SUCCESS);
       WorkflowResult saved = workflowResultRepository.save(result);
 
       List<WorkflowStepResult> steps = new ArrayList<>();
@@ -147,10 +147,12 @@ public class ArazzoSessionService {
       for (StepVerdict verdict : verdicts) {
          if (verdict.call() != null) {
             stepOfCall.put(verdict.call().getIndex(), verdict.expected().step().stepId());
-            steps.add(stepResult(saved.getId(), verdict));
          }
+         steps.add(stepResult(saved.getId(), verdict));
       }
       saved.setSteps(steps);
+      saved.setStatus(verdicts.stream().allMatch(verdict -> verdict.failures().isEmpty()) ? WorkflowRunStatus.SUCCESS
+            : WorkflowRunStatus.FAILURE);
       saved.setSession(new WorkflowSessionCheck(session.getId(),
             calls.stream().map(call -> new WorkflowSessionCall(call.getIndex(), call.getServiceName(),
                   call.getServiceVersion(), call.getMethod(), call.getPath(), stepOfCall.get(call.getIndex())))
@@ -174,18 +176,27 @@ public class ArazzoSessionService {
       return steps;
    }
 
-   /** A step matched to a call keeps the exchange of the call, as a step of a run keeps its own. */
+   /**
+    * A step matched to a call keeps the exchange of the call, as a step of a run keeps its own; a step fails with the
+    * reasons of its verdict.
+    */
    private WorkflowStepResult stepResult(String resultId, StepVerdict verdict) {
       ExpectedStep expected = verdict.expected();
+      ArazzoStepOperation operation = expected.operation();
+      WorkflowStepOperation stepOperation = new WorkflowStepOperation(operation.sourceName(), operation.operationId(),
+            operation.method(), operation.path());
+      WorkflowStepStatus status = verdict.failures().isEmpty() ? WorkflowStepStatus.PASSED : WorkflowStepStatus.FAILED;
+      String message = verdict.failures().isEmpty() ? null : String.join("; ", verdict.failures());
       ArazzoSessionCall call = verdict.call();
+      if (call == null) {
+         return new WorkflowStepResult(expected.index(), expected.step().stepId(), stepOperation, status, null, 0,
+               List.of(), Map.of(), null, message, null, List.of(), Map.of());
+      }
       String testCaseId = resultId + "-" + expected.index();
       arazzoRunService.storeExchange(testCaseId, requestOf(call, expected), responseOf(call, expected));
-      ArazzoStepOperation operation = expected.operation();
-      return new WorkflowStepResult(expected.index(), expected.step().stepId(),
-            new WorkflowStepOperation(operation.sourceName(), operation.operationId(), operation.method(),
-                  operation.path()),
-            WorkflowStepStatus.PASSED, call.getResponseStatus(), 0, List.of(), Map.of(), testCaseId, null,
-            call.getRequestUrl(), List.of(), Map.of());
+      return new WorkflowStepResult(expected.index(), expected.step().stepId(), stepOperation, status,
+            call.getResponseStatus(), 0, List.of(), Map.of(), testCaseId, message, call.getRequestUrl(), List.of(),
+            Map.of());
    }
 
    private static Request requestOf(ArazzoSessionCall call, ExpectedStep expected) {
