@@ -36,7 +36,7 @@ describe('ArazzoRunService', () => {
 
     const request = http.expectOne('/api/arazzo/documents/doc%201/workflows/readThenReprice/runs');
     expect(request.request.method).toEqual('POST');
-    expect(request.request.body).toEqual({ inputs: { pastry: 'Eclair Cafe' }, timeout: 10000 });
+    expect(request.request.body).toEqual({ inputs: { pastry: 'Eclair Cafe' }, timeout: 10000, validateSchema: false });
     request.flush({ id: 'run-1' });
   });
 
@@ -46,7 +46,7 @@ describe('ArazzoRunService', () => {
 
     const request = http.expectOne('/api/arazzo/documents/doc-1/workflows/readThenReprice/runs');
     expect(request.request.body).toEqual({ inputs: {}, timeout: 5000,
-      implementations: { pastryApi: 'http://localhost:8080' }, secretName: 'pastry-staging-token' });
+      implementations: { pastryApi: 'http://localhost:8080' }, secretName: 'pastry-staging-token', validateSchema: false });
     request.flush({ id: 'run-1' });
   });
 });

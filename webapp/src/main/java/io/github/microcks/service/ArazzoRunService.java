@@ -19,6 +19,8 @@ import io.github.microcks.domain.ArazzoDocument;
 import io.github.microcks.domain.ArazzoStepOperation;
 import io.github.microcks.domain.ArazzoWorkflowStatus;
 import io.github.microcks.domain.Request;
+import io.github.microcks.domain.Resource;
+import io.github.microcks.domain.ResourceType;
 import io.github.microcks.domain.Response;
 import io.github.microcks.domain.Secret;
 import io.github.microcks.domain.SecretRef;
@@ -29,12 +31,15 @@ import io.github.microcks.domain.WorkflowSourceTarget;
 import io.github.microcks.domain.WorkflowStepResult;
 import io.github.microcks.repository.ArazzoDocumentRepository;
 import io.github.microcks.repository.RequestRepository;
+import io.github.microcks.repository.ResourceRepository;
 import io.github.microcks.repository.ResponseRepository;
 import io.github.microcks.repository.SecretRepository;
 import io.github.microcks.repository.WorkflowResultRepository;
 import io.github.microcks.service.ArazzoDocumentService.ResolvedSource;
 import io.github.microcks.util.arazzo.ArazzoDataFlow;
 import io.github.microcks.util.arazzo.ArazzoWorkflowReader;
+
+import org.springframework.beans.factory.annotation.Value;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -69,6 +74,11 @@ public class ArazzoRunService {
    private final ArazzoMinionClient arazzoMinionClient;
    private final SecretRepository secretRepository;
    private final ArazzoMockCoherenceService arazzoMockCoherenceService;
+   private final ResourceRepository resourceRepository;
+
+   /** The URL the relative references of the stored contracts resolve against, as for OpenAPI contract tests. */
+   @Value("${validation.resourceUrl:#{null}}")
+   private String validationResourceUrl;
 
    /**
     * Build a new ArazzoRunService with its required dependencies.
@@ -80,12 +90,13 @@ public class ArazzoRunService {
     * @param arazzoMinionClient       The client of the Arazzo minion that executes the runs
     * @param secretRepository         The repository of the secrets whose authorization the calls of a run carry
     * @param arazzoMockCoherence      The service telling which example the mocks lack when a step fails
+    * @param resourceRepository       The repository of the OpenAPI contracts the responses are validated against
     */
    public ArazzoRunService(ArazzoDocumentRepository arazzoDocumentRepository,
          ArazzoDocumentService arazzoDocumentService, WorkflowResultRepository workflowResultRepository,
          RequestRepository requestRepository, ResponseRepository responseRepository,
          ArazzoMinionClient arazzoMinionClient, SecretRepository secretRepository,
-         ArazzoMockCoherenceService arazzoMockCoherence) {
+         ArazzoMockCoherenceService arazzoMockCoherence, ResourceRepository resourceRepository) {
       this.arazzoDocumentRepository = arazzoDocumentRepository;
       this.arazzoDocumentService = arazzoDocumentService;
       this.workflowResultRepository = workflowResultRepository;
@@ -94,6 +105,7 @@ public class ArazzoRunService {
       this.arazzoMinionClient = arazzoMinionClient;
       this.secretRepository = secretRepository;
       this.arazzoMockCoherenceService = arazzoMockCoherence;
+      this.resourceRepository = resourceRepository;
    }
 
    /**
@@ -107,7 +119,7 @@ public class ArazzoRunService {
     */
    public Optional<WorkflowResult> launchRun(String documentId, String workflowId, Map<String, Object> inputs,
          Long timeout) throws ArazzoRunRefusedException {
-      return launchRun(documentId, workflowId, inputs, timeout, null);
+      return launchRun(documentId, workflowId, inputs, timeout, null, false);
    }
 
    /**
@@ -123,6 +135,40 @@ public class ArazzoRunService {
     */
    public Optional<WorkflowResult> launchRun(String documentId, String workflowId, Map<String, Object> inputs,
          Long timeout, ArazzoRunImplementations implementations) throws ArazzoRunRefusedException {
+      return launchRun(documentId, workflowId, inputs, timeout, implementations, false);
+   }
+
+   /**
+    * Run a workflow against the Microcks mocks of the APIs its source descriptions are linked to.
+    * @param documentId     The id of the Arazzo document
+    * @param workflowId     The id of the workflow in that document
+    * @param inputs         The inputs of the workflow, by name
+    * @param timeout        How long a step waits for its response, in milliseconds; null for 10 seconds
+    * @param validateSchema Whether each response is validated against the OpenAPI schema of its operation
+    * @return The run, in progress; empty if the document or the workflow does not exist
+    * @throws ArazzoRunRefusedException if the workflow cannot run
+    */
+   public Optional<WorkflowResult> launchRun(String documentId, String workflowId, Map<String, Object> inputs,
+         Long timeout, boolean validateSchema) throws ArazzoRunRefusedException {
+      return launchRun(documentId, workflowId, inputs, timeout, null, validateSchema);
+   }
+
+   /**
+    * Run a workflow against the implementations of the APIs its source descriptions are linked to, or against their
+    * Microcks mocks.
+    * @param documentId      The id of the Arazzo document
+    * @param workflowId      The id of the workflow in that document
+    * @param inputs          The inputs of the workflow, by name; null for none
+    * @param timeout         How long a step waits for its response, in milliseconds; null for 10 seconds
+    * @param implementations The base URL of each linked source and the secret of the calls; null for the mocks
+    * @param validateSchema  Whether each response is validated against the OpenAPI schema of its operation
+    * @return The run, in progress; empty if the document or the workflow does not exist
+    * @throws ArazzoRunRefusedException if the workflow cannot run, if an input it needs is missing, or if it cannot
+    *                                   reach the implementations
+    */
+   public Optional<WorkflowResult> launchRun(String documentId, String workflowId, Map<String, Object> inputs,
+         Long timeout, ArazzoRunImplementations implementations, boolean validateSchema)
+         throws ArazzoRunRefusedException {
       Optional<ArazzoDocument> found = arazzoDocumentRepository.findById(documentId)
             .filter(document -> document.getWorkflowIds().contains(workflowId));
       if (found.isEmpty()) {
@@ -161,10 +207,12 @@ public class ArazzoRunService {
       run.setStatus(WorkflowRunStatus.IN_PROGRESS);
       run.setStartedDate(new Date());
       run.setNumber(nextNumber(document.getId()));
+      run.setValidateSchema(validateSchema);
       WorkflowResult launched = workflowResultRepository.save(run);
       try {
          arazzoMinionClient.launch(new ArazzoRunRequest(launched.getId(), workflowId, document.getContent(),
-               givenInputs, targets(linked, baseUrls), launched.getTimeout(), authorizationOf(secret)));
+               givenInputs, targets(linked, baseUrls, validateSchema), launched.getTimeout(), authorizationOf(secret),
+               validateSchema));
       } catch (ArazzoMinionException ame) {
          launched.setStatus(WorkflowRunStatus.FAILURE);
          launched.setMessage(ame.getMessage());
@@ -243,8 +291,8 @@ public class ArazzoRunService {
                   secret.getToken(), secret.getTokenHeader());
    }
 
-   private static Map<String, ArazzoRunRequest.Source> targets(List<ResolvedSource> linked,
-         Map<String, String> baseUrls) {
+   private Map<String, ArazzoRunRequest.Source> targets(List<ResolvedSource> linked, Map<String, String> baseUrls,
+         boolean validateSchema) {
       Map<String, ArazzoRunRequest.Source> targets = new LinkedHashMap<>();
       for (ResolvedSource source : linked) {
          Map<String, ArazzoRunRequest.Operation> operations = new LinkedHashMap<>();
@@ -252,10 +300,20 @@ public class ArazzoRunService {
             operations.put(operation.operationId(),
                   new ArazzoRunRequest.Operation(operation.method(), operation.path()));
          }
-         targets.put(source.link().sourceName(),
-               new ArazzoRunRequest.Source(baseUrls.get(source.link().sourceName()), operations));
+         // The contract is sent only when the minion validates the responses against it, with the URL its relative
+         // references resolve against.
+         String contract = validateSchema ? openApiContractOf(source) : null;
+         targets.put(source.link().sourceName(), new ArazzoRunRequest.Source(baseUrls.get(source.link().sourceName()),
+               operations, contract, contract == null ? null : validationResourceUrl));
       }
       return targets;
+   }
+
+   /** The main OpenAPI or Swagger contract Microcks stored for the API a source is linked to; null when none. */
+   private String openApiContractOf(ResolvedSource source) {
+      return resourceRepository.findMainByServiceId(source.serviceId()).stream().filter(
+            resource -> resource.getType() == ResourceType.OPEN_API_SPEC || resource.getType() == ResourceType.SWAGGER)
+            .map(Resource::getContent).findFirst().orElse(null);
    }
 
    /**

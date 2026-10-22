@@ -102,6 +102,8 @@ export type WorkflowResult = {
   number?: number;
   /** The example the mocks lack for the run to go on; absent when the run did not fail for a missing example. */
   missingExample?: WorkflowMissingExample;
+  /** Whether each step response was validated against the OpenAPI schema of its operation. */
+  validateSchema?: boolean;
 };
 
 /** The implementations a run calls instead of the mocks: one base URL per linked source, and an optional secret. */

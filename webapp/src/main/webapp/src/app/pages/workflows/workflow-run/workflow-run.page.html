@@ -61,6 +61,9 @@
           <span *ngIf="!entries(run.inputs).length" class="workflow-run-muted">None declared</span>
         </dd>
       </div>
+      <div class="workflow-run-property">
+        <dt>Schema validation</dt>&ngsp;<dd>{{ run.validateSchema ? 'On' : 'Off' }}</dd>
+      </div>
       <div *ngIf="run.status === 'SUCCESS'" class="workflow-run-property">
         <dt>Outputs</dt>&ngsp;<dd>
           <span *ngFor="let output of entries(run.outputs)" class="workflow-run-value"><code class="workflow-run-chip">{{ output.name }}</code> = <code class="workflow-run-chip">{{ output.value }}</code>&ngsp;</span>

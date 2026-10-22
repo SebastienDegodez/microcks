@@ -76,6 +76,8 @@ export class WorkflowRunDialogComponent implements OnInit {
   workflows: ArazzoWorkflowDetail[] = [];
   values: Record<string, string | number | null> = {};
   timeout = 10000;
+  /** Whether each response is validated against its OpenAPI schema: on by default, as in the mock-up. */
+  validateSchema = true;
   error?: string;
   running = false;
   target: RunTarget = 'MOCKS';
@@ -180,10 +182,9 @@ export class WorkflowRunDialogComponent implements OnInit {
     });
     this.running = true;
     this.error = undefined;
-    const launched = this.target === 'IMPLEMENTATIONS'
-      ? this.runSvc.launchRun(this.documentId, workflow.workflowId, inputs, this.timeout, this.implementations(workflow))
-      : this.runSvc.launchRun(this.documentId, workflow.workflowId, inputs, this.timeout);
-    launched.subscribe({
+    const implementations = this.target === 'IMPLEMENTATIONS' ? this.implementations(workflow) : undefined;
+    this.runSvc.launchRun(this.documentId, workflow.workflowId, inputs, this.timeout, implementations,
+      this.validateSchema).subscribe({
       next: run => {
         this.bsModalRef.hide();
         this.router.navigate(['/workflows/runs', run.id]);

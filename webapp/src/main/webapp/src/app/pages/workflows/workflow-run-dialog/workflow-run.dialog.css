@@ -74,13 +74,15 @@
   margin-top: 3px;
 }
 
-.workflow-run-target-disabled,
-.workflow-run-validation {
+.workflow-run-target-disabled {
   cursor: not-allowed;
 }
 
-.workflow-run-target-disabled .workflow-run-target-text,
-.workflow-run-validation .workflow-run-target-text {
+.workflow-run-validation {
+  cursor: pointer;
+}
+
+.workflow-run-target-disabled .workflow-run-target-text {
   opacity: 0.65;
 }
 

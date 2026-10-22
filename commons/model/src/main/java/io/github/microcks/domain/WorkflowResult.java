@@ -48,6 +48,7 @@ public class WorkflowResult {
    private String message;
    private Long number;
    private WorkflowMissingExample missingExample;
+   private boolean validateSchema;
 
    public String getId() {
       return id;
@@ -192,5 +193,14 @@ public class WorkflowResult {
 
    public void setMissingExample(WorkflowMissingExample missingExample) {
       this.missingExample = missingExample;
+   }
+
+   /** Whether each step response is validated against the OpenAPI schema of its operation. */
+   public boolean isValidateSchema() {
+      return validateSchema;
+   }
+
+   public void setValidateSchema(boolean validateSchema) {
+      this.validateSchema = validateSchema;
    }
 }

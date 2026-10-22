@@ -58,8 +58,10 @@ public class ArazzoRunController {
          @PathVariable("workflowId") String workflowId, @RequestBody ArazzoRunLaunchDTO launch) {
       try {
          Optional<WorkflowResult> run = arazzoRunService.launchRun(documentId, workflowId, launch.inputs(),
-               launch.timeout(), launch.implementations() == null ? null
-                     : new ArazzoRunImplementations(launch.implementations(), launch.secretName()));
+               launch.timeout(),
+               launch.implementations() == null ? null
+                     : new ArazzoRunImplementations(launch.implementations(), launch.secretName()),
+               Boolean.TRUE.equals(launch.validateSchema()));
          return run.<ResponseEntity<Object>>map(
                launched -> ResponseEntity.created(URI.create("/api/arazzo/runs/" + launched.getId())).body(launched))
                .orElseGet(() -> ResponseEntity.notFound().build());

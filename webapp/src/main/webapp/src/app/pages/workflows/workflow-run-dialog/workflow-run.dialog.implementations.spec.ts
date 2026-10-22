@@ -148,7 +148,7 @@ describe('WorkflowRunDialogComponent against implementations', () => {
 
     expect(runs.launchRun).toHaveBeenCalledWith('doc-1', 'placeOrder', {}, 10000, {
       baseUrls: { customerApi: 'https://customers.staging.example', orderApi: 'https://orders.staging.example' }
-    });
+    }, true);
   });
 
   it('offers the secrets the user may read, and runs with the one chosen', async () => {
@@ -165,7 +165,7 @@ describe('WorkflowRunDialogComponent against implementations', () => {
     runButton().click();
 
     expect(runs.launchRun).toHaveBeenCalledWith('doc-1', 'readThenReprice', {}, 10000,
-      { baseUrls: { pastryApi: 'http://localhost:8080' }, secretName: 'pastry-staging-token' });
+      { baseUrls: { pastryApi: 'http://localhost:8080' }, secretName: 'pastry-staging-token' }, true);
   });
 
   it('runs against the mocks again once the API developer goes back to them', async () => {
@@ -182,6 +182,6 @@ describe('WorkflowRunDialogComponent against implementations', () => {
     expect(texts('.workflow-run-summary')).toEqual(['readThenReprice against Microcks mocks']);
     expect(secrets.getSecrets).toHaveBeenCalledTimes(1);
     runButton().click();
-    expect(runs.launchRun).toHaveBeenCalledWith('doc-1', 'readThenReprice', {}, 10000);
+    expect(runs.launchRun).toHaveBeenCalledWith('doc-1', 'readThenReprice', {}, 10000, undefined, true);
   });
 });
