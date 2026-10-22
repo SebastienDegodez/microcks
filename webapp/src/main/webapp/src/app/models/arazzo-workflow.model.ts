@@ -33,13 +33,29 @@ export type ArazzoSourceDescription = {
   usedOperations: number;
 };
 
-/** The operation a step calls: method and path when found in the linked API, else the reason why it is not. */
+/**
+ * The operation a step calls: method and path when found in the linked API, else the reason why it is not. A step of
+ * an AsyncAPI source sends or receives on a channel: method is then the action Microcks names the AsyncAPI operation
+ * with (SEND, RECEIVE, PUBLISH or SUBSCRIBE), and a step on a channel has no operationId.
+ */
 export type ArazzoStepOperation = {
   sourceName: string;
-  operationId: string;
+  operationId?: string;
   method?: string;
   path?: string;
   reason?: string;
+  /** The address of the AsyncAPI channel the step sends or receives on; absent for an HTTP operation. */
+  channel?: string;
+};
+
+/** What a step of an AsyncAPI source tells of the messages it sends or receives. */
+export type ArazzoStepMessaging = {
+  /** Absent when the step does not tell it: its AsyncAPI operation then tells it. */
+  action?: 'send' | 'receive';
+  /** The runtime expression or value identifying the message a receive step waits for. */
+  correlationId?: string;
+  /** How long the step waits, in milliseconds. */
+  timeout?: number;
 };
 
 export type ArazzoStepParameter = {
@@ -83,9 +99,11 @@ export type ArazzoStepDetail = {
   onSuccess?: ArazzoStepAction[];
   /** What the step does when it fails, in the order of the document. */
   onFailure?: ArazzoStepAction[];
+  /** What the step sends or receives, for a step of an AsyncAPI source; absent for an HTTP step. */
+  messaging?: ArazzoStepMessaging;
 };
 
-/** Where a step uses a runtime expression: place is path, query, header, body or criterion. */
+/** Where a step uses a runtime expression: place is path, query, header, body, criterion or correlationId. */
 export type ArazzoExpressionUse = {
   stepId: string;
   place: string;

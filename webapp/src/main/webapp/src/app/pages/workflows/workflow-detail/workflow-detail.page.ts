@@ -36,6 +36,7 @@ import { TimeAgoPipe } from '../../../components/time-ago.pipe';
 import { ImportArazzoDialogComponent } from '../import-arazzo-dialog/import-arazzo-dialog.component';
 import { WorkflowDiagramComponent } from './workflow-diagram/workflow-diagram.component';
 import { StepActionLine, stepActionLines } from './step-actions';
+import { stepAction, stepEndpoint } from './step-messaging';
 
 /** The steps as cards, or the workflow as a diagram; the URL keeps it as ?view=diagram so a link can be shared. */
 export type WorkflowView = 'steps' | 'diagram';
@@ -217,6 +218,16 @@ export class WorkflowDetailPageComponent implements OnInit {
       this.stepActions.set(step, stepActionLines(step));
     }
     return this.stepActions.get(step)!;
+  }
+
+  /** What a step of an AsyncAPI source does with messages: send or receive. */
+  actionOf(step: ArazzoStepDetail): string | undefined {
+    return stepAction(step);
+  }
+
+  /** Where a step of an AsyncAPI source sends or receives: "RECEIVE orders/confirmed". */
+  endpointOf(step: ArazzoStepDetail): string {
+    return stepEndpoint(step);
   }
 
   entries(expressions: Record<string, string>): { name: string; expression: string }[] {
