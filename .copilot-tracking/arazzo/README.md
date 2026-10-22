@@ -6,7 +6,7 @@ This branch (`planning/arazzo`) is never merged. It is the **only backlog** of t
 |---|---|
 | `backlog/00-epic.md` | Goal, decisions, delivery conventions, and the ordered list of stories. |
 | `backlog/01-adr.md` | Storage of workflow runs. Its **Decision** section unblocks the run stories once it says `Status: decided`. |
-| `backlog/02-…` to `14-…` | Stories S1 to S13: persona, examples, Given/When/Then criteria, technical notes, dependencies (by story key), effort, DoR. |
+| `backlog/02-…` to `15-…` | Stories S1 to S14: persona, examples, Given/When/Then criteria, technical notes, dependencies (by story key), effort, DoR. |
 | `playbooks/implement-next-story.md` | What the scheduled *implementer* task does on each run. |
 | `playbooks/review-arazzo-prs.md` | What the scheduled *reviewer* task does on each run. |
 

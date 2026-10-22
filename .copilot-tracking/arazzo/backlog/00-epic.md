@@ -52,6 +52,7 @@ The checkboxes below are ticked by the maintainer when merging.
 - [ ] [S5](06-s5-run-mocks.md) Run a workflow against Microcks mocks (walking skeleton of the minion)
 - [ ] [S6](07-s6-why-failed.md) Understand why a step failed
 - [ ] [S7](08-s7-run-impl.md) Run a workflow against implementation endpoints
+- [ ] [S14](15-s14-run-through-api.md) Run a workflow against an implementation through the Microcks API (CI)
 - [ ] [S8](09-s8-missing-inputs.md) Refuse a run whose inputs are missing
 - [ ] [S9](10-s9-schema.md) Validate step responses against the OpenAPI schema
 - [ ] [S10](11-s10-coherence.md) Spot mock examples that do not form a coherent scenario
@@ -63,7 +64,7 @@ The checkboxes below are ticked by the maintainer when merging.
 
 - AsyncAPI source descriptions (Arazzo 1.1): check that an HTTP call publishes the expected event (#1665).
 - `onSuccess` / `onFailure` actions, `dependsOn`, nested workflows, `operationPath`.
-- Running a workflow from CI: `microcks-cli`, and the `microcks-testcontainers-java` and `-dotnet` bindings.
+- Running a workflow from CI with `microcks-cli`, and the `microcks-testcontainers-java` and `-dotnet` bindings. They build on the API of [S14](15-s14-run-through-api.md).
 - Feeding Arazzo workflows to the AI Copilot to generate coherent examples (#1635).
 
 ---
