@@ -32,8 +32,8 @@ Look at the fork's branches `arazzo/*` and the PRs from them.
 
 A story is **done** when its branch `arazzo/<key>-*` is merged into `master`. Walk the *Stories* list of `00-epic.md` in order, and take the first story that:
 
-- is not done and is not the ADR (a decision is never implemented);
-- has every story listed under its *Dependencies* done. When the ADR is listed, its **Decision** section must say `Status: decided`;
+- is not done and is not an ADR (`01-adr.md`, `16-adr2-mock-sessions.md`): a decision is never implemented;
+- has every story listed under its *Dependencies* done. When an ADR is listed, its **Decision** section must say `Status: decided`;
 - has every *DoR* box ticked in its file.
 
 None qualifies: report which story waits on what, and stop.

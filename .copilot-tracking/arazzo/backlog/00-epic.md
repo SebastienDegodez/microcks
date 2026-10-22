@@ -7,7 +7,8 @@ Let API developers describe multi-step journeys across the APIs Microcks already
 Two outcomes matter most:
 
 - **Check that the mocks form a coherent scenario.** For example, every pastry that the list operation returns must be readable by the detail operation.
-- **Check that implementations honour a journey**, not only each operation on its own.
+- **Check that implementations honour a journey**, not only each operation on its own: Microcks plays the workflow against a provider.
+- **Check that an application calling the mocks follows a journey**, such as a saga orchestrator and its compensation: Microcks checks a consumer against the workflow.
 
 ## Context
 
@@ -23,6 +24,7 @@ Two outcomes matter most:
 | 2 | Where do workflows execute? | In a **dedicated minion**. The webapp delegates the run and receives results back, like the AsyncAPI minion does. |
 | 3 | UI style | New screens follow the current Microcks style. Refreshing existing layouts happens in **dedicated PRs** ([S13](14-s13-refresh.md)). |
 | 4 | How a source description finds its Microcks API | By API **name and version**, as everywhere in Microcks. Arazzo does not carry them, so they come from a secondary artifact overlay (like `APIExamples`): see [S2](03-s2-link.md). |
+| 5 | How Microcks records the calls an application makes to its mocks (consumer side) | Pending in [ADR 2](16-adr2-mock-sessions.md). It blocks S15 to S17. |
 
 ## Delivery conventions (SKRAFT)
 
@@ -36,9 +38,9 @@ Two outcomes matter most:
 
 ## Stories
 
-Delivery order. The ADR blocks the run stories.
+Delivery order. ADR 1 blocks the run stories (S5 and after); ADR 2 blocks the consumer-side stories (S15 to S17).
 
-This folder is the only backlog: there are no GitHub issues. A story is identified by its key (S1…S13) and its file. Its state is read from git:
+This folder is the only backlog: there are no GitHub issues. A story is identified by its key (S1…S17) and its file. Its state is read from git:
 - **in progress:** a branch `arazzo/<key>-<slug>` exists, for example `arazzo/s1-import`;
 - **done:** that branch's PR is merged into `master`.
 
@@ -57,6 +59,10 @@ The checkboxes below are ticked by the maintainer when merging.
 - [ ] [S9](10-s9-schema.md) Validate step responses against the OpenAPI schema
 - [ ] [S10](11-s10-coherence.md) Spot mock examples that do not form a coherent scenario
 - [ ] [S11](12-s11-history.md) Follow the runs history
+- [ ] [ADR 2](16-adr2-mock-sessions.md) ADR — recording the calls an application makes to the mocks
+- [ ] [S15](17-s15-verify-consumer.md) Verify that my application followed a workflow against the mocks (consumer side)
+- [ ] [S16](18-s16-stateful-saga-mocks.md) Mocks answer consistently along a workflow
+- [ ] [S17](19-s17-saga-compensation.md) Make a saga step fail on the mocks and verify the compensation
 - [ ] [S12](13-s12-service-page.md) See the workflows that use an API on its page
 - [ ] [S13](14-s13-refresh.md) Refresh the API page layout (dedicated PR)
 
@@ -64,7 +70,7 @@ The checkboxes below are ticked by the maintainer when merging.
 
 - AsyncAPI source descriptions (Arazzo 1.1): check that an HTTP call publishes the expected event (#1665).
 - `onSuccess` / `onFailure` actions, `dependsOn`, nested workflows, `operationPath`.
-- Running a workflow from CI with `microcks-cli`, and the `microcks-testcontainers-java` and `-dotnet` bindings. They build on the API of [S14](15-s14-run-through-api.md).
+- Running a workflow from CI with `microcks-cli`, and the `microcks-testcontainers-java` and `-dotnet` bindings. They build on the API of [S14](15-s14-run-through-api.md), and add `verifyWorkflow(...)` for the consumer side ([S15](17-s15-verify-consumer.md)).
 - Feeding Arazzo workflows to the AI Copilot to generate coherent examples (#1635).
 
 ---
