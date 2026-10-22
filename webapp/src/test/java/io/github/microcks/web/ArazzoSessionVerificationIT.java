@@ -150,6 +150,23 @@ class ArazzoSessionVerificationIT extends AbstractBaseIT {
             verification.get("steps").get(2).get("message").asText());
    }
 
+   /** AC-03: the saga service reserves the items of order o-1 although the mocks placed o-42. */
+   @Test
+   void dataNotTakenFromThePreviousStepFailsTheVerification() throws Exception {
+      String sessionId = openSession();
+
+      placeOrder(sessionId);
+      assertEquals(201, callMocks(sessionId, "Stock+API", "/reservations", "{\"orderId\": \"o-1\", \"items\": []}")
+            .getStatusCode().value());
+      chargePayment(sessionId);
+      confirmOrder(sessionId);
+
+      JsonNode verification = verify(sessionId);
+      assertEquals("FAILURE", verification.get("status").asText(), verification.toPrettyString());
+      assertEquals("`reserveStock` body `/orderId` should come from `$steps.createOrder.outputs.id` (o-42), got o-1",
+            verification.get("steps").get(1).get("message").asText());
+   }
+
    private void placeOrder(String sessionId) {
       assertEquals(201,
             callMocks(sessionId, "Order+API", "/orders",

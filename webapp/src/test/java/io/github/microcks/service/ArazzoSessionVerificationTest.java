@@ -19,6 +19,7 @@ import io.github.microcks.domain.ArazzoDocument;
 import io.github.microcks.domain.ArazzoSession;
 import io.github.microcks.domain.ArazzoSessionCall;
 import io.github.microcks.domain.Header;
+import io.github.microcks.domain.WorkflowParameterValue;
 import io.github.microcks.domain.WorkflowResult;
 import io.github.microcks.domain.WorkflowRunOrigin;
 import io.github.microcks.domain.WorkflowRunStatus;
@@ -41,6 +42,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -123,6 +125,51 @@ class ArazzoSessionVerificationTest {
       assertEquals(List.of("0 createOrder PASSED", "1 reserveStock PASSED",
             "2 chargePayment FAILED step `reserveStock` expected before `chargePayment`", "3 confirmOrder PASSED"),
             described(verification));
+   }
+
+   /** AC-03: data not taken from the previous step fails the verification, naming its source and both values. */
+   @Test
+   void dataNotTakenFromThePreviousStepFailsTheVerification() throws Exception {
+      ArazzoSession session = sessionOnTheSaga();
+
+      record(session, createOrder(), reserveStock("o-1"), chargePayment("o-42"), confirmOrder("o-42"));
+
+      WorkflowResult verification = arazzoSessionService.verify(session.getId()).orElseThrow();
+      assertEquals(WorkflowRunStatus.FAILURE, verification.getStatus());
+      assertEquals(List.of("0 createOrder PASSED",
+            "1 reserveStock FAILED `reserveStock` body `/orderId` should come from `$steps.createOrder.outputs.id` "
+                  + "(o-42), got o-1",
+            "2 chargePayment PASSED", "3 confirmOrder PASSED"), described(verification));
+   }
+
+   /** A value of a path parameter not taken from the previous step fails its step the same way. */
+   @Test
+   void aPathParameterNotTakenFromThePreviousStepFailsTheVerification() throws Exception {
+      ArazzoSession session = sessionOnTheSaga();
+      ArazzoSessionCall confirmAnotherOrder = confirmOrder("o-1");
+      confirmAnotherOrder.setResponseStatus(404);
+
+      record(session, createOrder(), reserveStock("o-42"), chargePayment("o-42"), confirmAnotherOrder);
+
+      WorkflowResult verification = arazzoSessionService.verify(session.getId()).orElseThrow();
+      assertEquals("3 confirmOrder FAILED `confirmOrder` path `orderId` should come from "
+            + "`$steps.createOrder.outputs.id` (o-42), got o-1", described(verification).get(3));
+   }
+
+   /** The steps show the outputs read from the mock responses, and the values received with their source. */
+   @Test
+   void theStepsShowTheirOutputsAndTheValuesTheyReceived() throws Exception {
+      ArazzoSession session = sessionOnTheSaga();
+
+      record(session, createOrder(), reserveStock("o-42"), chargePayment("o-42"), confirmOrder("o-42"));
+
+      WorkflowResult verification = arazzoSessionService.verify(session.getId()).orElseThrow();
+      WorkflowStepResult createOrder = verification.getSteps().get(0);
+      assertEquals(Map.of("id", "o-42", "amount", 25.0), createOrder.outputs());
+      assertEquals(Map.of("id", "$response.body#/id", "amount", "$response.body#/amount"), createOrder.outputOrigins());
+      assertEquals(List.of(new WorkflowParameterValue("orderId", "path", "o-42", "$steps.createOrder.outputs.id")),
+            verification.getSteps().get(3).parameters());
+      assertEquals(Map.of("orderId", "o-42", "reservationId", "r-9"), verification.getOutputs());
    }
 
    /** AC-04: a step the service never calls fails the verification as missing. */

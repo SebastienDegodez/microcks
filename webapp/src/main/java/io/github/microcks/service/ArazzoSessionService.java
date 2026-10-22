@@ -44,6 +44,7 @@ import io.github.microcks.util.arazzo.ArazzoWorkflowReader;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -151,6 +152,7 @@ public class ArazzoSessionService {
          steps.add(stepResult(saved.getId(), verdict));
       }
       saved.setSteps(steps);
+      saved.setOutputs(ArazzoSessionVerifier.workflowOutputs(workflowOf(document, session).outputs(), verdicts));
       saved.setStatus(verdicts.stream().allMatch(verdict -> verdict.failures().isEmpty()) ? WorkflowRunStatus.SUCCESS
             : WorkflowRunStatus.FAILURE);
       saved.setSession(new WorkflowSessionCheck(session.getId(),
@@ -163,8 +165,7 @@ public class ArazzoSessionService {
    /** The steps of the workflow of the session, each with its operation in the API its source is linked to. */
    private static List<ExpectedStep> expectedSteps(ArazzoDocument document, ArazzoSession session,
          Map<String, ResolvedSource> sources) {
-      ArazzoWorkflow workflow = ArazzoWorkflowReader
-            .workflow(ArazzoWorkflowService.parse(document.getContent()), session.getWorkflowId()).orElseThrow();
+      ArazzoWorkflow workflow = workflowOf(document, session);
       List<ExpectedStep> steps = new ArrayList<>();
       for (ArazzoStep step : workflow.steps()) {
          ArazzoStepOperation operation = ArazzoDocumentService.operationOf(
@@ -174,6 +175,11 @@ public class ArazzoSessionService {
                new ExpectedStep(steps.size(), step, operation, source.link().apiName(), source.link().apiVersion()));
       }
       return steps;
+   }
+
+   private static ArazzoWorkflow workflowOf(ArazzoDocument document, ArazzoSession session) {
+      return ArazzoWorkflowReader.workflow(ArazzoWorkflowService.parse(document.getContent()), session.getWorkflowId())
+            .orElseThrow();
    }
 
    /**
@@ -195,8 +201,19 @@ public class ArazzoSessionService {
       String testCaseId = resultId + "-" + expected.index();
       arazzoRunService.storeExchange(testCaseId, requestOf(call, expected), responseOf(call, expected));
       return new WorkflowStepResult(expected.index(), expected.step().stepId(), stepOperation, status,
-            call.getResponseStatus(), 0, List.of(), Map.of(), testCaseId, message, call.getRequestUrl(), List.of(),
-            Map.of());
+            call.getResponseStatus(), 0, List.of(), verdict.outputs(), testCaseId, message, call.getRequestUrl(),
+            verdict.parameters(), outputOrigins(expected.step(), verdict.outputs()));
+   }
+
+   /** The runtime expression each output of a step comes from, for the outputs that have a value. */
+   private static Map<String, String> outputOrigins(ArazzoStep step, Map<String, Object> outputs) {
+      Map<String, String> origins = new LinkedHashMap<>();
+      step.outputs().forEach((name, expression) -> {
+         if (outputs.containsKey(name)) {
+            origins.put(name, expression);
+         }
+      });
+      return origins;
    }
 
    private static Request requestOf(ArazzoSessionCall call, ExpectedStep expected) {

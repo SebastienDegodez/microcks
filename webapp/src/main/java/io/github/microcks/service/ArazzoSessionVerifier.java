@@ -17,8 +17,19 @@ package io.github.microcks.service;
 
 import io.github.microcks.domain.ArazzoSessionCall;
 import io.github.microcks.domain.ArazzoStepOperation;
+import io.github.microcks.domain.Header;
+import io.github.microcks.domain.WorkflowParameterValue;
+import io.github.microcks.util.arazzo.ArazzoExpressionContext;
+import io.github.microcks.util.arazzo.ArazzoExpressionEvaluator;
+import io.github.microcks.util.arazzo.ArazzoExpressionException;
+import io.github.microcks.util.arazzo.ArazzoParameter;
+import io.github.microcks.util.arazzo.ArazzoReceivedRequest;
 import io.github.microcks.util.arazzo.ArazzoStep;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -31,10 +42,14 @@ import java.util.Set;
  * Verifies the calls an application made to the mocks in a session against the steps of a workflow: a step is matched
  * to the first call, in the order of receipt, that no earlier step took and that calls its operation, its method and
  * path template, on the mocks of the API its source is linked to. A step without call is missing; then the order of the
- * calls is checked, as the session asks.
+ * calls is checked, as the session asks, and the data of each call: the values it sends from runtime expressions must
+ * be those the outputs of the steps before it give, read from the responses of the mocks.
  * @author SebastienDegodez
  */
 final class ArazzoSessionVerifier {
+
+   private static final ObjectMapper JSON = new ObjectMapper();
+   private static final ArazzoExpressionEvaluator EXPRESSIONS = new ArazzoExpressionEvaluator();
 
    private ArazzoSessionVerifier() {
    }
@@ -52,11 +67,14 @@ final class ArazzoSessionVerifier {
 
    /**
     * How a step was verified.
-    * @param expected The step
-    * @param call     The call matched to it; null when none was
-    * @param failures Why the step fails, in the order they were found; empty when it passes
+    * @param expected   The step
+    * @param call       The call matched to it; null when none was
+    * @param failures   Why the step fails, in the order they were found; empty when it passes
+    * @param outputs    Its outputs, read from the response of the mocks to its call, by name
+    * @param parameters The value its call carries for each of its parameters, with the expression it should come from
     */
-   record StepVerdict(ExpectedStep expected, ArazzoSessionCall call, List<String> failures) {
+   record StepVerdict(ExpectedStep expected, ArazzoSessionCall call, List<String> failures, Map<String, Object> outputs,
+         List<WorkflowParameterValue> parameters) {
    }
 
    /**
@@ -67,18 +85,147 @@ final class ArazzoSessionVerifier {
     */
    static List<StepVerdict> verify(List<ExpectedStep> steps, List<ArazzoSessionCall> calls, ArazzoCallOrder order) {
       Map<ExpectedStep, ArazzoSessionCall> matched = match(steps, calls);
+      Map<String, Map<String, Object>> stepOutputs = new LinkedHashMap<>();
       List<StepVerdict> verdicts = new ArrayList<>();
       for (ExpectedStep step : steps) {
          ArazzoSessionCall call = matched.get(step);
-         List<String> failures = new ArrayList<>();
          if (call == null) {
-            failures.add("step `" + step.step().stepId() + "` missing");
-         } else {
-            order.violation(step, call, matched).ifPresent(failures::add);
+            verdicts.add(new StepVerdict(step, null, List.of("step `" + step.step().stepId() + "` missing"), Map.of(),
+                  List.of()));
+            continue;
          }
-         verdicts.add(new StepVerdict(step, call, failures));
+         List<String> failures = new ArrayList<>();
+         order.violation(step, call, matched).ifPresent(failures::add);
+         // The values the call carries are checked against the outputs of the steps before it in the workflow.
+         ReceivedCall before = new ReceivedCall(Map.of(), Map.copyOf(stepOutputs), null);
+         ArazzoReceivedRequest request = requestOf(step, call);
+         List<WorkflowParameterValue> parameters = new ArrayList<>();
+         for (ArazzoParameter parameter : step.step().parameters()) {
+            Object value = request.parameter(parameter.in(), parameter.name()).orElse(null);
+            String expression = expressionOf(parameter.value());
+            parameters.add(new WorkflowParameterValue(parameter.name(), parameter.in(), value, expression));
+            checkData(step, parameter.in() + " `" + parameter.name() + "`", expression, value, before)
+                  .ifPresent(failures::add);
+         }
+         if (step.step().requestBody() != null) {
+            step.step().requestBody().replacements().forEach((target, value) -> checkData(step, "body `" + target + "`",
+                  expressionOf(value), request.bodyValue(target).orElse(null), before).ifPresent(failures::add));
+         }
+         Map<String, Object> outputs = evaluated(step.step().outputs(),
+               new ReceivedCall(Map.of(), Map.copyOf(stepOutputs), call));
+         stepOutputs.put(step.step().stepId(), outputs);
+         verdicts.add(new StepVerdict(step, call, failures, outputs, parameters));
       }
       return verdicts;
+   }
+
+   /**
+    * @param expressions The outputs of the workflow, by name, with their runtime expressions
+    * @param verdicts    The verdicts of its steps
+    * @return The outputs of the workflow that have a value, by name
+    */
+   static Map<String, Object> workflowOutputs(Map<String, String> expressions, List<StepVerdict> verdicts) {
+      Map<String, Map<String, Object>> stepOutputs = new LinkedHashMap<>();
+      verdicts.stream().filter(verdict -> verdict.call() != null)
+            .forEach(verdict -> stepOutputs.put(verdict.expected().step().stepId(), verdict.outputs()));
+      return evaluated(expressions, new ReceivedCall(Map.of(), stepOutputs, null));
+   }
+
+   /** A value of the workflow is a runtime expression when it starts with $; null for a constant. */
+   private static String expressionOf(String value) {
+      return ArazzoExpressionEvaluator.isExpression(value) ? value : null;
+   }
+
+   /**
+    * A value a step sends must be the value of the runtime expression it comes from, as the outputs of the steps before
+    * it give it. A constant is not checked, nor an expression without value, such as an input of the workflow or the
+    * output of a missing step.
+    */
+   private static Optional<String> checkData(ExpectedStep step, String place, String expression, Object received,
+         ReceivedCall context) {
+      if (expression == null) {
+         return Optional.empty();
+      }
+      Object expected;
+      try {
+         expected = EXPRESSIONS.evaluate(expression, context);
+      } catch (ArazzoExpressionException noValue) {
+         return Optional.empty();
+      }
+      if (sameValue(expected, received)) {
+         return Optional.empty();
+      }
+      return Optional.of("`" + step.step().stepId() + "` " + place + " should come from `" + expression + "` ("
+            + expected + "), got " + (received == null ? "nothing" : received));
+   }
+
+   /** Numbers are equal by value, whatever their type; any other value by its text. */
+   private static boolean sameValue(Object expected, Object received) {
+      if (expected instanceof Number number && received instanceof Number other) {
+         return new BigDecimal(number.toString()).compareTo(new BigDecimal(other.toString())) == 0;
+      }
+      return received != null && String.valueOf(expected).equals(String.valueOf(received));
+   }
+
+   /** The outputs whose expressions have a value, by name; those without value are left out. */
+   private static Map<String, Object> evaluated(Map<String, String> expressions, ReceivedCall context) {
+      Map<String, Object> values = new LinkedHashMap<>();
+      expressions.forEach((name, expression) -> {
+         try {
+            values.put(name, EXPRESSIONS.resolve(expression, context));
+         } catch (ArazzoExpressionException noValue) {
+            // The output comes from a response the mocks did not give, or a step without call.
+         }
+      });
+      return values;
+   }
+
+   private static ArazzoReceivedRequest requestOf(ExpectedStep step, ArazzoSessionCall call) {
+      String url = call.getRequestUrl();
+      String query = url == null || !url.contains("?") ? null : url.substring(url.indexOf('?') + 1);
+      return new ArazzoReceivedRequest(step.operation().path(), call.getPath(), query,
+            headersOf(call.getRequestHeaders()), call.getRequestBody());
+   }
+
+   private static Map<String, List<String>> headersOf(Set<Header> headers) {
+      Map<String, List<String>> byName = new LinkedHashMap<>();
+      headers.forEach(header -> byName.put(header.getName(), List.copyOf(header.getValues())));
+      return byName;
+   }
+
+   /**
+    * What the runtime expressions of a step see in a session: no input, the outputs of the steps before it and, once
+    * the mocks answered, the response to its call.
+    */
+   private record ReceivedCall(Map<String, Object> inputs, Map<String, Map<String, Object>> steps,
+         ArazzoSessionCall call) implements ArazzoExpressionContext {
+
+      @Override
+      public int statusCode(String expression) {
+         return answered(expression).getResponseStatus();
+      }
+
+      @Override
+      public Map<String, List<String>> responseHeaders(String expression) {
+         return headersOf(answered(expression).getResponseHeaders());
+      }
+
+      @Override
+      public Object responseBody(String expression) {
+         String body = answered(expression).getResponseBody();
+         try {
+            return JSON.readValue(body, Object.class);
+         } catch (IllegalArgumentException | JsonProcessingException notJson) {
+            return body;
+         }
+      }
+
+      private ArazzoSessionCall answered(String expression) {
+         if (call == null) {
+            throw new ArazzoExpressionException("No response yet for " + expression);
+         }
+         return call;
+      }
    }
 
    /** The call matched to each step that has one, in the order of the workflow. */
