@@ -166,3 +166,37 @@
   color: var(--text-default);
   margin-left: 6px;
 }
+
+/* The Arazzo run a trace comes from: a neutral metadata chip, then its workflow, step and attempt. */
+.traces .trace-header .trace-arazzo {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+.traces .trace-header .trace-arazzo-chip {
+  display: inline-block;
+  height: 20px;
+  padding: 0 8px;
+  border: 1px solid var(--divider-light);
+  border-radius: 12px;
+  background: var(--background);
+  color: var(--text-default);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.traces .trace-header .trace-arazzo-origin {
+  color: var(--text-default);
+  font-family: SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.traces .trace-header .trace-arazzo-run {
+  color: var(--primary-500);
+}
