@@ -150,6 +150,7 @@
 </div>
 
 <div *ngIf="reports" class="modal-footer workflow-run-footer">
+  <span class="workflow-run-summary">Each run is judged on its example once it ends</span>
   <button type="button" class="btn btn-default workflow-run-history" (click)="openHistory()">Runs history</button>
   <button type="button" class="btn btn-primary workflow-run-close" (click)="bsModalRef.hide()">Close</button>
 </div>
