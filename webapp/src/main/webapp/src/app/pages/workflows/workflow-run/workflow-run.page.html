@@ -43,6 +43,22 @@
       </p>
     </div>
 
+    <div *ngIf="run.example?.verdict && run.example as example" class="workflow-run-example-verdict" role="status"
+         [class.workflow-run-example-matches]="example.verdict === 'MATCHES'"
+         [class.workflow-run-example-not-matching]="example.verdict === 'DOES_NOT_MATCH'">
+      <span class="pficon" aria-hidden="true" [class.pficon-ok]="example.verdict === 'MATCHES'"
+            [class.pficon-error-circle-o]="example.verdict === 'DOES_NOT_MATCH'"></span>
+      <div>
+        <p *ngIf="example.verdict === 'MATCHES'"><strong>Matches the example</strong>&ngsp;<code class="workflow-run-chip">{{ example.name }}</code>: every expectation holds.</p>
+        <ng-container *ngIf="example.verdict === 'DOES_NOT_MATCH'">
+          <p><strong>Does not match the example</strong>&ngsp;<code class="workflow-run-chip">{{ example.name }}</code>:</p>
+          <ul class="workflow-run-unmet">
+            <li *ngFor="let unmet of example.unmetExpectations">{{ unmet }}</li>
+          </ul>
+        </ng-container>
+      </div>
+    </div>
+
     <h2 class="workflow-run-section-title">Properties</h2>
     <dl class="workflow-run-properties">
       <div class="workflow-run-property">
@@ -70,6 +86,25 @@
           <span *ngIf="!entries(run.outputs).length" class="workflow-run-muted">None declared</span>
         </dd>
       </div>
+      <ng-container *ngIf="run.example as example">
+        <div class="workflow-run-property">
+          <dt>Example</dt>&ngsp;<dd><code class="workflow-run-chip">{{ example.name }}</code> · {{ verdictLabel(example) }}</dd>
+        </div>
+        <div *ngIf="expectedOutputs(run).length" class="workflow-run-property">
+          <dt>Expected outputs</dt>&ngsp;<dd>
+            <span *ngFor="let output of expectedOutputs(run)" class="workflow-run-value workflow-run-expected-output"
+                  [class.workflow-run-expected-unmet]="output.unmet"><code class="workflow-run-chip">{{ output.name }}</code> expected <code class="workflow-run-chip">{{ output.expected }}</code>, got <code class="workflow-run-chip">{{ output.got }}</code>&ngsp;</span>
+          </dd>
+        </div>
+        <div *ngIf="example.steps.length" class="workflow-run-property">
+          <dt>Expected steps</dt>&ngsp;<dd>
+            <span *ngFor="let step of example.steps" class="workflow-run-value workflow-run-expected-step"><code class="workflow-run-chip">{{ step.stepId }}</code>{{ expectedStatus(step) }}<ng-container *ngFor="let output of entries(step.outputs)">&ngsp;·&ngsp;<code class="workflow-run-chip">{{ output.name }}</code> = <code class="workflow-run-chip">{{ output.value }}</code></ng-container>&ngsp;</span>
+          </dd>
+        </div>
+        <div class="workflow-run-property">
+          <dt>Expected end</dt>&ngsp;<dd><ng-container *ngIf="example.stopsAt; else runsToEnd">Stops at <code class="workflow-run-chip">{{ example.stopsAt }}</code></ng-container><ng-template #runsToEnd>Runs to its end</ng-template></dd>
+        </div>
+      </ng-container>
     </dl>
 
     <h2 class="workflow-run-section-title">Steps</h2>

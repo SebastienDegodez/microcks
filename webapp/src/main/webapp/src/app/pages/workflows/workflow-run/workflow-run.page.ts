@@ -22,7 +22,13 @@ import { catchError, map, shareReplay, switchMap, takeWhile, tap } from 'rxjs/op
 import { BsModalService } from 'ngx-bootstrap/modal';
 import { HighlightAuto } from 'ngx-highlightjs';
 
-import { WorkflowCriterionResult, WorkflowResult, WorkflowStepResult } from '../../../models/arazzo-run.model';
+import {
+  ArazzoStepExpectation,
+  WorkflowCriterionResult,
+  WorkflowExampleCheck,
+  WorkflowResult,
+  WorkflowStepResult
+} from '../../../models/arazzo-run.model';
 import { RequestResponsePair } from '../../../models/service.model';
 import { ArazzoRunService } from '../../../services/arazzo-run.service';
 import { TimeAgoPipe } from '../../../components/time-ago.pipe';
@@ -45,6 +51,9 @@ export type RunFailure = {
   message?: string;
   attempts: number;
 };
+
+/** An output a recorded example expects, next to the one the run produced; unmet when they differ. */
+export type ExpectedOutput = { name: string; expected: string; got: string; unmet: boolean };
 
 /** Which attempt of a retried step a slot of the run is, from 1, out of how many, and whether a later one followed. */
 export type StepAttempt = { attempt: number; attempts: number; retried: boolean };
@@ -191,7 +200,34 @@ export class WorkflowRunPageComponent implements OnInit {
     return JSON.stringify(value) ?? 'null';
   }
 
+  /** Running a run again plays the same example, if it played one. */
   runAgain(run: WorkflowResult): void {
-    openRunDialog(this.modals, run.documentId, [run.workflowId], run.workflowId);
+    openRunDialog(this.modals, run.documentId, [run.workflowId], run.workflowId, run.example?.name);
+  }
+
+  /** Whether the run matches the example it played, once it ended. */
+  verdictLabel(example: WorkflowExampleCheck): string {
+    switch (example.verdict) {
+      case 'MATCHES': return 'Matches';
+      case 'DOES_NOT_MATCH': return 'Does not match';
+      default: return 'Judged once the run ends';
+    }
+  }
+
+  /** Each output the example expects, with the output the run produced: unmet when the judge says so. */
+  expectedOutputs(run: WorkflowResult): ExpectedOutput[] {
+    const example = run.example!;
+    const produced = run.outputs ?? {};
+    return Object.entries(example.outputs).map(([name, value]) => ({
+      name,
+      expected: this.json(value),
+      got: name in produced ? this.json(produced[name]) : 'absent',
+      unmet: example.unmetExpectations.some(unmet => unmet.startsWith('Output ' + name + ':'))
+    }));
+  }
+
+  /** What an example expects of a step: its exact status, when it gives one. */
+  expectedStatus(step: ArazzoStepExpectation): string {
+    return step.status == null ? '' : ' ' + step.status;
   }
 }

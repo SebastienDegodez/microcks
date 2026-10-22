@@ -65,7 +65,14 @@
         <tbody>
           <tr *ngFor="let run of runs">
             <td><a class="workflow-runs-number" [routerLink]="['/workflows/runs', run.id]">#{{ run.number ?? '?' }}</a></td>
-            <td><code class="workflow-runs-chip">{{ run.workflowId }}</code></td>
+            <td>
+              <code class="workflow-runs-chip">{{ run.workflowId }}</code>
+              <div *ngIf="run.example" class="workflow-runs-example"
+                   [class.workflow-runs-example-matches]="run.exampleVerdict === 'MATCHES'"
+                   [class.workflow-runs-example-not-matching]="run.exampleVerdict === 'DOES_NOT_MATCH'">
+                example&ngsp;<code class="workflow-runs-chip">{{ run.example }}</code><ng-container *ngIf="run.exampleVerdict">&ngsp;·&ngsp;<span class="pficon" aria-hidden="true" [class.pficon-ok]="run.exampleVerdict === 'MATCHES'" [class.pficon-error-circle-o]="run.exampleVerdict === 'DOES_NOT_MATCH'"></span>&ngsp;{{ run.exampleVerdict === 'MATCHES' ? 'Matches' : 'Does not match' }}</ng-container>
+              </div>
+            </td>
             <td>{{ targetLabels[run.target] }}</td>
             <td [ngSwitch]="run.status">
               <span *ngSwitchCase="'SUCCESS'" class="workflow-runs-passed">
