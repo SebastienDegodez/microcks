@@ -52,7 +52,6 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
  * Acceptance tests of running an Arazzo workflow with its step responses validated against their OpenAPI schema,
@@ -137,13 +136,15 @@ class ArazzoRunSchemaValidationTest {
       assertEquals(List.of(true, false), minion.requests().stream().map(ArazzoRunRequest::validateSchema).toList());
    }
 
-   @Test
-   void aLinkedApiWithoutOpenApiContractIsHandedWithoutContract() throws Exception {
+   @ParameterizedTest
+   @CsvSource({ "JSON_SCHEMA, ", "SWAGGER, order-api.openapi.yaml" })
+   void aLinkedApiIsHandedItsContractOnlyWhenItIsAnOpenApiOrSwaggerOne(ResourceType type, String contract)
+         throws Exception {
       apiIsImported("customer-api.openapi.yaml");
       apiIsImported("order-api.openapi.yaml");
       String orderApi = serviceRepository.findByNameAndVersion("Order API", "1.0.0").getId();
       for (Resource resource : resourceRepository.findMainByServiceId(orderApi)) {
-         resource.setType(ResourceType.JSON_SCHEMA);
+         resource.setType(type);
          resourceRepository.save(resource);
       }
       arazzoDocumentService.importArazzoSources(fixture("order-fulfilment.arazzo-sources.yaml"));
@@ -154,7 +155,7 @@ class ArazzoRunSchemaValidationTest {
 
       Map<String, ArazzoRunRequest.Source> sources = minion.requests().get(0).sources();
       assertEquals(fixture("customer-api.openapi.yaml"), sources.get("customerApi").openApiContract());
-      assertNull(sources.get("orderApi").openApiContract());
+      assertEquals(contract == null ? null : fixture(contract), sources.get("orderApi").openApiContract());
    }
 
    @Test

@@ -301,11 +301,11 @@ public class ArazzoRunService {
       return targets;
    }
 
-   /** The main OpenAPI contract Microcks stored for the API a source is linked to; null when it has none. */
+   /** The main OpenAPI or Swagger contract Microcks stored for the API a source is linked to; null when none. */
    private String openApiContractOf(ResolvedSource source) {
-      return resourceRepository.findMainByServiceId(source.serviceId()).stream()
-            .filter(resource -> resource.getType() == ResourceType.OPEN_API_SPEC).map(Resource::getContent).findFirst()
-            .orElse(null);
+      return resourceRepository.findMainByServiceId(source.serviceId()).stream().filter(
+            resource -> resource.getType() == ResourceType.OPEN_API_SPEC || resource.getType() == ResourceType.SWAGGER)
+            .map(Resource::getContent).findFirst().orElse(null);
    }
 
    /**
