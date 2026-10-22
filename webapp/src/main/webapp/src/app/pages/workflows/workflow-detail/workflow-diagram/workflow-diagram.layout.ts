@@ -15,6 +15,7 @@
  */
 import { ArazzoExpressionUse, ArazzoStepDetail, ArazzoWorkflowDetail } from '../../../../models/arazzo-workflow.model';
 import { stepActionLines } from '../step-actions';
+import { stepEndpoint, stepMessagingSummary } from '../step-messaging';
 
 /** A rectangle of the diagram, in pixels from its top left corner. */
 export type DiagramBox = { x: number; y: number; width: number; height: number };
@@ -145,12 +146,16 @@ function outputsHeight(workflow: ArazzoWorkflowDetail): number {
 
 function stepHeight(step: ArazzoStepDetail): number {
   const operation = step.operation;
-  const endpoint = operation.reason ? 0 : 20 * linesOf('REST  ' + operation.method + ' ' + operation.path, MONO_12);
-  const operationId = 20 * linesOf(operation.operationId + (operation.reason ? '  ' + operation.reason : ''), SANS_13);
+  const endpointText = step.messaging ? 'EVENT  ' + stepEndpoint(step) : 'REST  ' + operation.method + ' ' + operation.path;
+  const endpoint = operation.reason ? 0 : 20 * linesOf(endpointText, MONO_12);
+  // A step on a channel found in its AsyncAPI contract names no operation.
+  const operationText = (operation.operationId || operation.channel) + (operation.reason ? '  ' + operation.reason : '');
+  const operationId = operation.operationId || operation.reason ? 20 * linesOf(operationText, SANS_13) : 0;
+  const messaging = stepMessagingSummary(step);
   const criteria = step.successCriteria.map(criterion => criterion.condition).join(' · ');
   const actions = stepActionLines(step).reduce((height, line) => height + 4 + 18 * linesOf('↻ ' + line.summary, SANS_13), 0);
-  return NODE_PADDING + 28 + endpoint + operationId + (criteria ? 6 + 16 * linesOf('✓ ' + criteria, MONO_11) : 0)
-    + actions;
+  return NODE_PADDING + 28 + endpoint + operationId + (messaging ? 4 + 16 * linesOf('✉ ' + messaging, MONO_11) : 0)
+    + (criteria ? 6 + 16 * linesOf('✓ ' + criteria, MONO_11) : 0) + actions;
 }
 
 function nodeRight(nodes: DiagramNode[]): number {

@@ -122,6 +122,11 @@
   line-height: 14px;
 }
 
+/* A step of an AsyncAPI source, in the colour of event-driven APIs. */
+.workflow-protocol-event {
+  border-color: var(--warning-500);
+}
+
 .workflow-muted {
   color: var(--text-secondary);
 }
@@ -276,6 +281,7 @@
   text-transform: none;
 }
 
+.workflow-step-messaging,
 .workflow-step-parameter,
 .workflow-step-replacement,
 .workflow-step-output,

@@ -34,6 +34,7 @@ import { startWith } from 'rxjs/operators';
 import { ArazzoStepDetail, ArazzoWorkflowDetail } from '../../../../models/arazzo-workflow.model';
 import { DiagramEdge, DiagramNode, WorkflowDiagram, layoutWorkflowDiagram } from './workflow-diagram.layout';
 import { StepActionLine, stepActionLines } from '../step-actions';
+import { stepEndpoint, stepMessagingSummary } from '../step-messaging';
 
 /**
  * A read-only, top-down diagram of an Arazzo workflow: its inputs, its steps and its outputs chained by sequence
@@ -100,6 +101,16 @@ export class WorkflowDiagramComponent implements AfterViewInit, OnDestroy {
   /** The success criteria of a step on one compact line. */
   criteriaOf(step: ArazzoStepDetail): string {
     return step.successCriteria.map(criterion => criterion.condition).join(' · ');
+  }
+
+  /** Where a step of an AsyncAPI source sends or receives: "RECEIVE orders/confirmed". */
+  endpointOf(step: ArazzoStepDetail): string {
+    return stepEndpoint(step);
+  }
+
+  /** The message a receive step waits for, and for how long, on one compact line; empty when it tells neither. */
+  messagingOf(step: ArazzoStepDetail): string {
+    return stepMessagingSummary(step);
   }
 
   /** What a step does on success and on failure, one line each, read once per step. */

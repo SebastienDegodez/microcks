@@ -134,6 +134,15 @@
   outline-offset: 2px;
 }
 
+/* A step of an AsyncAPI source, in the colour of event-driven APIs; a problem keeps its own colour. */
+.diagram-node-event {
+  --node-accent: var(--warning-500);
+}
+
+.workflow-protocol-event {
+  border-color: var(--warning-500);
+}
+
 .diagram-node-problem {
   --node-accent: var(--danger);
   border-style: dashed;
@@ -240,6 +249,24 @@
   padding-top: 6px;
   border-top: 1px solid color-mix(in srgb, var(--node-accent) 30%, transparent);
   line-height: 16px;
+}
+
+/* The message a receive step waits for, and for how long. */
+.diagram-step-messaging {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 4px;
+  line-height: 16px;
+}
+
+.diagram-step-messaging .fa {
+  flex-shrink: 0;
+  color: var(--warning-500);
+}
+
+.diagram-step-messaging .diagram-mono {
+  font-size: 11px;
 }
 
 .diagram-step-criteria .fa-check {

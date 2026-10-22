@@ -47,16 +47,19 @@
       </div>
 
       <div *ngIf="node.step as step" #nodeElement class="diagram-node diagram-node-step"
-           [class.diagram-node-problem]="!!step.operation.reason" [attr.data-node-id]="node.id"
+           [class.diagram-node-event]="!!step.messaging" [class.diagram-node-problem]="!!step.operation.reason"
+           [attr.data-node-id]="node.id"
            [style.left.px]="node.x" [style.top.px]="node.y" [style.width.px]="node.width"
            role="button" tabindex="0" [attr.title]="'Show the step ' + step.stepId"
            (click)="select(node)" (keydown.enter)="select(node)">
         <div class="diagram-step-title">
           <span class="workflow-step-number">{{ node.index! + 1 }}</span>&ngsp;<span class="diagram-step-id">{{ step.stepId }}</span>
         </div>&ngsp;<div *ngIf="!step.operation.reason" class="diagram-step-endpoint">
-          <span class="workflow-protocol-chip">REST</span>&ngsp;<code class="diagram-mono">{{ step.operation.method }} {{ step.operation.path }}</code>
-        </div>&ngsp;<div class="diagram-step-operation">
-          {{ step.operation.operationId }}<ng-container *ngIf="step.operation.reason">&ngsp;<span class="workflow-problem"><span class="pficon pficon-warning-triangle-o" aria-hidden="true"></span>&ngsp;{{ step.operation.reason }}</span></ng-container>
+          <span class="workflow-protocol-chip" [class.workflow-protocol-event]="!!step.messaging">{{ step.messaging ? 'EVENT' : 'REST' }}</span>&ngsp;<code class="diagram-mono">{{ step.messaging ? endpointOf(step) : step.operation.method + ' ' + step.operation.path }}</code>
+        </div>&ngsp;<div *ngIf="step.operation.operationId || step.operation.reason" class="diagram-step-operation">
+          {{ step.operation.operationId || step.operation.channel }}<ng-container *ngIf="step.operation.reason">&ngsp;<span class="workflow-problem"><span class="pficon pficon-warning-triangle-o" aria-hidden="true"></span>&ngsp;{{ step.operation.reason }}</span></ng-container>
+        </div>&ngsp;<div *ngIf="messagingOf(step) as messaging" class="diagram-step-messaging">
+          <span class="fa fa-envelope-o" aria-hidden="true"></span><code class="diagram-mono">{{ messaging }}</code>
         </div>&ngsp;<div *ngIf="criteriaOf(step) as criteria" class="diagram-step-criteria">
           <span class="fa fa-check" aria-hidden="true"></span><code class="diagram-mono">{{ criteria }}</code>
         </div>&ngsp;<div *ngFor="let line of actionLines(step)" class="diagram-step-action" [attr.title]="line.action.name">

@@ -86,6 +86,7 @@
               <code class="workflow-chip">{{ passing.fromStepId }}.outputs.{{ passing.outputName }}</code>&ngsp;<ng-container [ngSwitch]="passing.to.place">
                 <ng-container *ngSwitchCase="'body'">replaces <code class="workflow-chip">{{ passing.to.target }}</code> in the request body of</ng-container>
                 <ng-container *ngSwitchCase="'criterion'">is checked by a success criterion of</ng-container>
+                <ng-container *ngSwitchCase="'correlationId'">is the correlationId of</ng-container>
                 <ng-container *ngSwitchDefault>becomes the <code class="workflow-chip">{{ passing.to.target }}</code> {{ passing.to.place }} parameter of</ng-container>
               </ng-container>&ngsp;{{ passing.to.stepId }}
             </p>
@@ -95,11 +96,14 @@
                   <span class="workflow-step-number">{{ index + 1 }}</span>&ngsp;<span class="workflow-step-id">{{ step.stepId }}</span>
                 </span>
                 <span class="workflow-step-operation">
-                  <ng-container *ngIf="!step.operation.reason">
+                  <ng-container *ngIf="!step.operation.reason && !step.messaging">
                     <span class="workflow-protocol-chip">REST</span>&ngsp;<span class="workflow-endpoint">{{ step.operation.method }} {{ step.operation.path }}</span>&ngsp;<a [routerLink]="['/services', serviceIdOf(workflow, step)]">{{ step.operation.operationId }}</a>
                   </ng-container>
+                  <ng-container *ngIf="!step.operation.reason && step.messaging">
+                    <span class="workflow-protocol-chip workflow-protocol-event">EVENT</span>&ngsp;<span class="workflow-endpoint">{{ endpointOf(step) }}</span><ng-container *ngIf="step.operation.operationId">&ngsp;<a [routerLink]="['/services', serviceIdOf(workflow, step)]">{{ step.operation.operationId }}</a></ng-container>
+                  </ng-container>
                   <ng-container *ngIf="step.operation.reason">
-                    <code class="workflow-chip">{{ step.operation.operationId }}</code>&ngsp;<span class="workflow-problem">
+                    <code class="workflow-chip">{{ step.operation.operationId || step.operation.channel }}</code>&ngsp;<span class="workflow-problem">
                       <span class="pficon pficon-warning-triangle-o" aria-hidden="true"></span>
                       {{ step.operation.reason }}
                     </span>
@@ -110,6 +114,22 @@
 
               <div class="row workflow-step-body">
                 <div class="col-sm-6">
+                  <ng-container *ngIf="step.messaging as messaging">
+                    <h4 class="workflow-step-section">Message exchange</h4>
+                    <div *ngIf="actionOf(step) as action" class="workflow-step-messaging">
+                      <span class="workflow-muted">Action</span>&ngsp;<code class="workflow-chip">{{ action }}</code>
+                    </div>
+                    <div *ngIf="!step.operation.reason && step.operation.channel" class="workflow-step-messaging">
+                      <span class="workflow-muted">Channel</span>&ngsp;<code class="workflow-chip">{{ step.operation.channel }}</code>
+                    </div>
+                    <div *ngIf="messaging.correlationId" class="workflow-step-messaging">
+                      <span class="workflow-muted">Correlation id</span>&ngsp;<span class="workflow-muted">{{ isExpression(messaging.correlationId) ? '←' : '=' }}</span>&ngsp;<code class="workflow-chip">{{ messaging.correlationId }}</code>
+                    </div>
+                    <div *ngIf="messaging.timeout != null" class="workflow-step-messaging">
+                      <span class="workflow-muted">Timeout</span>&ngsp;<code class="workflow-chip">{{ messaging.timeout }} ms</code>
+                    </div>
+                  </ng-container>
+
                   <ng-container *ngIf="step.parameters.length">
                     <h4 class="workflow-step-section">Parameters</h4>
                     <div *ngFor="let parameter of step.parameters" class="workflow-step-parameter">
