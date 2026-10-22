@@ -21,6 +21,7 @@ import io.github.microcks.domain.Header;
 import io.github.microcks.service.ArazzoSessionVerifier.ExpectedStep;
 import io.github.microcks.util.arazzo.ArazzoOperationCall;
 import io.github.microcks.util.arazzo.ArazzoStep;
+import io.github.microcks.util.arazzo.ArazzoWorkflow;
 
 import org.junit.jupiter.api.Test;
 
@@ -59,8 +60,11 @@ class ArazzoSessionVerifierTest {
       call.setResponseHeaders(Set.of(new Header("Location", Set.of("/receipts/rc-1"))));
       call.setResponseBody("Receipt of order o-42");
 
-      List<ArazzoSessionVerifier.StepVerdict> verdicts = ArazzoSessionVerifier.verify(List.of(expected), List.of(call),
-            Map.of(), null);
+      ArazzoWorkflow workflow = new ArazzoWorkflow("printWorkflow", null, null, List.of(), List.of(printReceipt),
+            Map.of(), Map.of(), List.of());
+
+      List<ArazzoSessionVerifier.StepVerdict> verdicts = ArazzoSessionVerifier.verify(workflow, List.of(expected),
+            List.of(call), Map.of(), null);
 
       assertEquals(Map.of("status", 202, "location", "/receipts/rc-1", "receipt", "Receipt of order o-42"),
             verdicts.get(0).outputs());

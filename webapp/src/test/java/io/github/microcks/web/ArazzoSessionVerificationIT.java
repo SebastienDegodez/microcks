@@ -233,6 +233,22 @@ class ArazzoSessionVerificationIT extends AbstractBaseIT {
       }
    }
 
+   /** dependsOn relaxes the order: in Order saga 1.1.0, charging before reserving the items is in order. */
+   @Test
+   void dependsOnRelaxesTheOrderOfTheSteps() throws Exception {
+      uploadArtifactFile(example("order-saga.arazzo.yaml", "order-saga-parallel"), true);
+      uploadArtifactFile(example("order-saga.arazzo.yaml", "order-saga-parallel-sources"), false);
+      String sessionId = openSession("{\"documentId\": \"Order saga:1.1.0\", \"workflowId\": \"placeOrderSaga\"}");
+
+      placeOrder(sessionId);
+      chargePayment(sessionId);
+      reserveStock(sessionId);
+      confirmOrder(sessionId);
+
+      JsonNode verification = verify(sessionId);
+      assertEquals("SUCCESS", verification.get("status").asText(), verification.toPrettyString());
+   }
+
    /** A session opened with inputs checks the values coming from them: customer c-9 is not the c-7 given. */
    @Test
    void theValuesComingFromTheInputsOfTheSessionAreChecked() throws Exception {

@@ -291,6 +291,30 @@ class ArazzoSessionVerificationTest {
       assertEquals(0, arazzoSessionRepository.count());
    }
 
+   /**
+    * dependsOn relaxes the order (Arazzo 1.1): in Order saga 1.1.0, reserveStock and chargePayment both depend on
+    * createOrder only, so they may come in any order; confirmOrder declares no dependsOn, so it comes after every step
+    * listed before it.
+    */
+   @ParameterizedTest
+   @CsvSource(delimiter = '|', value = { "createOrder,chargePayment,reserveStock,confirmOrder | SUCCESS | ",
+         "createOrder,chargePayment,confirmOrder,reserveStock | FAILURE | "
+               + "3 confirmOrder FAILED step `reserveStock` expected before `confirmOrder`" })
+   void dependsOnRelaxesTheOrderOfTheSteps(String received, WorkflowRunStatus status, String failedStep)
+         throws Exception {
+      ArazzoDocument saga = orderSagaIsImportedAndLinked("order-saga-parallel");
+      ArazzoSession session = arazzoSessionService.openSession(saga.getId(), SAGA).orElseThrow();
+      Map<String, ArazzoSessionCall> calls = Map.of("createOrder", createOrder(), "reserveStock", reserveStock("o-42"),
+            "chargePayment", chargePayment("o-42"), "confirmOrder", confirmOrder("o-42"));
+
+      record(session, Arrays.stream(received.split(",")).map(calls::get).toArray(ArazzoSessionCall[]::new));
+
+      WorkflowResult verification = arazzoSessionService.verify(session.getId()).orElseThrow();
+      assertEquals(status, verification.getStatus());
+      assertEquals(failedStep == null ? List.of() : List.of(failedStep),
+            described(verification).stream().filter(step -> step.contains("FAILED")).toList());
+   }
+
    /** AC-04: a step the service never calls fails the verification as missing. */
    @Test
    void aMissingStepFailsTheVerification() throws Exception {
@@ -460,13 +484,18 @@ class ArazzoSessionVerificationTest {
    }
 
    private ArazzoDocument orderSagaIsImportedAndLinked() throws Exception {
+      return orderSagaIsImportedAndLinked("order-saga");
+   }
+
+   /** Imports the Order, Stock and Payment APIs, then a saga of the fixture and its overlay, linking them. */
+   private ArazzoDocument orderSagaIsImportedAndLinked(String saga) throws Exception {
       for (String api : List.of("order-api", "stock-api", "payment-api")) {
          Path contract = Files.createTempFile(api, ".yaml");
          Files.writeString(contract, example("order-saga.contracts.yaml", api));
          serviceService.importServiceDefinition(contract.toFile(), null, new ArtifactInfo(api + ".yaml", true));
       }
-      arazzoDocumentService.importArazzoSources(example("order-saga.arazzo.yaml", "order-saga-sources"));
-      return arazzoDocumentService.importArazzoDocument(example("order-saga.arazzo.yaml", "order-saga"));
+      arazzoDocumentService.importArazzoSources(example("order-saga.arazzo.yaml", saga + "-sources"));
+      return arazzoDocumentService.importArazzoDocument(example("order-saga.arazzo.yaml", saga));
    }
 
    /** One YAML document per example of a fixture, each announced by a {@code # example: <name> - <what>} comment. */

@@ -25,6 +25,8 @@ import io.github.microcks.util.arazzo.ArazzoExpressionException;
 import io.github.microcks.util.arazzo.ArazzoParameter;
 import io.github.microcks.util.arazzo.ArazzoReceivedRequest;
 import io.github.microcks.util.arazzo.ArazzoStep;
+import io.github.microcks.util.arazzo.ArazzoStepOrder;
+import io.github.microcks.util.arazzo.ArazzoWorkflow;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -43,9 +45,10 @@ import java.util.Set;
  * Verifies the calls an application made to the mocks in a session against the steps of a workflow: a step is matched
  * to the first call, in the order of receipt, that no earlier step took and that calls its operation, its method and
  * path template, on the mocks of the API its source is linked to, whatever its place. A step without call is missing.
- * Then each call is checked: it must be received after the calls of the prerequisites of its step; the values it sends
- * from runtime expressions must be those the outputs of the steps before it give, read from the responses of the mocks;
- * and its request must conform to the contract of the API it called.
+ * Then each call is checked: it must be received after the calls of the prerequisites of its step, as "dependsOn
+ * relaxes" the order of the workflow; the values it sends from runtime expressions must be those the outputs of the
+ * steps before it give, read from the responses of the mocks; and its request must conform to the contract of the API
+ * it called.
  * @author SebastienDegodez
  */
 final class ArazzoSessionVerifier {
@@ -83,16 +86,16 @@ final class ArazzoSessionVerifier {
    }
 
    /**
+    * @param workflow    The workflow, which tells the prerequisites of each step: "dependsOn relaxes" the order
     * @param steps       The steps of the workflow, in its order
     * @param calls       The calls of the session, in their order of receipt
     * @param inputs      The inputs of the workflow the session was opened with, by name; empty for none
     * @param resourceUrl The URL the relative references of the contracts resolve against; null for none
     * @return The verdict of each step, in the order of the workflow
     */
-   static List<StepVerdict> verify(List<ExpectedStep> steps, List<ArazzoSessionCall> calls, Map<String, Object> inputs,
-         String resourceUrl) {
+   static List<StepVerdict> verify(ArazzoWorkflow workflow, List<ExpectedStep> steps, List<ArazzoSessionCall> calls,
+         Map<String, Object> inputs, String resourceUrl) {
       Map<ExpectedStep, ArazzoSessionCall> matched = match(steps, calls);
-      Map<String, List<String>> prerequisites = prerequisites(steps.stream().map(ExpectedStep::step).toList());
       Map<String, ArazzoSessionCall> callOfStep = new LinkedHashMap<>();
       matched.forEach((step, call) -> callOfStep.put(step.step().stepId(), call));
       Map<String, Map<String, Object>> stepOutputs = new LinkedHashMap<>();
@@ -105,7 +108,8 @@ final class ArazzoSessionVerifier {
             continue;
          }
          List<String> failures = new ArrayList<>();
-         outOfOrder(step, call, prerequisites.get(step.step().stepId()), callOfStep, calls).ifPresent(failures::add);
+         outOfOrder(step, call, ArazzoStepOrder.prerequisitesOf(workflow, step.step().stepId()), callOfStep, calls)
+               .ifPresent(failures::add);
          // The values the call carries are checked against the outputs of the steps before it in the workflow.
          ReceivedCall before = new ReceivedCall(inputs, Map.copyOf(stepOutputs), null);
          ArazzoReceivedRequest request = requestOf(step, call);
@@ -245,27 +249,12 @@ final class ArazzoSessionVerifier {
    }
 
    /**
-    * The steps each step of a workflow must be received after: every step listed before it, which is the strict order
-    * of the workflow. This is the one place the order rule lives: once Arazzo 1.1 step dependsOn is read, a step that
-    * declares it only needs the steps it names and those whose outputs it uses.
-    * @param steps The steps of the workflow, in its order
-    * @return The ids of the prerequisites of each step, in the order of the workflow, by step id
-    */
-   static Map<String, List<String>> prerequisites(List<ArazzoStep> steps) {
-      Map<String, List<String>> prerequisites = new LinkedHashMap<>();
-      List<String> before = new ArrayList<>();
-      for (ArazzoStep step : steps) {
-         prerequisites.put(step.stepId(), List.copyOf(before));
-         before.add(step.stepId());
-      }
-      return prerequisites;
-   }
-
-   /**
     * A call is in order when the calls of the prerequisites of its step were all received before it; else it names the
-    * first prerequisite whose call was not. A prerequisite without call is missing on its own and does not count here.
+    * first prerequisite, in the order of the workflow, whose call was not. The prerequisites follow the rule of the
+    * shared kernel: the steps a step names in its dependsOn and those whose outputs it uses, or every step listed
+    * before a step without dependsOn. A prerequisite without call is missing on its own and does not count here.
     */
-   private static Optional<String> outOfOrder(ExpectedStep step, ArazzoSessionCall call, List<String> prerequisites,
+   private static Optional<String> outOfOrder(ExpectedStep step, ArazzoSessionCall call, Set<String> prerequisites,
          Map<String, ArazzoSessionCall> callOfStep, List<ArazzoSessionCall> calls) {
       List<ArazzoSessionCall> receivedBefore = calls.subList(0, calls.indexOf(call));
       return prerequisites.stream()

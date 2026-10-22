@@ -205,8 +205,8 @@ public class ArazzoSessionService {
       Map<String, ResolvedSource> sources = arazzoDocumentService.resolveSources(document);
       List<ArazzoSessionCall> calls = arazzoSessionCallRepository.findBySessionIdOrderByIndexAsc(session.getId());
       Map<String, Object> inputs = session.getInputs() == null ? Map.of() : session.getInputs();
-      List<StepVerdict> verdicts = ArazzoSessionVerifier.verify(expectedSteps(document, session, sources), calls,
-            inputs, validationResourceUrl);
+      List<StepVerdict> verdicts = ArazzoSessionVerifier.verify(workflowOf(document, session.getWorkflowId()),
+            expectedSteps(document, session, sources), calls, inputs, validationResourceUrl);
 
       WorkflowResult result = new WorkflowResult();
       result.setDocumentId(document.getId());
