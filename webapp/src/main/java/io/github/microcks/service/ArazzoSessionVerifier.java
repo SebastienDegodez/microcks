@@ -217,8 +217,8 @@ final class ArazzoSessionVerifier {
     * What the runtime expressions of a step see in a session: the inputs it was opened with, the outputs of the steps
     * before it and, once the mocks answered, the response to its call.
     */
-   private record ReceivedCall(Map<String, Object> inputs, Map<String, Map<String, Object>> steps,
-         ArazzoSessionCall call) implements ArazzoExpressionContext {
+   record ReceivedCall(Map<String, Object> inputs, Map<String, Map<String, Object>> steps, ArazzoSessionCall call)
+         implements ArazzoExpressionContext {
 
       @Override
       public int statusCode(String expression) {

@@ -23,84 +23,172 @@ import io.github.microcks.domain.Request;
 import io.github.microcks.domain.Response;
 import io.github.microcks.repository.ArazzoSessionRepository;
 import io.github.microcks.repository.RequestRepository;
+import io.github.microcks.repository.ResponseRepository;
+import io.github.microcks.repository.ServiceStateRepository;
 import io.github.microcks.service.ArazzoDocumentService.ResolvedSource;
 import io.github.microcks.service.ArazzoSessionVerifier.ExpectedStep;
+import io.github.microcks.service.ArazzoSessionVerifier.ReceivedCall;
+import io.github.microcks.util.arazzo.ArazzoExpressionEvaluator;
+import io.github.microcks.util.arazzo.ArazzoExpressionException;
 import io.github.microcks.util.arazzo.ArazzoStep;
 import io.github.microcks.util.arazzo.ArazzoWorkflow;
 import io.github.microcks.util.arazzo.ArazzoWorkflowReader;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.Date;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 /**
- * Service bean deciding how the mocks answer a call made in an Arazzo verification session: the step of the workflow
- * the call matches answers with its example, filled with the values of the session.
+ * Service bean deciding how the mocks answer a call made in an open Arazzo verification session: the step of the
+ * workflow the call matches answers with the example the mocks dispatched, or the example of its operation when they
+ * dispatched none, filled with the values of the session. The values the earlier steps gave are the state of the
+ * session: the outputs of each answered step, kept in the state store of the API that answered it, under a key of the
+ * session, and expiring with the session.
  * @author SebastienDegodez
  */
 @org.springframework.stereotype.Service
 public class ArazzoSessionAnswerService {
 
+   private static final ObjectMapper JSON = new ObjectMapper();
+   private static final ArazzoExpressionEvaluator EXPRESSIONS = new ArazzoExpressionEvaluator();
+
    private final ArazzoDocumentService arazzoDocumentService;
    private final ArazzoSessionRepository arazzoSessionRepository;
    private final RequestRepository requestRepository;
+   private final ResponseRepository responseRepository;
+   private final ServiceStateRepository serviceStateRepository;
 
    /**
     * Build a new ArazzoSessionAnswerService with its required dependencies.
     * @param arazzoDocumentService   The service finding the Arazzo documents and linking their sources to APIs
     * @param arazzoSessionRepository The repository of the sessions
     * @param requestRepository       The repository of the requests of the examples
+    * @param responseRepository      The repository of the responses of the examples
+    * @param serviceStateRepository  The repository of the state stores of the APIs
     */
    public ArazzoSessionAnswerService(ArazzoDocumentService arazzoDocumentService,
-         ArazzoSessionRepository arazzoSessionRepository, RequestRepository requestRepository) {
+         ArazzoSessionRepository arazzoSessionRepository, RequestRepository requestRepository,
+         ResponseRepository responseRepository, ServiceStateRepository serviceStateRepository) {
       this.arazzoDocumentService = arazzoDocumentService;
       this.arazzoSessionRepository = arazzoSessionRepository;
       this.requestRepository = requestRepository;
+      this.responseRepository = responseRepository;
+      this.serviceStateRepository = serviceStateRepository;
    }
 
    /**
     * @param sessionId  The id of the session the call names
     * @param received   The call, as the mocks received it
     * @param dispatched The response the mocks dispatched to the call; null when they found none
-    * @return The answer of the session to the call; empty when the mocks answer as they do outside a session
+    * @return The answer of the session to the call; empty when the session is not open, or when the call matches no
+    *         step of its workflow or its operation has no example: the mocks then answer as they do outside a session
     */
    public Optional<Response> answer(String sessionId, ArazzoSessionCall received, Response dispatched) {
-      Optional<ArazzoSession> session = arazzoSessionRepository.findById(sessionId);
-      if (session.isEmpty()) {
-         return Optional.empty();
-      }
-      Optional<ArazzoDocument> document = arazzoDocumentService.getDocument(session.get().getDocumentId());
-      if (document.isEmpty()) {
-         return Optional.empty();
-      }
-      Optional<ExpectedStep> step = stepOf(document.get(), session.get(), received);
-      if (step.isEmpty()) {
-         return Optional.empty();
-      }
-      Request example = requestRepository.findByOperationIdAndName(dispatched.getOperationId(), dispatched.getName())
-            .stream().findFirst().orElse(null);
-      Response answer = copyOf(dispatched);
-      answer.setContent(ArazzoSessionAnswer.filled(dispatched.getContent(), ArazzoSessionAnswer
-            .replacements(step.get().step(), example, ArazzoSessionVerifier.requestOf(step.get(), received))));
-      return Optional.of(answer);
+      Date now = new Date();
+      return arazzoSessionRepository.findById(sessionId)
+            .filter(session -> session.getClosedDate() == null && session.getExpireAt().after(now))
+            .flatMap(this::stepsOf).flatMap(steps -> steps.stepOf(received).flatMap(step -> {
+               Response example = dispatched != null ? dispatched : exampleOf(steps.sources(), step, received);
+               if (example == null) {
+                  return Optional.empty();
+               }
+               Request exampleRequest = requestRepository
+                     .findByOperationIdAndName(example.getOperationId(), example.getName()).stream().findFirst()
+                     .orElse(null);
+               Response answer = copyOf(example);
+               answer.setContent(ArazzoSessionAnswer.filled(example.getContent(),
+                     ArazzoSessionAnswer.replacements(step.step(), exampleRequest,
+                           ArazzoSessionVerifier.requestOf(step, received),
+                           new ReceivedCall(Map.of(), steps.outputs(), null))));
+               return Optional.of(answer);
+            }));
    }
 
-   /** The step of the workflow of the session the call matches. */
-   private Optional<ExpectedStep> stepOf(ArazzoDocument document, ArazzoSession session, ArazzoSessionCall received) {
-      Map<String, ResolvedSource> sources = arazzoDocumentService.resolveSources(document);
-      ArazzoWorkflow workflow = ArazzoWorkflowReader
-            .workflow(ArazzoWorkflowService.parse(document.getContent()), session.getWorkflowId()).orElseThrow();
-      List<ExpectedStep> steps = new ArrayList<>();
-      for (ArazzoStep step : workflow.steps()) {
-         ResolvedSource source = sources.get(step.call().sourceName());
-         steps.add(
-               new ExpectedStep(steps.size(), step,
-                     ArazzoDocumentService.operationOf(new ArazzoStepCall(step.call().sourceName(),
-                           step.call().operationId(), step.call().channel()), sources),
-                     source.link().apiName(), source.link().apiVersion(), null));
-      }
-      return steps.stream().filter(step -> ArazzoSessionVerifier.calls(received, step)).findFirst();
+   /**
+    * Keep the outputs of the step a call recorded in a session answered, read from the response of the mocks, in the
+    * state of the session.
+    * @param session The session the call was recorded in
+    * @param call    The call, as the mocks received and answered it
+    */
+   public void remember(ArazzoSession session, ArazzoSessionCall call) {
+      stepsOf(session).ifPresent(steps -> steps.stepOf(call).ifPresent(step -> {
+         Map<String, Object> outputs = new LinkedHashMap<>();
+         ReceivedCall answered = new ReceivedCall(Map.of(), steps.outputs(), call);
+         step.step().outputs().forEach((name, expression) -> {
+            try {
+               outputs.put(name, EXPRESSIONS.resolve(expression, answered));
+            } catch (ArazzoExpressionException noValue) {
+               // The output comes from a response the mocks did not give.
+            }
+         });
+         try {
+            steps.store(step).put(stateKey(session.getId(), step), JSON.writeValueAsString(outputs),
+                  secondsUntil(session.getExpireAt()));
+         } catch (JsonProcessingException jpe) {
+            // The outputs read from a JSON response are written back as JSON.
+         }
+      }));
+   }
+
+   /**
+    * Let the state of a session expire with the session, once closing it moved its expiry.
+    * @param sessionId The id of the session
+    */
+   public void expireWithSession(String sessionId) {
+      arazzoSessionRepository.findById(sessionId).ifPresent(session -> stepsOf(session).ifPresent(steps -> {
+         for (ExpectedStep step : steps.steps()) {
+            String outputs = steps.store(step).get(stateKey(sessionId, step));
+            if (outputs != null) {
+               steps.store(step).put(stateKey(sessionId, step), outputs, secondsUntil(session.getExpireAt()));
+            }
+         }
+      }));
+   }
+
+   /** The steps of the workflow of a session; empty when its document or its workflow is gone. */
+   private Optional<SessionSteps> stepsOf(ArazzoSession session) {
+      return arazzoDocumentService.getDocument(session.getDocumentId())
+            .flatMap(document -> workflowOf(document, session.getWorkflowId()).map(workflow -> {
+               Map<String, ResolvedSource> sources = arazzoDocumentService.resolveSources(document);
+               List<ExpectedStep> steps = new ArrayList<>();
+               for (ArazzoStep step : workflow.steps()) {
+                  ResolvedSource source = sources.get(step.call().sourceName());
+                  steps.add(new ExpectedStep(steps.size(), step,
+                        ArazzoDocumentService.operationOf(new ArazzoStepCall(step.call().sourceName(),
+                              step.call().operationId(), step.call().channel()), sources),
+                        source.link().apiName(), source.link().apiVersion(), null));
+               }
+               return new SessionSteps(session.getId(), sources, steps, serviceStateRepository);
+            }));
+   }
+
+   private static Optional<ArazzoWorkflow> workflowOf(ArazzoDocument document, String workflowId) {
+      return Optional.ofNullable(document.getContent()).map(ArazzoWorkflowService::parse)
+            .flatMap(content -> ArazzoWorkflowReader.workflow(content, workflowId));
+   }
+
+   /** The first success example of the operation a call reached, else its first example; null when it has none. */
+   private Response exampleOf(Map<String, ResolvedSource> sources, ExpectedStep step, ArazzoSessionCall received) {
+      String operationId = sources.get(step.step().call().sourceName()).serviceId() + "-" + received.getOperationName();
+      return responseRepository.findByOperationId(operationId).stream()
+            .filter(response -> response.getCallbackName() == null).min(Comparator.comparing(Response::isFault))
+            .orElse(null);
+   }
+
+   private static String stateKey(String sessionId, ExpectedStep step) {
+      return "arazzo-session:" + sessionId + ":" + step.step().stepId();
+   }
+
+   private static int secondsUntil(Date expireAt) {
+      return (int) ((expireAt.getTime() - System.currentTimeMillis()) / 1000L);
    }
 
    private static Response copyOf(Response example) {
@@ -110,5 +198,49 @@ public class ArazzoSessionAnswerService {
       copy.setMediaType(example.getMediaType());
       copy.setHeaders(example.getHeaders());
       return copy;
+   }
+
+   /**
+    * The steps of the workflow of a session.
+    * @param sessionId The id of the session
+    * @param sources   The source descriptions of the document, with the APIs they are linked to, by name
+    * @param steps     The steps, in the order of the workflow
+    * @param states    The repository of the state stores of the APIs
+    */
+   private record SessionSteps(String sessionId, Map<String, ResolvedSource> sources, List<ExpectedStep> steps,
+         ServiceStateRepository states) {
+
+      /** The state store of the API the source of a step is linked to. */
+      private StateStore store(ExpectedStep step) {
+         return new ServiceStateStore(states, sources.get(step.step().call().sourceName()).serviceId());
+      }
+
+      /**
+       * The step a call matches: the first step of its operation the session has not answered yet, else the last one,
+       * which answers again.
+       */
+      private Optional<ExpectedStep> stepOf(ArazzoSessionCall call) {
+         List<ExpectedStep> candidates = steps.stream().filter(step -> ArazzoSessionVerifier.calls(call, step))
+               .toList();
+         return candidates.stream().filter(step -> store(step).get(stateKey(sessionId, step)) == null).findFirst()
+               .or(() -> candidates.stream().reduce((first, second) -> second));
+      }
+
+      /** The outputs of the steps the session answered, by step id. */
+      private Map<String, Map<String, Object>> outputs() {
+         Map<String, Map<String, Object>> outputs = new LinkedHashMap<>();
+         for (ExpectedStep step : steps) {
+            String stored = store(step).get(stateKey(sessionId, step));
+            if (stored != null) {
+               try {
+                  outputs.put(step.step().stepId(), JSON.readValue(stored, new TypeReference<>() {
+                  }));
+               } catch (JsonProcessingException jpe) {
+                  // Microcks writes the outputs as JSON.
+               }
+            }
+         }
+         return outputs;
+      }
    }
 }

@@ -55,6 +55,8 @@ class ArazzoSessionAnswerIT extends AbstractBaseIT {
    private static final String FIXTURES = "target/test-classes/io/github/microcks/service/arazzo/";
    private static final String SESSION_HEADER = "x-microcks-session";
    private static final ObjectMapper JSON = new ObjectMapper();
+   private static final String PLACE_ORDER = "{\"customerId\": \"c-7\", \"items\": [{\"sku\": \"ABC-1\", \"quantity\": 2}], "
+         + "\"amount\": 25.0, \"currency\": \"EUR\"}";
 
    @Autowired
    private ArazzoDocumentRepository arazzoDocumentRepository;
@@ -102,6 +104,24 @@ class ArazzoSessionAnswerIT extends AbstractBaseIT {
 
       assertEquals(201, reserved.getStatusCode().value(), reserved.getBody());
       assertEquals(JSON.readTree("{\"id\": \"r-9\", \"orderId\": \"o-42\"}"), JSON.readTree(reserved.getBody()));
+   }
+
+   /**
+    * AC-01: the mocks placed order o-42 in the session and have no example for it, yet they confirm o-42 with the
+    * example of confirmOrder, written for o-1.
+    */
+   @Test
+   void aLaterStepAnswersWithTheOutputOfAnEarlierStep() throws Exception {
+      String sessionId = openSession();
+      ResponseEntity<String> placed = callMocks(sessionId, "Order+API", "/orders", PLACE_ORDER);
+      assertEquals("o-42", JSON.readTree(placed.getBody()).get("id").asText(), placed.getBody());
+
+      ResponseEntity<String> confirmed = callMocks(sessionId, "Order+API", "/orders/o-42/confirm", null);
+
+      assertEquals(200, confirmed.getStatusCode().value(), confirmed.getBody());
+      assertEquals(
+            JSON.readTree("{\"id\": \"o-42\", \"customerId\": \"c-7\", \"amount\": 25.0, \"status\": \"CONFIRMED\"}"),
+            JSON.readTree(confirmed.getBody()));
    }
 
    private String openSession() throws Exception {

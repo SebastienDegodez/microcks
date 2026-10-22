@@ -69,6 +69,7 @@ public class ArazzoSessionService {
    private final ArazzoSessionRepository arazzoSessionRepository;
    private final ArazzoSessionCallRepository arazzoSessionCallRepository;
    private final WorkflowResultRepository workflowResultRepository;
+   private final ArazzoSessionAnswerService arazzoSessionAnswerService;
 
    /** The URL the relative references of the stored contracts resolve against, as for OpenAPI contract tests. */
    @Value("${validation.resourceUrl:#{null}}")
@@ -93,15 +94,17 @@ public class ArazzoSessionService {
     * @param arazzoSessionRepository     The repository of the sessions
     * @param arazzoSessionCallRepository The repository of the calls the sessions received
     * @param workflowResultRepository    The repository the verifications are kept in, with the runs
+    * @param arazzoSessionAnswerService  The service keeping the state of the sessions the mocks answer with
     */
    public ArazzoSessionService(ArazzoDocumentService arazzoDocumentService, ArazzoRunService arazzoRunService,
          ArazzoSessionRepository arazzoSessionRepository, ArazzoSessionCallRepository arazzoSessionCallRepository,
-         WorkflowResultRepository workflowResultRepository) {
+         WorkflowResultRepository workflowResultRepository, ArazzoSessionAnswerService arazzoSessionAnswerService) {
       this.arazzoDocumentService = arazzoDocumentService;
       this.arazzoRunService = arazzoRunService;
       this.arazzoSessionRepository = arazzoSessionRepository;
       this.arazzoSessionCallRepository = arazzoSessionCallRepository;
       this.workflowResultRepository = workflowResultRepository;
+      this.arazzoSessionAnswerService = arazzoSessionAnswerService;
    }
 
    /**
@@ -178,6 +181,8 @@ public class ArazzoSessionService {
          call.setReceivedDate(now);
          call.setExpireAt(session.getExpireAt());
          arazzoSessionCallRepository.save(call);
+         // The outputs of the step the mocks answered become the state of the session.
+         arazzoSessionAnswerService.remember(session, call);
       }
    }
 
@@ -188,7 +193,11 @@ public class ArazzoSessionService {
     */
    public boolean closeSession(String sessionId) {
       Date now = new Date();
-      return arazzoSessionRepository.close(sessionId, now, new Date(now.getTime() + retention * 1000L));
+      boolean closed = arazzoSessionRepository.close(sessionId, now, new Date(now.getTime() + retention * 1000L));
+      if (closed) {
+         arazzoSessionAnswerService.expireWithSession(sessionId);
+      }
+      return closed;
    }
 
    /**

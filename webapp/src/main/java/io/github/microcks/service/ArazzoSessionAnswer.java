@@ -15,7 +15,12 @@
  */
 package io.github.microcks.service;
 
+import io.github.microcks.domain.Parameter;
 import io.github.microcks.domain.Request;
+import io.github.microcks.util.arazzo.ArazzoExpressionContext;
+import io.github.microcks.util.arazzo.ArazzoExpressionEvaluator;
+import io.github.microcks.util.arazzo.ArazzoExpressionException;
+import io.github.microcks.util.arazzo.ArazzoParameter;
 import io.github.microcks.util.arazzo.ArazzoReceivedRequest;
 import io.github.microcks.util.arazzo.ArazzoStep;
 
@@ -26,38 +31,81 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 
 /**
  * Fills the example a step of a workflow answers with, in a session, with the values of the session. The example pairs
- * a request with its response: the steps reads in reverse where each value it sends goes in the request, the example
- * request holds a value there, and the places of the example response holding that same value receive the value of the
- * session.
+ * a request with its response. The step is read in reverse: each parameter and each request body replacement of the
+ * step tells where a value goes in the request; the example request holds a value there; the places of the example
+ * response holding that same value receive the value of the session. The value of the session is the value of the
+ * runtime expression of the step, from the outputs of the earlier steps of the session, else the value the request
+ * carries there.
  * @author SebastienDegodez
  */
 final class ArazzoSessionAnswer {
 
    private static final ObjectMapper JSON = new ObjectMapper();
+   private static final ArazzoExpressionEvaluator EXPRESSIONS = new ArazzoExpressionEvaluator();
 
    private ArazzoSessionAnswer() {
    }
 
    /**
     * @param step     The step the call is answered for
-    * @param example  The request of the example the mocks answer with
+    * @param example  The request of the example the mocks answer with; null when the example has none
     * @param received The request the mocks received for the step
+    * @param session  What the runtime expressions of the step see in the session
     * @return The value of the session each value of the example request is replaced with, by the text of the example
     *         value
     */
-   static Map<String, Object> replacements(ArazzoStep step, Request example, ArazzoReceivedRequest received) {
+   static Map<String, Object> replacements(ArazzoStep step, Request example, ArazzoReceivedRequest received,
+         ArazzoExpressionContext session) {
       Map<String, Object> replacements = new LinkedHashMap<>();
-      if (step.requestBody() != null && example != null) {
+      if (example == null) {
+         return replacements;
+      }
+      for (ArazzoParameter parameter : step.parameters()) {
+         exampleParameter(example, parameter).ifPresent(
+               exampleValue -> valueOf(parameter.value(), received.parameter(parameter.in(), parameter.name()), session)
+                     .ifPresent(value -> replacements.put(exampleValue, value)));
+      }
+      if (step.requestBody() != null) {
          ArazzoReceivedRequest exampleRequest = new ArazzoReceivedRequest("", "", null, Map.of(), example.getContent());
-         step.requestBody().replacements().keySet()
-               .forEach(target -> exampleRequest.bodyValue(target).ifPresent(exampleValue -> received.bodyValue(target)
-                     .ifPresent(value -> replacements.put(String.valueOf(exampleValue), value))));
+         step.requestBody().replacements()
+               .forEach((target, expression) -> exampleRequest.bodyValue(target)
+                     .ifPresent(exampleValue -> valueOf(expression, received.bodyValue(target), session)
+                           .ifPresent(value -> replacements.put(String.valueOf(exampleValue), value))));
       }
       return replacements;
+   }
+
+   /** The value of a runtime expression of the step in the session, else the value the request carries. */
+   private static Optional<Object> valueOf(String value, Optional<Object> received, ArazzoExpressionContext session) {
+      if (ArazzoExpressionEvaluator.isExpression(value)) {
+         try {
+            return Optional.ofNullable(EXPRESSIONS.evaluate(value, session)).or(() -> received);
+         } catch (ArazzoExpressionException noValue) {
+            // An input of the workflow, or the output of a step the session has not answered yet.
+         }
+      }
+      return received;
+   }
+
+   /**
+    * The value the example request holds where the step puts a parameter: Microcks keeps the path and query parameters
+    * of an example request as its query parameters, and its header parameters as its headers.
+    */
+   private static Optional<String> exampleParameter(Request example, ArazzoParameter parameter) {
+      if ("header".equals(parameter.in())) {
+         return Optional.ofNullable(example.getHeaders()).stream().flatMap(Set::stream)
+               .filter(header -> header.getName().equalsIgnoreCase(parameter.name()))
+               .flatMap(header -> header.getValues().stream()).findFirst();
+      }
+      return Optional.ofNullable(example.getQueryParameters()).stream().flatMap(List::stream)
+            .filter(query -> query.getName().equals(parameter.name())).map(Parameter::getValue).findFirst();
    }
 
    /**

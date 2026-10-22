@@ -89,6 +89,51 @@ class ArazzoSessionAnswerTest {
       assertEquals("201", answer.getStatus());
    }
 
+   /**
+    * AC-01: createOrder placed o-42 in the session; the mocks have no example for o-42, yet they confirm o-42 with the
+    * example of confirmOrder, written for o-1.
+    */
+   @Test
+   void aLaterStepAnswersWithTheOutputOfAnEarlierStep() throws Exception {
+      ArazzoSession session = sessionOnTheSaga();
+      mocksAnswer(session, createOrder(), dispatched("Order API", "POST /orders"));
+
+      Response answer = arazzoSessionAnswerService.answer(session.getId(), confirmOrder("o-42"), null).orElseThrow();
+
+      assertJson("{\"id\": \"o-42\", \"customerId\": \"c-7\", \"amount\": 25.0, \"status\": \"CONFIRMED\"}",
+            answer.getContent());
+      assertEquals(List.of("200", "application/json"), List.of(answer.getStatus(), answer.getMediaType()));
+   }
+
+   /** A value a step does not send is taken from the outputs of the earlier steps of the session. */
+   @Test
+   void aValueAStepDoesNotSendIsTakenFromTheSession() throws Exception {
+      ArazzoSession session = sessionOnTheSaga();
+      mocksAnswer(session, createOrder(), dispatched("Order API", "POST /orders"));
+
+      Response answer = arazzoSessionAnswerService
+            .answer(session.getId(), received("Payment API", "POST /payments", "/payments", "{\"amount\": 25.0}"),
+                  dispatched("Payment API", "POST /payments"))
+            .orElseThrow();
+
+      assertJson("{\"id\": \"p-3\", \"orderId\": \"o-42\", \"status\": \"CHARGED\"}", answer.getContent());
+   }
+
+   /**
+    * The mocks play the workflow: the value an earlier step of the session gave wins over the value the service sends,
+    * which the verification of the session reports.
+    */
+   @Test
+   void theValuesOfTheSessionWinOverThoseTheServiceSends() throws Exception {
+      ArazzoSession session = sessionOnTheSaga();
+      mocksAnswer(session, createOrder(), dispatched("Order API", "POST /orders"));
+
+      Response answer = arazzoSessionAnswerService
+            .answer(session.getId(), reserveStock("o-7"), dispatched("Stock API", "POST /reservations")).orElseThrow();
+
+      assertJson("{\"id\": \"r-9\", \"orderId\": \"o-42\"}", answer.getContent());
+   }
+
    private ArazzoSession sessionOnTheSaga() throws Exception {
       ArazzoDocument saga = orderSagaIsImportedAndLinked();
       return arazzoSessionService.openSession(saga.getId(), SAGA).orElseThrow();
@@ -98,6 +143,31 @@ class ArazzoSessionAnswerTest {
    private Response dispatched(String apiName, String operationName) {
       Service api = serviceRepository.findByNameAndVersion(apiName, "1.0.0");
       return responseRepository.findByOperationId(api.getId() + "-" + operationName).get(0);
+   }
+
+   /**
+    * The mocks answer a call in a session, then record it there with their answer, as they do for a REST call.
+    * @return The answer
+    */
+   private Response mocksAnswer(ArazzoSession session, ArazzoSessionCall call, Response dispatched) {
+      Response answer = arazzoSessionAnswerService.answer(session.getId(), call, dispatched).orElse(dispatched);
+      call.setResponseStatus(Integer.parseInt(answer.getStatus()));
+      call.setResponseHeaders(Set.of(new Header("Content-Type", Set.of(answer.getMediaType()))));
+      call.setResponseBody(answer.getContent());
+      arazzoSessionService.recordCall(session.getId(), call);
+      return answer;
+   }
+
+   /** The order saga service places an order for customer c-7. */
+   private static ArazzoSessionCall createOrder() {
+      return received("Order API", "POST /orders", "/orders",
+            "{\"customerId\": \"c-7\", \"items\": [{\"sku\": \"ABC-1\", \"quantity\": 2}], \"amount\": 25.0, "
+                  + "\"currency\": \"EUR\"}");
+   }
+
+   /** The order saga service confirms an order. */
+   private static ArazzoSessionCall confirmOrder(String orderId) {
+      return received("Order API", "POST /orders/{orderId}/confirm", "/orders/" + orderId + "/confirm", null);
    }
 
    /** The order saga service reserves the items of an order. */
