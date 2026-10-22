@@ -35,6 +35,7 @@
             <div class="list-group-item-text repositoryUrl">
               <a href="{{ job.repositoryUrl }}">{{ job.repositoryUrl }}</a><br />
               <app-label-list [metadata]="job.metadata" [filter]="repositoryFilterFeatureLabelList()"></app-label-list>
+              <app-arazzo-document-ref *ngIf="job.arazzoDocumentRef" [ref]="job.arazzoDocumentRef"></app-arazzo-document-ref>
               <div *ngIf="job.metadata" class="job-update">
                 <small>Updated on {{ job.metadata.lastUpdate | date : 'medium' }}</small>
               </div>

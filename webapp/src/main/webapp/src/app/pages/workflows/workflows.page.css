@@ -226,6 +226,16 @@
   color: var(--text-default);
 }
 
+/* Link sources reads as a link under the last runs, aligned with them. */
+.workflows-link-sources {
+  display: block;
+  margin-top: 4px;
+  padding: 0;
+  border: 0;
+  font-size: inherit;
+  text-align: left;
+}
+
 /* A workflow row, indented under its document. */
 .workflows-workflow {
   display: flex;

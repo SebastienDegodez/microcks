@@ -61,6 +61,11 @@ code {
   background: var(--surface-subtle);
 }
 
+/* An imported document is not a drop target: its box is drawn solid. */
+.arazzo-import-imported {
+  border-style: solid;
+}
+
 .arazzo-import-dragging {
   border-color: var(--primary-500);
   background: var(--surface-hover);

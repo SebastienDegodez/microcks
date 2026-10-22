@@ -55,4 +55,23 @@ export class ArazzoDocumentsService {
   public importDocument(content: string, fileName: string, links: ArazzoSourceLinks): Observable<ArazzoDocumentSummary> {
     return this.http.post<ArazzoDocumentSummary>(this.rootUrl + '/documents', { content, fileName, links });
   }
+
+  /**
+   * Analyse the links of the source descriptions of an imported Arazzo document, to link them again; nothing is stored.
+   * @param documentId The identifier of the imported document
+   * @param links The API each source description is linked to; absent for the links of its overlay, completed with the
+   * API matched for a source the overlay does not link
+   */
+  public analyseImportedDocument(documentId: string, links?: ArazzoSourceLinks): Observable<ArazzoImportAnalysis> {
+    return this.http.post<ArazzoImportAnalysis>(this.rootUrl + '/documents/' + documentId + '/analysis', { links });
+  }
+
+  /**
+   * Link the source descriptions of an imported Arazzo document again, replacing the sources of its overlay.
+   * @param documentId The identifier of the imported document
+   * @param links The API each source description is linked to
+   */
+  public relinkSources(documentId: string, links: ArazzoSourceLinks): Observable<ArazzoDocumentSummary> {
+    return this.http.put<ArazzoDocumentSummary>(this.rootUrl + '/documents/' + documentId + '/sources', { links });
+  }
 }

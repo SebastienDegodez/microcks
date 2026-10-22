@@ -119,6 +119,8 @@
                 <span class="pficon pficon-in-progress" aria-hidden="true"></span> {{ inProgress }} in progress
               </span>
             </div>
+            <button *ngIf="hasUnlinkedSource(document)" type="button" class="btn btn-link workflows-link-sources"
+              (click)="openLinkSources(document)">Link sources</button>
           </div>
         </div>
 

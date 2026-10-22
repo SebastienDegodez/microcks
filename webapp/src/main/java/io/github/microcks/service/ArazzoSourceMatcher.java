@@ -19,6 +19,7 @@ import io.github.microcks.domain.ArazzoSourceMatch;
 import io.github.microcks.repository.ServiceRepository;
 import io.github.microcks.util.HTTPDownloader;
 import io.github.microcks.util.ObjectMapperFactory;
+import io.github.microcks.util.ReferenceResolver;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.MissingNode;
@@ -28,6 +29,7 @@ import org.springframework.stereotype.Component;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.Set;
 
@@ -78,7 +80,40 @@ public class ArazzoSourceMatcher {
     * @return What the declared contract says of the Microcks API to link the source to
     */
    public ArazzoSourceMatch match(String declaredUrl) {
-      JsonNode info = readContract(declaredUrl).path("info");
+      return matchContract(readContract(declaredUrl));
+   }
+
+   /**
+    * Match a source description of an Arazzo document imported from a repository: a relative url is read in that
+    * repository, as Microcks reads the relative references of a contract, with the secret of the repository; an
+    * absolute one is read as by {@link #match(String)}, without that secret.
+    * @param declaredUrl The url a source description declares for its contract
+    * @param repository  The repository the document was imported from
+    * @return What the declared contract says of the Microcks API to link the source to
+    */
+   public ArazzoSourceMatch match(String declaredUrl, ReferenceResolver repository) {
+      if (!isRelative(declaredUrl)) {
+         return match(declaredUrl);
+      }
+      try {
+         return matchContract(ObjectMapperFactory.getYamlObjectMapper()
+               .readTree(repository.getReferenceContent(declaredUrl, StandardCharsets.UTF_8)));
+      } catch (IOException ioe) {
+         return matchContract(MissingNode.getInstance());
+      }
+   }
+
+   /**
+    * @param declaredUrl The url a source description declares for its contract
+    * @param repository  The repository the document was imported from
+    * @return The url the contract is read from: a relative url resolved in the repository, else the declared one
+    */
+   public static String resolve(String declaredUrl, ReferenceResolver repository) {
+      return isRelative(declaredUrl) ? repository.getReferenceURL(declaredUrl) : declaredUrl;
+   }
+
+   private ArazzoSourceMatch matchContract(JsonNode contract) {
+      JsonNode info = contract.path("info");
       // Read as OpenAPIImporter names the API it imports, so that an unquoted YAML version matches the same way.
       String title = info.path("title").asText();
       String version = info.path("version").asText();
@@ -105,6 +140,15 @@ public class ArazzoSourceMatcher {
          }
       } catch (IOException ioe) {
          return MissingNode.getInstance();
+      }
+   }
+
+   /** A url without scheme is relative to the document that declares it. */
+   private static boolean isRelative(String declaredUrl) {
+      try {
+         return URI.create(declaredUrl).getScheme() == null;
+      } catch (IllegalArgumentException iae) {
+         return false;
       }
    }
 

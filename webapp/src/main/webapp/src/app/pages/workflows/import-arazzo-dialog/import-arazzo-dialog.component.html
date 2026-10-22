@@ -1,6 +1,6 @@
 <div class="arazzo-import">
   <div class="modal-header arazzo-import-header">
-    <h4 class="modal-title" id="arazzo-import-title">Import Arazzo document</h4>
+    <h4 class="modal-title" id="arazzo-import-title">{{ documentId ? 'Link sources' : 'Import Arazzo document' }}</h4>
     <button type="button" class="close" aria-label="Close" (click)="bsModalRef.hide()">
       <span class="pficon pficon-close" aria-hidden="true"></span>
     </button>
@@ -9,39 +9,56 @@
   <div class="modal-body arazzo-import-body">
     <section class="arazzo-import-section" aria-labelledby="arazzo-import-document-title">
       <h5 id="arazzo-import-document-title" class="arazzo-import-section-title">1. Document</h5>
-      <div class="arazzo-import-drop arazzo-import-document" [class.arazzo-import-dragging]="dragging"
-        (dragover)="onDragOver($event)" (dragleave)="onDragLeave()" (drop)="onDrop($event)">
-        <span class="fa fa-file-o arazzo-import-file-icon" aria-hidden="true"></span>
-        <div class="arazzo-import-file">
-          <ng-container *ngIf="fileName; else noFile">
-            <div class="arazzo-import-file-name">{{ fileName }}</div>
-            <div *ngIf="analysis" class="arazzo-import-validation" [class.arazzo-import-refused]="!valid" role="status">
-              <ng-container *ngIf="valid; else refused">
-                <span class="fa fa-check-circle-o arazzo-import-ok" aria-hidden="true"></span>
-                Valid Arazzo {{ analysis.arazzoVersion }} · title “{{ analysis.title }}” {{ analysis.version }} ·
-                {{ analysis.workflowIds.length }} {{ analysis.workflowIds.length === 1 ? 'workflow' : 'workflows' }} ·
-                {{ analysis.sources.length }}
-                {{ analysis.sources.length === 1 ? 'source description' : 'source descriptions' }}
-              </ng-container>
-              <ng-template #refused>
-                <span class="pficon pficon-error-circle-o" aria-hidden="true"></span>
-                {{ analysis.refusal }}
-              </ng-template>
-            </div>
+      <ng-template #fileInfo>
+        <div class="arazzo-import-file-name">{{ fileName }}</div>
+        <div *ngIf="analysis" class="arazzo-import-validation" [class.arazzo-import-refused]="!valid" role="status">
+          <ng-container *ngIf="valid; else refused">
+            <span class="fa fa-check-circle-o arazzo-import-ok" aria-hidden="true"></span>
+            Valid Arazzo {{ analysis.arazzoVersion }} · title “{{ analysis.title }}” {{ analysis.version }} ·
+            {{ analysis.workflowIds.length }} {{ analysis.workflowIds.length === 1 ? 'workflow' : 'workflows' }} ·
+            {{ analysis.sources.length }}
+            {{ analysis.sources.length === 1 ? 'source description' : 'source descriptions' }}
           </ng-container>
-          <ng-template #noFile>
-            <div class="arazzo-import-drop-text">Drop a <code>.arazzo.yaml</code> or <code>.arazzo.json</code> file here</div>
+          <ng-template #refused>
+            <span class="pficon pficon-error-circle-o" aria-hidden="true"></span>
+            {{ analysis.refusal }}
           </ng-template>
         </div>
-        <label class="btn btn-default arazzo-import-choose">
-          {{ fileName ? 'Choose another file' : 'Choose a file' }}
-          <input type="file" class="sr-only" accept=".yaml,.yml,.json" (change)="onFileChosen($event)" />
-        </label>
-      </div>
-      <p class="arazzo-import-help">
-        Drop a <code>.arazzo.yaml</code> or <code>.arazzo.json</code> file, or import it from a URL in Importers.
-        Re-importing the same title and version updates the existing document.
-      </p>
+      </ng-template>
+
+      <ng-container *ngIf="!documentId; else importedDocument">
+        <div class="arazzo-import-drop arazzo-import-document" [class.arazzo-import-dragging]="dragging"
+          (dragover)="onDragOver($event)" (dragleave)="onDragLeave()" (drop)="onDrop($event)">
+          <span class="fa fa-file-o arazzo-import-file-icon" aria-hidden="true"></span>
+          <div class="arazzo-import-file">
+            <ng-container *ngIf="fileName; else noFile">
+              <ng-container *ngTemplateOutlet="fileInfo"></ng-container>
+            </ng-container>
+            <ng-template #noFile>
+              <div class="arazzo-import-drop-text">Drop a <code>.arazzo.yaml</code> or <code>.arazzo.json</code> file here</div>
+            </ng-template>
+          </div>
+          <label class="btn btn-default arazzo-import-choose">
+            {{ fileName ? 'Choose another file' : 'Choose a file' }}
+            <input type="file" class="sr-only" accept=".yaml,.yml,.json" (change)="onFileChosen($event)" />
+          </label>
+        </div>
+        <p class="arazzo-import-help">
+          Drop a <code>.arazzo.yaml</code> or <code>.arazzo.json</code> file, or import it from a URL in Importers.
+          Re-importing the same title and version updates the existing document.
+        </p>
+      </ng-container>
+      <ng-template #importedDocument>
+        <div class="arazzo-import-document arazzo-import-imported">
+          <span class="fa fa-file-o arazzo-import-file-icon" aria-hidden="true"></span>
+          <div class="arazzo-import-file">
+            <ng-container *ngTemplateOutlet="fileInfo"></ng-container>
+          </div>
+        </div>
+        <p class="arazzo-import-help">
+          Saving replaces the links of its ArazzoSources overlay. Refreshing the document from Importers keeps them.
+        </p>
+      </ng-template>
     </section>
 
     <ng-container *ngIf="valid && analysis">
@@ -99,7 +116,7 @@
           {{ source.match.contractTitle }} is not in Microcks yet:
           <a role="button" tabindex="0" (click)="importMissingApi(source)"
             (keydown.enter)="importMissingApi(source)">import {{ fileNameOf(source.declaredUrl) }}</a>
-          first, or import now and link it later from the workflow page.
+          first<ng-container *ngIf="!documentId">, or import now and link it later from the workflow page</ng-container>.
         </p>
       </section>
 
@@ -144,7 +161,7 @@
     </span>
     <button type="button" class="btn btn-default arazzo-import-cancel" (click)="bsModalRef.hide()">Cancel</button>
     <button type="button" class="btn btn-primary arazzo-import-submit" [disabled]="!canImport" (click)="importDocument()">
-      Import
+      {{ documentId ? 'Save links' : 'Import' }}
     </button>
   </div>
 </div>

@@ -16,15 +16,15 @@
 import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
-import { of, throwError } from 'rxjs';
-
-import { BsModalService } from 'ngx-bootstrap/modal';
+import { BsModalRef, BsModalService } from 'ngx-bootstrap/modal';
+import { of, Subject, throwError } from 'rxjs';
 
 import { ArazzoWorkflowDetail } from '../../../models/arazzo-workflow.model';
 import { WorkflowRunSummary } from '../../../models/arazzo-run.model';
 import { ArazzoRunHistoryService } from '../../../services/arazzo-run-history.service';
 import { ArazzoWorkflowService } from '../../../services/arazzo-workflow.service';
 import { FakeRunHistory, HOUR, pastryRuns } from '../../../../test-data/arazzo-run-history';
+import { ImportArazzoDialogComponent } from '../import-arazzo-dialog/import-arazzo-dialog.component';
 import { WorkflowDetailPageComponent } from './workflow-detail.page';
 import { WorkflowRunDialogComponent } from '../workflow-run-dialog/workflow-run.dialog';
 
@@ -80,21 +80,25 @@ function readThenReprice(): ArazzoWorkflowDetail {
 describe('WorkflowDetailPageComponent', () => {
   let harness: RouterTestingHarness;
   let page: HTMLElement;
-  let modals: jasmine.SpyObj<BsModalService>;
+  let service: { getWorkflow: jasmine.Spy };
+  let modalService: jasmine.SpyObj<BsModalService>;
+  let linkDialogHidden: Subject<unknown>;
   let history: FakeRunHistory;
 
   async function open(workflow: ArazzoWorkflowDetail | Error,
                       url = '/workflows/doc-1/readThenReprice', runs: WorkflowRunSummary[] = []): Promise<void> {
     history = new FakeRunHistory(runs, 'doc-1');
-    const service = {
+    linkDialogHidden = new Subject<unknown>();
+    modalService = jasmine.createSpyObj<BsModalService>('BsModalService', ['show']);
+    modalService.show.and.returnValue({ onHidden: linkDialogHidden } as unknown as BsModalRef);
+    service = {
       getWorkflow: jasmine.createSpy('getWorkflow')
         .and.returnValue(workflow instanceof Error ? throwError(() => workflow) : of(workflow))
     };
-    modals = jasmine.createSpyObj<BsModalService>('BsModalService', ['show']);
     TestBed.configureTestingModule({
       providers: [
         provideRouter([{ path: 'workflows/:documentId/:workflowId', component: WorkflowDetailPageComponent }]),
-        { provide: BsModalService, useValue: modals },
+        { provide: BsModalService, useValue: modalService },
         { provide: ArazzoWorkflowService, useValue: service },
         { provide: ArazzoRunHistoryService, useValue: history }
       ]
@@ -216,7 +220,7 @@ describe('WorkflowDetailPageComponent', () => {
       .toEqual(['/workflows/doc-1/readThenReprice', '/workflows/doc-1/listThenReadFirst']);
   });
 
-  it('opens the runs history of the document and runs the workflow from its page, with no link source control', async () => {
+  it('opens the runs history of the document and runs the workflow from its page', async () => {
     await open(readThenReprice());
 
     const runsHistory = page.querySelector('.workflow-run-controls a.workflow-runs-history') as HTMLAnchorElement;
@@ -226,12 +230,10 @@ describe('WorkflowDetailPageComponent', () => {
     expect(controls.map(control => normalized(control.textContent))).toEqual(['Run workflow']);
     expect(controls.map(control => control.disabled)).toEqual([false]);
     expect(page.querySelectorAll('.workflow-run-controls [title]').length).toEqual(0);
-    expect(normalized(page.textContent)).not.toContain('Change link');
-    expect(normalized(page.textContent)).not.toContain('Link sources');
 
     controls[0].click();
 
-    expect(modals.show).toHaveBeenCalledWith(WorkflowRunDialogComponent, jasmine.objectContaining({
+    expect(modalService.show).toHaveBeenCalledWith(WorkflowRunDialogComponent, jasmine.objectContaining({
       initialState: { documentId: 'doc-1', workflowIds: ['readThenReprice', 'listThenReadFirst'],
         workflowId: 'readThenReprice' }
     }));
@@ -247,6 +249,33 @@ describe('WorkflowDetailPageComponent', () => {
     expect(run.disabled).toBeTrue();
     expect(run.parentElement?.getAttribute('title'))
       .toEqual('Operation DeletePastry not found in API Pastry - 2.0 2.0.0, API Order API 1.0.0 not found');
+  });
+
+  it('offers to change the link of a linked source, and to link a source linked to no API', async () => {
+    const workflow = readThenReprice();
+    workflow.sources.push({ link: { sourceName: 'orderApi', apiName: 'Order API', apiVersion: '1.0.0', linked: false },
+      reason: 'API Order API 1.0.0 not found', operations: 0, usedOperations: 0 });
+    await open(workflow);
+
+    expect(texts('.workflow-change-link')).toEqual(['Change link', 'Link source']);
+    (page.querySelector('.workflow-change-link') as HTMLButtonElement).click();
+
+    expect(modalService.show).toHaveBeenCalledWith(ImportArazzoDialogComponent,
+      jasmine.objectContaining({ initialState: { documentId: 'doc-1', fileName: 'pastry.arazzo.yaml' } }));
+  });
+
+  it('reads the workflow again once its sources are linked', async () => {
+    await open(readThenReprice());
+    const relinked = readThenReprice();
+    relinked.sources[0].usedOperations = 2;
+    service.getWorkflow.and.returnValue(of(relinked));
+    (page.querySelector('.workflow-change-link') as HTMLButtonElement).click();
+
+    linkDialogHidden.next(undefined);
+    await settle();
+
+    expect(service.getWorkflow).toHaveBeenCalledTimes(2);
+    expect(texts('.workflow-source')[0]).toContain('3 operations, 2 used by steps');
   });
 
   it('shows that the workflow has never run, with no recent run', async () => {
@@ -304,9 +333,9 @@ describe('WorkflowDetailPageComponent', () => {
     await open(workflow);
 
     expect(texts('.workflow-source')).toEqual([
-      'pastryApi REST API Pastry - 2.0 2.0.0 · 3 operations, 3 used by steps',
-      'orderApi API Order API 1.0.0 not found',
-      'customerApi no API name and version for this source'
+      'pastryApi REST API Pastry - 2.0 2.0.0 · 3 operations, 3 used by steps Change link',
+      'orderApi API Order API 1.0.0 not found Link source',
+      'customerApi no API name and version for this source Link source'
     ]);
     expect(Array.from(page.querySelectorAll('.workflow-source a')).map(link => link.getAttribute('href')))
       .toEqual(['/services/svc-1']);

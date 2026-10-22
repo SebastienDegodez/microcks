@@ -196,4 +196,19 @@ export class WorkflowsPageComponent implements OnInit, OnDestroy {
       .show(ImportArazzoDialogComponent, { class: 'arazzo-import-modal', ariaLabelledBy: 'arazzo-import-title' })
       .onHidden?.subscribe(() => this.getDocuments());
   }
+
+  hasUnlinkedSource(document: ArazzoDocumentSummary): boolean {
+    return document.sources.some((source) => !source.link.linked);
+  }
+
+  /** Open the linking step of the import dialog on an imported document, then list the documents again. */
+  openLinkSources(document: ArazzoDocumentSummary): void {
+    this.modalService
+      .show(ImportArazzoDialogComponent, {
+        class: 'arazzo-import-modal',
+        ariaLabelledBy: 'arazzo-import-title',
+        initialState: { documentId: document.id, fileName: document.fileName },
+      })
+      .onHidden?.subscribe(() => this.getDocuments());
+  }
 }

@@ -238,6 +238,33 @@ describe('WorkflowsPageComponent', () => {
     expect(texts(fixture, '.workflows-document-title')).toEqual(['API Pastry scenarios']);
   });
 
+  it('offers to link the sources of a document with a source linked to no API', () => {
+    const fixture = openPage([PASTRY_SCENARIOS, ORDER_FULFILMENT]);
+
+    const runs = Array.from(element(fixture).querySelectorAll('.workflows-document-runs'));
+    expect(runs.map((column) => column.querySelectorAll('.workflows-link-sources').length)).toEqual([0, 1]);
+    expect(texts(fixture, '.workflows-link-sources')).toEqual(['Link sources']);
+    (element(fixture).querySelector('.workflows-link-sources') as HTMLButtonElement).click();
+
+    expect(modalService.show).toHaveBeenCalledWith(
+      ImportArazzoDialogComponent,
+      jasmine.objectContaining({
+        initialState: { documentId: 'order-doc', fileName: 'place-order.arazzo.yaml' },
+      })
+    );
+  });
+
+  it('lists the documents again once their sources are linked', () => {
+    const fixture = openPage([ORDER_FULFILMENT]);
+    (element(fixture).querySelector('.workflows-link-sources') as HTMLButtonElement).click();
+    documentsService.documents = [PASTRY_SCENARIOS];
+
+    importDialogHidden.next(undefined);
+    fixture.detectChanges();
+
+    expect(texts(fixture, '.workflows-document-title')).toEqual(['API Pastry scenarios']);
+  });
+
   it('lists only the documents using the API filtered on', async () => {
     const fixture = openPage([PASTRY_SCENARIOS, ORDER_FULFILMENT]);
     const apiFilter = element(fixture).querySelector('#workflows-api-filter') as HTMLSelectElement;

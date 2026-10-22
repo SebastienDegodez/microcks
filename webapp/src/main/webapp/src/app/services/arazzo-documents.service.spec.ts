@@ -53,4 +53,22 @@ describe('ArazzoDocumentsService', () => {
       links: { orderApi: null },
     });
   });
+
+  it('analyses the links of an imported document, with the links of its overlay when none are chosen', () => {
+    service.analyseImportedDocument('order-doc').subscribe();
+
+    const request = http.expectOne('/api/arazzo/documents/order-doc/analysis');
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual({ links: undefined });
+  });
+
+  it('replaces the links of the sources of an imported document', () => {
+    service.relinkSources('order-doc', { customerApi: null, orderApi: { name: 'Order API', version: '1.0.0' } }).subscribe();
+
+    const request = http.expectOne('/api/arazzo/documents/order-doc/sources');
+    expect(request.request.method).toBe('PUT');
+    expect(request.request.body).toEqual({
+      links: { customerApi: null, orderApi: { name: 'Order API', version: '1.0.0' } },
+    });
+  });
 });

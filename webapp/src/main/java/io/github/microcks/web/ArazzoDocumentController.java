@@ -24,7 +24,9 @@ import io.github.microcks.util.MockRepositoryImportException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -76,6 +78,41 @@ public class ArazzoDocumentController {
       try {
          return new ResponseEntity<>(arazzoImportService.importArazzoDocument(request.content(), request.fileName(),
                request.links() == null ? Map.of() : request.links()), HttpStatus.CREATED);
+      } catch (MockRepositoryImportException mrie) {
+         return new ResponseEntity<>(mrie.getMessage(), HttpStatus.BAD_REQUEST);
+      }
+   }
+
+   /**
+    * Analyse the links of the source descriptions of an imported Arazzo document, to link them again. Nothing is
+    * stored.
+    * @param documentId The identifier of the imported document
+    * @param request    The links chosen for its source descriptions; none for the links of its overlay
+    * @return The API each source is linked to, and whether each workflow is ready to run; 404 for an unknown document
+    * @throws MockRepositoryImportException if the stored document cannot be read anymore
+    */
+   @PostMapping(value = "/documents/{id}/analysis")
+   public ResponseEntity<ArazzoImportAnalysis> analyseImportedDocument(@PathVariable("id") String documentId,
+         @RequestBody ArazzoLinksRequest request) throws MockRepositoryImportException {
+      ArazzoImportAnalysis analysis = arazzoImportService.analyseImportedDocument(documentId, request.links());
+      return analysis == null ? new ResponseEntity<>(HttpStatus.NOT_FOUND)
+            : new ResponseEntity<>(analysis, HttpStatus.OK);
+   }
+
+   /**
+    * Link the source descriptions of an imported Arazzo document again, replacing the sources of its overlay.
+    * @param documentId The identifier of the imported document
+    * @param request    The links chosen for its source descriptions
+    * @return The summary of the document, why the links are refused, or 404 for an unknown document
+    */
+   @PutMapping(value = "/documents/{id}/sources")
+   public ResponseEntity<Object> relinkSources(@PathVariable("id") String documentId,
+         @RequestBody ArazzoLinksRequest request) {
+      try {
+         ArazzoDocumentSummary summary = arazzoImportService.relinkSources(documentId,
+               request.links() == null ? Map.of() : request.links());
+         return summary == null ? new ResponseEntity<>(HttpStatus.NOT_FOUND)
+               : new ResponseEntity<>(summary, HttpStatus.OK);
       } catch (MockRepositoryImportException mrie) {
          return new ResponseEntity<>(mrie.getMessage(), HttpStatus.BAD_REQUEST);
       }

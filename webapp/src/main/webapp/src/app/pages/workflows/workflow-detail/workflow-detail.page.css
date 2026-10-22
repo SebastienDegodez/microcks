@@ -79,7 +79,18 @@
 }
 
 .workflow-source {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
   padding: 4px 0;
+}
+
+/* Change link sits at the trailing edge of its source, as a link. */
+.workflow-source .workflow-change-link {
+  margin-left: auto;
+  padding: 0 0 0 16px;
+  border: 0;
+  font-size: inherit;
 }
 
 .workflow-source .fa-link {
