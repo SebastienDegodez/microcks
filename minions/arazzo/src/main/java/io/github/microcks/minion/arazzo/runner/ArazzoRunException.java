@@ -15,11 +15,13 @@
  */
 package io.github.microcks.minion.arazzo.runner;
 
+import io.github.microcks.util.arazzo.ArazzoExpressionException;
+
 /**
  * Why a step or a workflow cannot be executed: a runtime expression without value, a malformed condition...
  * @author SebastienDegodez
  */
-public class ArazzoRunException extends RuntimeException {
+public class ArazzoRunException extends ArazzoExpressionException {
 
    /**
     * @param message Why, shown to the API developer
