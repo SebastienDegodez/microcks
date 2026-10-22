@@ -91,6 +91,17 @@ class ArazzoSessionRecorderTest {
       assertEquals(List.of(), described(call.getResponseHeaders()));
    }
 
+   @Test
+   void aRestInvocationNamingASessionInItsBaggageIsRecorded() {
+      MockHttpServletRequest request = new MockHttpServletRequest("POST", "/rest/Order+API/1.0.0/orders");
+      request.addHeader("baggage", "tenant=bakery");
+      request.addHeader("baggage", "microcks-session=s-2");
+
+      recorder.recordRest(placeOrder(), request, null, new ResponseResult(HttpStatus.CREATED, null, null));
+
+      assertEquals("POST /orders", recorded("s-2").getOperationName());
+   }
+
    @ParameterizedTest
    @CsvSource(nullValues = "null", value = { "null", "''", "'  '" })
    void aRestInvocationNamingNoSessionIsNotRecorded(String sessionId) {

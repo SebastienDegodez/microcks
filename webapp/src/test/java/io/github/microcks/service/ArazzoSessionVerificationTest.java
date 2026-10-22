@@ -43,10 +43,14 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Acceptance tests of verifying that an application, an order saga service, followed the workflow placeOrderSaga of
@@ -217,6 +221,82 @@ class ArazzoSessionVerificationTest {
       assertEquals(WorkflowRunStatus.SUCCESS, verification.getStatus());
       assertEquals(Arrays.asList("createOrder", null, "reserveStock", "chargePayment", null, "confirmOrder"),
             verification.getSession().calls().stream().map(WorkflowSessionCall::stepId).toList());
+   }
+
+   /** AC-05: two sessions on the saga at the same time; each verification reports only the calls of its session. */
+   @Test
+   void sessionsAreIsolated() throws Exception {
+      ArazzoSession first = sessionOnTheSaga();
+      ArazzoSession second = arazzoSessionService.openSession(first.getDocumentId(), SAGA).orElseThrow();
+
+      record(first, createOrder());
+      record(second, createOrder(), reserveStock("o-42"));
+      record(first, reserveStock("o-42"), chargePayment("o-42"));
+      record(second, chargePayment("o-42"), confirmOrder("o-42"));
+      record(first, confirmOrder("o-42"));
+
+      for (ArazzoSession session : List.of(first, second)) {
+         WorkflowResult verification = arazzoSessionService.verify(session.getId()).orElseThrow();
+         assertEquals(WorkflowRunStatus.SUCCESS, verification.getStatus());
+         assertEquals(List.of("0 createOrder", "1 reserveStock", "2 chargePayment", "3 confirmOrder"),
+               verification.getSession().calls().stream().map(call -> call.index() + " " + call.stepId()).toList());
+      }
+   }
+
+   /** A closed session records no more calls, and can still be verified until it expires. */
+   @Test
+   void aClosedSessionRecordsNoMoreCallsAndCanStillBeVerified() throws Exception {
+      ArazzoSession session = sessionOnTheSaga();
+      record(session, createOrder(), reserveStock("o-42"), chargePayment("o-42"));
+
+      assertTrue(arazzoSessionService.closeSession(session.getId()));
+      record(session, confirmOrder("o-42"));
+
+      WorkflowResult verification = arazzoSessionService.verify(session.getId()).orElseThrow();
+      assertEquals("3 confirmOrder FAILED step `confirmOrder` missing", described(verification).get(3));
+      assertEquals(3, verification.getSession().calls().size());
+   }
+
+   /** A call naming an unknown session is not recorded, and an unknown session has no verification. */
+   @Test
+   void anUnknownSessionRecordsNothingAndHasNoVerification() throws Exception {
+      orderSagaIsImportedAndLinked();
+
+      arazzoSessionService.recordCall("unknown", createOrder());
+
+      assertEquals(Optional.empty(), arazzoSessionService.verify("unknown"));
+      assertFalse(arazzoSessionService.closeSession("unknown"));
+   }
+
+   /** No session is opened on an unknown document; one on an unknown workflow is refused, naming it. */
+   @Test
+   void aSessionIsOpenedOnAKnownWorkflowOnly() throws Exception {
+      ArazzoDocument saga = orderSagaIsImportedAndLinked();
+
+      assertEquals(Optional.empty(), arazzoSessionService.openSession("unknown", SAGA));
+      assertEquals("Unknown workflow: cancelSaga", assertThrows(ArazzoRunRefusedException.class,
+            () -> arazzoSessionService.openSession(saga.getId(), "cancelSaga")).getMessage());
+   }
+
+   /** A workflow whose steps call no operation of a linked API cannot be verified: the session is refused. */
+   @Test
+   void aSessionOnAWorkflowWhoseSourcesAreNotLinkedIsRefused() throws Exception {
+      ArazzoDocument saga = arazzoDocumentService.importArazzoDocument(example("order-saga.arazzo.yaml", "order-saga"));
+
+      assertEquals("Workflow placeOrderSaga cannot be verified: no API name and version for this source",
+            assertThrows(ArazzoRunRefusedException.class, () -> arazzoSessionService.openSession(saga.getId(), SAGA))
+                  .getMessage());
+   }
+
+   /** A session is opened on a workflow by the title and version of its document, as the Microcks API names it. */
+   @Test
+   void aSessionIsOpenedByTheTitleAndVersionOfTheDocument() throws Exception {
+      ArazzoDocument saga = orderSagaIsImportedAndLinked();
+
+      ArazzoSession session = arazzoSessionService.openSession("Order saga:1.0.0", SAGA).orElseThrow();
+
+      assertEquals(List.of(saga.getId(), "Order saga", "1.0.0", SAGA), List.of(session.getDocumentId(),
+            session.getDocumentTitle(), session.getDocumentVersion(), session.getWorkflowId()));
    }
 
    private ArazzoSession sessionOnTheSaga() throws Exception {

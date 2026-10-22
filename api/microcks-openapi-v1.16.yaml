@@ -1428,6 +1428,15 @@ paths:
                 $ref: '#/components/schemas/ArazzoSession'
           description: Created ArazzoSession, open. The mocks record the calls
             naming its identifier
+        "400":
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: "Unknown workflow: cancelSaga"
+          description: "The session is refused and none is created. The body tells\
+            \ why: the workflow is unknown, or one of its steps calls no operation\
+            \ of a linked API"
         "404":
           description: No Arazzo document has this identifier, or this title and
             version
@@ -1439,8 +1448,34 @@ paths:
       description: "Open a session to verify that an application follows a workflow\
         \ of an Arazzo document against the Microcks mocks. The application names\
         \ the session in each call it makes to the mocks, with the x-microcks-session\
-        \ header; the mocks record these calls in their order of receipt. Then ask\
-        \ for the verification of the session."
+        \ header (or gRPC metadata), or with the microcks-session entry of its W3C\
+        \ baggage header; the mocks record these calls in their order of receipt,\
+        \ until the session is closed or expires, up to a maximum of calls. Then\
+        \ ask for the verification of the session."
+  /arazzo/sessions/{sessionId}:
+    delete:
+      tags:
+      - workflow
+      responses:
+        "204":
+          description: The ArazzoSession is closed. It records no more calls, and
+            it is kept with its calls, to be verified, for a retention delay
+        "404":
+          description: No ArazzoSession has this identifier
+      security:
+      - jwt-bearer:
+        - user
+      operationId: CloseArazzoSession
+      summary: Close a verification session
+      description: Close a verification session, so that the mocks record no more
+        calls in it.
+    parameters:
+    - name: sessionId
+      description: Unique identifier of the ArazzoSession
+      schema:
+        type: string
+      in: path
+      required: true
   /arazzo/sessions/{sessionId}/verification:
     post:
       tags:
@@ -2818,6 +2853,15 @@ components:
         openedDate:
           format: int64
           description: Timestamp of the opening of the session
+          type: integer
+        closedDate:
+          format: int64
+          description: Timestamp of the closing of the session; absent while it
+            is open
+          type: integer
+        expireAt:
+          format: int64
+          description: Timestamp the session expires at, with its calls
           type: integer
         callCount:
           format: int64

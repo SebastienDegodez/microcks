@@ -15,6 +15,8 @@
  */
 package io.github.microcks.config;
 
+import io.github.microcks.domain.ArazzoSession;
+import io.github.microcks.domain.ArazzoSessionCall;
 import io.github.microcks.domain.ServiceState;
 
 import com.mongodb.WriteConcern;
@@ -66,6 +68,13 @@ public class MongoConfiguration {
          IndexOperations indexOps = mongoTemplate.indexOps(ServiceState.class);
 
          resolver.resolveIndexFor(ServiceState.class).forEach(indexOps::createIndex);
+
+         // The Arazzo verification sessions and their calls expire, so that their collections stay bounded.
+         log.info("Ensuring TTL indexes for ArazzoSession and ArazzoSessionCall");
+         IndexOperations sessionIndexOps = mongoTemplate.indexOps(ArazzoSession.class);
+         resolver.resolveIndexFor(ArazzoSession.class).forEach(sessionIndexOps::createIndex);
+         IndexOperations callIndexOps = mongoTemplate.indexOps(ArazzoSessionCall.class);
+         resolver.resolveIndexFor(ArazzoSessionCall.class).forEach(callIndexOps::createIndex);
       });
    }
 

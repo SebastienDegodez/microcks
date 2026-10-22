@@ -27,6 +27,7 @@ import io.github.microcks.util.dispatcher.ProxyFallbackSpecification;
 import io.github.microcks.util.el.EvaluableRequest;
 import io.github.microcks.util.el.TemplateEngine;
 import io.github.microcks.util.el.TemplateEngineFactory;
+import io.github.microcks.util.tracing.ArazzoSessionCarrier;
 import io.github.microcks.util.tracing.ArazzoTraceAttributes;
 
 import io.opentelemetry.api.common.Attributes;
@@ -71,9 +72,6 @@ public class MockControllerCommons {
 
    /** The header name used to specify a delay strategy in the request. */
    public static final String X_MICROCKS_DELAY_STRATEGY_HEADER = "x-microcks-delay-strategy";
-
-   /** The header naming the Arazzo verification session a mock invocation is recorded in. */
-   public static final String ARAZZO_SESSION_HEADER = "x-microcks-session";
 
    private static final String RENDERING_MESSAGE = "Response contains dynamic EL expression, rendering it...";
 
@@ -412,11 +410,14 @@ public class MockControllerCommons {
    }
 
    /**
-    * The Arazzo verification session a mock invocation names, in which the mocks record it.
+    * The Arazzo verification session a mock invocation names, in which the mocks record it: its x-microcks-session
+    * header, else the microcks-session entry of its W3C baggage.
     * @param request The request of the mock invocation
     * @return The id of the session, empty when the invocation names none
     */
    public static Optional<String> getArazzoSessionId(HttpServletRequest request) {
-      return Optional.ofNullable(request.getHeader(ARAZZO_SESSION_HEADER)).filter(sessionId -> !sessionId.isBlank());
+      Enumeration<String> baggage = request.getHeaders(ArazzoTraceAttributes.BAGGAGE_HEADER);
+      return ArazzoSessionCarrier.sessionId(request.getHeader(ArazzoSessionCarrier.SESSION_HEADER),
+            baggage == null ? List.of() : Collections.list(baggage));
    }
 }

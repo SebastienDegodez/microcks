@@ -55,6 +55,7 @@ class ArazzoSessionVerificationIT extends AbstractBaseIT {
 
    private static final String FIXTURES = "target/test-classes/io/github/microcks/service/arazzo/";
    private static final String SESSIONS = "/arazzo/sessions";
+   private static final String SESSION = "/arazzo/sessions/{sessionId}";
    private static final String VERIFICATION = "/arazzo/sessions/{sessionId}/verification";
    private static final String SESSION_HEADER = "x-microcks-session";
    private static final MicrocksApiDescription MICROCKS_API = MicrocksApiDescription.version("1.16");
@@ -167,6 +168,62 @@ class ArazzoSessionVerificationIT extends AbstractBaseIT {
             verification.get("steps").get(1).get("message").asText());
    }
 
+   /**
+    * AC-05: two tests run the saga at the same time, one naming its session in the header, the other in its W3C
+    * baggage; each verification only sees the calls of its own session.
+    */
+   @Test
+   void sessionsAreIsolated() throws Exception {
+      String first = openSession();
+      String second = openSession();
+      String inBaggage = "baggage:tenant=bakery,microcks-session=" + second;
+
+      placeOrder(first);
+      placeOrder(inBaggage);
+      reserveStock(inBaggage);
+      reserveStock(first);
+      chargePayment(first);
+      chargePayment(inBaggage);
+      confirmOrder(inBaggage);
+      confirmOrder(first);
+
+      for (String sessionId : List.of(first, second)) {
+         JsonNode verification = verify(sessionId);
+         assertEquals("SUCCESS", verification.get("status").asText(), verification.toPrettyString());
+         assertEquals(4, verification.get("session").get("calls").size(), verification.toPrettyString());
+      }
+   }
+
+   /** A closed session records no more calls; it can still be verified. */
+   @Test
+   void aClosedSessionRecordsNoMoreCalls() throws Exception {
+      String sessionId = openSession();
+      placeOrder(sessionId);
+
+      ResponseEntity<String> closed = restTemplate.exchange("/api" + SESSION, HttpMethod.DELETE,
+            new HttpEntity<>(jsonHeaders()), String.class, sessionId);
+      MICROCKS_API.assertResponseConforms("DELETE", SESSION, closed);
+      assertEquals(204, closed.getStatusCode().value());
+      reserveStock(sessionId);
+
+      JsonNode verification = verify(sessionId);
+      assertEquals(1, verification.get("session").get("calls").size(), verification.toPrettyString());
+   }
+
+   /** A session on an unknown workflow is refused, telling why in plain text. */
+   @Test
+   void aSessionOnAnUnknownWorkflowIsRefused() throws Exception {
+      String body = "{\"documentId\": \"Order saga:1.0.0\", \"workflowId\": \"cancelSaga\"}";
+      MICROCKS_API.assertRequestConforms("POST", SESSIONS, body);
+
+      ResponseEntity<String> refused = restTemplate.exchange("/api" + SESSIONS, HttpMethod.POST,
+            new HttpEntity<>(body, jsonHeaders()), String.class);
+
+      MICROCKS_API.assertResponseConforms("POST", SESSIONS, refused);
+      assertEquals(400, refused.getStatusCode().value());
+      assertEquals("Unknown workflow: cancelSaga", refused.getBody());
+   }
+
    private void placeOrder(String sessionId) {
       assertEquals(201,
             callMocks(sessionId, "Order+API", "/orders",
@@ -217,10 +274,17 @@ class ArazzoSessionVerificationIT extends AbstractBaseIT {
       return JSON.readTree(verified.getBody());
    }
 
-   /** The saga service calls the mocks of an API 1.0.0, naming its session. */
-   private ResponseEntity<String> callMocks(String sessionId, String api, String path, String body) {
+   /**
+    * The saga service calls the mocks of an API 1.0.0, naming its session in the x-microcks-session header, or in the
+    * baggage header when written as {@code baggage:<baggage>}.
+    */
+   private ResponseEntity<String> callMocks(String session, String api, String path, String body) {
       HttpHeaders headers = jsonHeaders();
-      headers.add(SESSION_HEADER, sessionId);
+      if (session.startsWith("baggage:")) {
+         headers.add("baggage", session.substring("baggage:".length()));
+      } else {
+         headers.add(SESSION_HEADER, session);
+      }
       return restTemplate.exchange("/rest/" + api + "/1.0.0" + path, HttpMethod.POST, new HttpEntity<>(body, headers),
             String.class);
    }

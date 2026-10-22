@@ -17,10 +17,12 @@ package io.github.microcks.web;
 
 import io.github.microcks.domain.ArazzoSession;
 import io.github.microcks.domain.WorkflowResult;
+import io.github.microcks.service.ArazzoRunRefusedException;
 import io.github.microcks.service.ArazzoSessionService;
 import io.github.microcks.web.ArazzoSessionController.ArazzoSessionRequest;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 
 import java.net.URI;
@@ -41,12 +43,12 @@ class ArazzoSessionControllerTest {
    private final ArazzoSessionController controller = new ArazzoSessionController(arazzoSessionService);
 
    @Test
-   void anOpenedSessionIsCreatedAtItsUrl() {
+   void anOpenedSessionIsCreatedAtItsUrl() throws Exception {
       ArazzoSession session = new ArazzoSession();
       session.setId("s-1");
       when(arazzoSessionService.openSession("Order saga:1.0.0", "placeOrderSaga")).thenReturn(Optional.of(session));
 
-      ResponseEntity<ArazzoSession> opened = controller
+      ResponseEntity<Object> opened = controller
             .openSession(new ArazzoSessionRequest("Order saga:1.0.0", "placeOrderSaga"));
 
       assertEquals(201, opened.getStatusCode().value());
@@ -55,11 +57,32 @@ class ArazzoSessionControllerTest {
    }
 
    @Test
-   void noSessionIsOpenedOnAnUnknownDocument() {
+   void noSessionIsOpenedOnAnUnknownDocument() throws Exception {
       when(arazzoSessionService.openSession("unknown", "placeOrderSaga")).thenReturn(Optional.empty());
 
       assertEquals(404,
             controller.openSession(new ArazzoSessionRequest("unknown", "placeOrderSaga")).getStatusCode().value());
+   }
+
+   @Test
+   void aRefusedSessionIsABadRequestTellingWhyInPlainText() throws Exception {
+      when(arazzoSessionService.openSession("Order saga:1.0.0", "cancelSaga"))
+            .thenThrow(new ArazzoRunRefusedException("Unknown workflow: cancelSaga"));
+
+      ResponseEntity<Object> refused = controller
+            .openSession(new ArazzoSessionRequest("Order saga:1.0.0", "cancelSaga"));
+
+      assertEquals(400, refused.getStatusCode().value());
+      assertEquals(MediaType.TEXT_PLAIN, refused.getHeaders().getContentType());
+      assertEquals("Unknown workflow: cancelSaga", refused.getBody());
+   }
+
+   @Test
+   void aClosedSessionHasNoContentAndAnUnknownSessionIsNotFound() {
+      when(arazzoSessionService.closeSession("s-1")).thenReturn(true);
+
+      assertEquals(204, controller.closeSession("s-1").getStatusCode().value());
+      assertEquals(404, controller.closeSession("unknown").getStatusCode().value());
    }
 
    @Test

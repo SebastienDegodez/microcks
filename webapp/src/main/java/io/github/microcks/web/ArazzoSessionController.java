@@ -17,9 +17,12 @@ package io.github.microcks.web;
 
 import io.github.microcks.domain.ArazzoSession;
 import io.github.microcks.domain.WorkflowResult;
+import io.github.microcks.service.ArazzoRunRefusedException;
 import io.github.microcks.service.ArazzoSessionService;
 
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -56,10 +59,22 @@ public class ArazzoSessionController {
    }
 
    @PostMapping(value = "/sessions")
-   public ResponseEntity<ArazzoSession> openSession(@RequestBody ArazzoSessionRequest request) {
-      return arazzoSessionService.openSession(request.documentId(), request.workflowId())
-            .map(session -> ResponseEntity.created(URI.create("/api/arazzo/sessions/" + session.getId())).body(session))
-            .orElseGet(() -> ResponseEntity.notFound().build());
+   public ResponseEntity<Object> openSession(@RequestBody ArazzoSessionRequest request) {
+      try {
+         return arazzoSessionService.openSession(request.documentId(), request.workflowId())
+               .<ResponseEntity<Object>>map(session -> ResponseEntity
+                     .created(URI.create("/api/arazzo/sessions/" + session.getId())).body(session))
+               .orElseGet(() -> ResponseEntity.notFound().build());
+      } catch (ArazzoRunRefusedException arre) {
+         // The reason is plain text, whatever the client accepts, as the Microcks API describes it.
+         return ResponseEntity.badRequest().contentType(MediaType.TEXT_PLAIN).body(arre.getMessage());
+      }
+   }
+
+   @DeleteMapping(value = "/sessions/{sessionId}")
+   public ResponseEntity<Void> closeSession(@PathVariable("sessionId") String sessionId) {
+      return arazzoSessionService.closeSession(sessionId) ? ResponseEntity.noContent().build()
+            : ResponseEntity.notFound().build();
    }
 
    @PostMapping(value = "/sessions/{sessionId}/verification")

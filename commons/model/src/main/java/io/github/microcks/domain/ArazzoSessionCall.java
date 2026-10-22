@@ -31,6 +31,7 @@ public class ArazzoSessionCall {
 
    @Id
    private String id;
+   @Indexed
    private String sessionId;
    private long index;
    private Date receivedDate;

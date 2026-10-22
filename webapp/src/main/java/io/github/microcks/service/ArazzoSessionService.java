@@ -20,6 +20,7 @@ import io.github.microcks.domain.ArazzoSession;
 import io.github.microcks.domain.ArazzoSessionCall;
 import io.github.microcks.domain.ArazzoStepCall;
 import io.github.microcks.domain.ArazzoStepOperation;
+import io.github.microcks.domain.ArazzoWorkflowStatus;
 import io.github.microcks.domain.Request;
 import io.github.microcks.domain.Response;
 import io.github.microcks.domain.WorkflowResult;
@@ -73,6 +74,18 @@ public class ArazzoSessionService {
    @Value("${validation.resourceUrl:#{null}}")
    private String validationResourceUrl;
 
+   /** How long an open session records calls, in seconds, before it expires with them. */
+   @Value("${arazzo.sessions.max-open-duration:3600}")
+   private long maxOpenDuration;
+
+   /** How long a closed session is kept with its calls, in seconds, before it expires. */
+   @Value("${arazzo.sessions.retention:600}")
+   private long retention;
+
+   /** How many calls a session records at most; the next ones are not recorded. */
+   @Value("${arazzo.sessions.max-calls:1000}")
+   private long maxCalls;
+
    /**
     * Build a new ArazzoSessionService with its required dependencies.
     * @param arazzoDocumentService       The service finding the Arazzo documents and linking their sources to APIs
@@ -96,32 +109,62 @@ public class ArazzoSessionService {
     * @param documentId The id of the Arazzo document, or its title and version as {@code <title>:<version>}
     * @param workflowId The id of the workflow in that document
     * @return The session, open; empty if the document does not exist
+    * @throws ArazzoRunRefusedException if the workflow is unknown, or if one of its steps calls no operation of a
+    *                                   linked API
     */
-   public Optional<ArazzoSession> openSession(String documentId, String workflowId) {
-      return arazzoDocumentService.getDocument(documentId).map(document -> {
-         ArazzoSession session = new ArazzoSession();
-         session.setDocumentId(document.getId());
-         session.setDocumentTitle(document.getTitle());
-         session.setDocumentVersion(document.getVersion());
-         session.setWorkflowId(workflowId);
-         session.setOpenedDate(new Date());
-         return arazzoSessionRepository.save(session);
-      });
+   public Optional<ArazzoSession> openSession(String documentId, String workflowId) throws ArazzoRunRefusedException {
+      Optional<ArazzoDocument> found = arazzoDocumentService.getDocument(documentId);
+      if (found.isEmpty()) {
+         return Optional.empty();
+      }
+      ArazzoDocument document = found.get();
+      if (!document.getWorkflowIds().contains(workflowId)) {
+         throw new ArazzoRunRefusedException("Unknown workflow: " + workflowId);
+      }
+      ArazzoWorkflowStatus status = ArazzoDocumentService.status(workflowId,
+            document.getWorkflowCalls().get(workflowId), arazzoDocumentService.resolveSources(document));
+      if (!status.runnable()) {
+         throw new ArazzoRunRefusedException(
+               "Workflow " + workflowId + " cannot be verified: " + String.join(", ", status.reasons()));
+      }
+      Date now = new Date();
+      ArazzoSession session = new ArazzoSession();
+      session.setDocumentId(document.getId());
+      session.setDocumentTitle(document.getTitle());
+      session.setDocumentVersion(document.getVersion());
+      session.setWorkflowId(workflowId);
+      session.setOpenedDate(now);
+      // A session that is never closed expires after its maximum duration, so that its calls are not kept forever.
+      session.setExpireAt(new Date(now.getTime() + maxOpenDuration * 1000L));
+      return Optional.of(arazzoSessionRepository.save(session));
    }
 
    /**
-    * Record a call the mocks received naming a session; a call naming no open session is not recorded.
+    * Record a call the mocks received naming a session; a call naming no open session, or a session that recorded its
+    * maximum of calls, is not recorded.
     * @param sessionId The id of the session the call names
     * @param call      The call, as the mocks received and answered it
     */
    public void recordCall(String sessionId, ArazzoSessionCall call) {
-      long index = arazzoSessionRepository.nextCallIndex(sessionId);
-      if (index >= 0) {
+      Date now = new Date();
+      ArazzoSession session = arazzoSessionRepository.countCall(sessionId, maxCalls, now);
+      if (session != null) {
          call.setSessionId(sessionId);
-         call.setIndex(index);
-         call.setReceivedDate(new Date());
+         call.setIndex(session.getCallCount() - 1);
+         call.setReceivedDate(now);
+         call.setExpireAt(session.getExpireAt());
          arazzoSessionCallRepository.save(call);
       }
+   }
+
+   /**
+    * Close a session: it records no more calls, and it is kept with its calls for the retention delay.
+    * @param sessionId The id of the session
+    * @return Whether the session exists
+    */
+   public boolean closeSession(String sessionId) {
+      Date now = new Date();
+      return arazzoSessionRepository.close(sessionId, now, new Date(now.getTime() + retention * 1000L));
    }
 
    /**
