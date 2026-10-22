@@ -39,6 +39,8 @@ import io.github.microcks.service.ArazzoDocumentService.ResolvedSource;
 import io.github.microcks.util.arazzo.ArazzoDataFlow;
 import io.github.microcks.util.arazzo.ArazzoWorkflowReader;
 
+import org.springframework.beans.factory.annotation.Value;
+
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -73,6 +75,10 @@ public class ArazzoRunService {
    private final SecretRepository secretRepository;
    private final ArazzoMockCoherenceService arazzoMockCoherenceService;
    private final ResourceRepository resourceRepository;
+
+   /** The URL the relative references of the stored contracts resolve against, as for OpenAPI contract tests. */
+   @Value("${validation.resourceUrl:#{null}}")
+   private String validationResourceUrl;
 
    /**
     * Build a new ArazzoRunService with its required dependencies.
@@ -294,9 +300,11 @@ public class ArazzoRunService {
             operations.put(operation.operationId(),
                   new ArazzoRunRequest.Operation(operation.method(), operation.path()));
          }
-         // The contract is sent only when the minion validates the responses against it.
+         // The contract is sent only when the minion validates the responses against it, with the URL its relative
+         // references resolve against.
+         String contract = validateSchema ? openApiContractOf(source) : null;
          targets.put(source.link().sourceName(), new ArazzoRunRequest.Source(baseUrls.get(source.link().sourceName()),
-               operations, validateSchema ? openApiContractOf(source) : null));
+               operations, contract, contract == null ? null : validationResourceUrl));
       }
       return targets;
    }

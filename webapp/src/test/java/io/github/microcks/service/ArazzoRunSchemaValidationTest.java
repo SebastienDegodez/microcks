@@ -61,9 +61,11 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
 @SpringJUnitConfig(classes = { RepositoryTestsConfiguration.class,
       ArazzoRunSchemaValidationTest.MinionAtTheBoundary.class })
-@TestPropertySource(locations = { "classpath:/config/test.properties" })
+@TestPropertySource(locations = { "classpath:/config/test.properties" }, properties = {
+      "validation.resourceUrl=" + ArazzoRunSchemaValidationTest.RESOURCES })
 class ArazzoRunSchemaValidationTest {
 
+   static final String RESOURCES = "http://microcks.example:8080/api/resources/";
    private static final String FIXTURES = "/io/github/microcks/service/arazzo/";
    private static final Map<String, Object> INPUTS = Map.of("pastry", "Eclair Cafe", "newPrice", 2.6);
 
@@ -110,6 +112,7 @@ class ArazzoRunSchemaValidationTest {
       ArazzoRunRequest request = minion.requests().get(0);
       assertEquals(validateSchema, request.validateSchema());
       assertEquals(contract == null ? null : fixture(contract), request.sources().get("pastryApi").openApiContract());
+      assertEquals(contract == null ? null : RESOURCES, request.sources().get("pastryApi").openApiContractBaseUrl());
       assertEquals(validateSchema, workflowResultRepository.findById(run.getId()).orElseThrow().isValidateSchema());
    }
 
@@ -156,6 +159,7 @@ class ArazzoRunSchemaValidationTest {
       Map<String, ArazzoRunRequest.Source> sources = minion.requests().get(0).sources();
       assertEquals(fixture("customer-api.openapi.yaml"), sources.get("customerApi").openApiContract());
       assertEquals(contract == null ? null : fixture(contract), sources.get("orderApi").openApiContract());
+      assertEquals(contract == null ? null : RESOURCES, sources.get("orderApi").openApiContractBaseUrl());
    }
 
    @Test
