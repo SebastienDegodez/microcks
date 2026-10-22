@@ -98,19 +98,18 @@ public class ArazzoSessionAnswerService {
                   steps -> steps.stepOf(received)
                         .flatMap(step -> Optional.ofNullable(dispatched)
                               .or(() -> exampleOf(steps.serviceIdOf(step), received))
-                              .map(example -> filled(example, step, received, steps.outputs()))));
+                              .map(example -> filled(example, step, received, steps.context(null)))));
    }
 
    /**
     * The example the step answers with, filled with the values of the session; as it is when Microcks keeps no request
     * with it.
     */
-   private Response filled(Response example, ExpectedStep step, ArazzoSessionCall received,
-         Map<String, Map<String, Object>> outputs) {
+   private Response filled(Response example, ExpectedStep step, ArazzoSessionCall received, ReceivedCall session) {
       Map<String, Object> replacements = requestRepository
             .findByOperationIdAndName(example.getOperationId(), example.getName()).stream().findFirst()
             .map(exampleRequest -> ArazzoSessionAnswerFiller.replacements(step.step(), exampleRequest,
-                  ArazzoSessionVerifier.requestOf(step, received), new ReceivedCall(Map.of(), outputs, null)))
+                  ArazzoSessionVerifier.requestOf(step, received), session))
             .orElse(Map.of());
       Response answer = copyOf(example);
       answer.setContent(ArazzoSessionAnswerFiller.filled(example.getContent(), replacements));
@@ -126,7 +125,7 @@ public class ArazzoSessionAnswerService {
    public void remember(ArazzoSession session, ArazzoSessionCall call) {
       stepsOf(session).ifPresent(steps -> steps.stepOf(call).ifPresent(step -> {
          Map<String, Object> outputs = new LinkedHashMap<>();
-         ReceivedCall answered = new ReceivedCall(Map.of(), steps.outputs(), call);
+         ReceivedCall answered = steps.context(call);
          step.step().outputs().forEach((name, expression) -> {
             try {
                outputs.put(name, EXPRESSIONS.resolve(expression, answered));
@@ -171,7 +170,8 @@ public class ArazzoSessionAnswerService {
                               step.call().operationId(), step.call().channel()), sources),
                         source.link().apiName(), source.link().apiVersion(), null));
                }
-               return new SessionSteps(session.getId(), sources, steps, serviceStateRepository);
+               return new SessionSteps(session.getId(), session.getInputs() == null ? Map.of() : session.getInputs(),
+                     sources, steps, serviceStateRepository);
             }));
    }
 
@@ -209,12 +209,13 @@ public class ArazzoSessionAnswerService {
    /**
     * The steps of the workflow of a session.
     * @param sessionId The id of the session
+    * @param inputs    The inputs of the workflow the session was opened with, by name
     * @param sources   The source descriptions of the document, with the APIs they are linked to, by name
     * @param steps     The steps, in the order of the workflow
     * @param states    The repository of the state stores of the APIs
     */
-   private record SessionSteps(String sessionId, Map<String, ResolvedSource> sources, List<ExpectedStep> steps,
-         ServiceStateRepository states) {
+   private record SessionSteps(String sessionId, Map<String, Object> inputs, Map<String, ResolvedSource> sources,
+         List<ExpectedStep> steps, ServiceStateRepository states) {
 
       /** The id of the API the source of a step is linked to. */
       private String serviceIdOf(ExpectedStep step) {
@@ -235,6 +236,14 @@ public class ArazzoSessionAnswerService {
                .toList();
          return candidates.stream().filter(step -> store(step).get(stateKey(sessionId, step)) == null).findFirst()
                .or(() -> candidates.stream().reduce((first, second) -> second));
+      }
+
+      /**
+       * What the runtime expressions of a step see in the session: its inputs, the outputs of the steps it answered
+       * and, once the mocks answered it, the response to the call.
+       */
+      private ReceivedCall context(ArazzoSessionCall call) {
+         return new ReceivedCall(inputs, outputs(), call);
       }
 
       /** The outputs of the steps the session answered, by step id. */

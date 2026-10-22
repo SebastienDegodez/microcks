@@ -147,6 +147,22 @@ class ArazzoSessionAnswerTest {
    }
 
    /**
+    * The inputs a session was opened with are values of the session too: createOrder takes its customer from
+    * $inputs.customerId, and the order the mock places is for that customer.
+    */
+   @Test
+   void theInputsOfTheSessionFlowIntoTheAnswers() throws Exception {
+      ArazzoDocument saga = orderSagaIsImportedAndLinked();
+      ArazzoSession session = arazzoSessionService.openSession(saga.getId(), SAGA, Map.of("customerId", "c-9"))
+            .orElseThrow();
+
+      Response placed = mocksAnswer(session, createOrder(), dispatched("Order API", "POST /orders"));
+
+      assertJson("{\"id\": \"o-42\", \"customerId\": \"c-9\", \"amount\": 25.0, \"status\": \"PENDING\"}",
+            placed.getContent());
+   }
+
+   /**
     * The mocks play the workflow: the value an earlier step of the session gave wins over the value the service sends,
     * which the verification of the session reports.
     */
