@@ -89,6 +89,7 @@ describe('WorkflowRunPageComponent verification of a session', () => {
     const page = open(outOfOrderVerification());
 
     expect(text(page.querySelector('.workflow-run-title'))).toEqual('Verification #5 · placeOrderSaga failed');
+    expect(text(page.querySelector('.breadcrumb li:last-child'))).toEqual('Verification #5');
     const subtitle = page.querySelector('.workflow-run-subtitle')!;
     expect(text(subtitle.firstChild as Element)).toEqual('Verified a minute ago against Microcks mocks');
     expect(text(subtitle.querySelector('.arazzo-run-origin'))).toEqual('Session');
@@ -130,9 +131,9 @@ describe('WorkflowRunPageComponent verification of a session', () => {
       text(row.querySelector('.workflow-run-step-title')) + ' | '
         + text(row.querySelector('.workflow-run-step-call')) + ' | '
         + text(row.querySelector('.workflow-run-step-result')))).toEqual([
-      '1 · createOrder | call #1 | 201 · 0 ms',
-      '2 · reserveStock | call #3 | 201 · 0 ms',
-      '3 · chargePayment | call #2 | 201 · 0 ms',
+      '1 · createOrder | call #1 | 201',
+      '2 · reserveStock | call #3 | 201',
+      '3 · chargePayment | call #2 | 201',
       '4 · confirmOrder |  | No call received'
     ]);
   }));

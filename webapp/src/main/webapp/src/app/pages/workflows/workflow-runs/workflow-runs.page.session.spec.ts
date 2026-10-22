@@ -51,6 +51,9 @@ describe('WorkflowRunsPageComponent verifications of sessions', () => {
         + (row.querySelector('.arazzo-run-origin')?.textContent?.trim() ?? '-'))).toEqual([
       '#3 Session', '#2 Mock URL', '#1 -'
     ]);
+    // A verification has no duration of its own: it reads the calls the session received.
+    expect(Array.from(page.querySelectorAll('tbody tr .workflow-runs-duration')).map(cell => cell.textContent?.trim()))
+      .toEqual(['—', runs[1].elapsedTime + ' ms', runs[2].elapsedTime + ' ms']);
     expect(page.querySelector('tbody tr .arazzo-run-origin')?.getAttribute('title'))
       .toEqual('Verification of the calls an application made to the mocks in a session');
   });

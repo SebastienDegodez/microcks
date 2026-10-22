@@ -6,7 +6,7 @@
         <ng-container *ngIf="state.run as run">
           <li><a [routerLink]="['/workflows', run.documentId, run.workflowId]">{{ run.documentTitle }} - {{ run.documentVersion }}</a></li>
           <li><a [routerLink]="['/workflows/documents', run.documentId, 'runs']">Runs</a></li>
-          <li>Run<ng-container *ngIf="run.number"> #{{ run.number }}</ng-container></li>
+          <li>{{ isSession(run) ? 'Verification' : 'Run' }}<ng-container *ngIf="run.number"> #{{ run.number }}</ng-container></li>
         </ng-container>
       </ol>
     </div>
@@ -149,7 +149,8 @@
                 [ngClass]="{ 'pficon pficon-ok': step.status === 'PASSED', 'pficon pficon-error-circle-o': step.status === 'FAILED', 'fa fa-circle-o': step.status === 'NOT_RUN' }"></span>
           <span class="workflow-run-step-title">{{ step.index + 1 }} · {{ step.stepId }}</span>&ngsp;<span *ngIf="callOf(run, step) as call" class="workflow-run-step-call" title="The order in which the session received this call">call #{{ call.index + 1 }}</span>&ngsp;<span *ngIf="attemptOf(run, step) as attempt" class="workflow-run-step-attempt">attempt {{ attempt.attempt }} of {{ attempt.attempts }}<ng-container *ngIf="attempt.retried">, retried</ng-container></span>&ngsp;<span class="workflow-run-protocol-chip">REST</span>&ngsp;<code class="workflow-run-endpoint">{{ step.operation.method }} {{ step.operation.path }}</code>&ngsp;<span class="workflow-run-operation">{{ step.operation.operationId }}</span>&ngsp;<span class="workflow-run-step-result">
             <ng-container *ngIf="step.status === 'NOT_RUN'">Not run</ng-container>
-            <ng-container *ngIf="step.status !== 'NOT_RUN' && (!isSession(run) || callOf(run, step))">{{ step.statusCode ?? 'No response' }} · {{ step.elapsedTime }} ms</ng-container>
+            <ng-container *ngIf="step.status !== 'NOT_RUN' && !isSession(run)">{{ step.statusCode ?? 'No response' }} · {{ step.elapsedTime }} ms</ng-container>
+            <ng-container *ngIf="isSession(run) && callOf(run, step)">{{ step.statusCode }}</ng-container>
             <ng-container *ngIf="isSession(run) && !callOf(run, step)">No call received</ng-container>
           </span>
         </div>

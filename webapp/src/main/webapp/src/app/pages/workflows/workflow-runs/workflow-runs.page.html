@@ -87,7 +87,7 @@
             </td>
             <td>{{ run.failedStepId ?? '—' }}</td>
             <td class="workflow-runs-muted">{{ startedOn(run) | timeAgo }}</td>
-            <td class="workflow-runs-duration">{{ run.elapsedTime }} ms</td>
+            <td class="workflow-runs-duration">{{ run.origin === 'SESSION' ? '—' : run.elapsedTime + ' ms' }}</td>
           </tr>
         </tbody>
       </table>
