@@ -40,7 +40,12 @@ import io.github.microcks.service.ArazzoSessionVerifier.StepVerdict;
 import io.github.microcks.util.arazzo.ArazzoStep;
 import io.github.microcks.util.arazzo.ArazzoWorkflow;
 import io.github.microcks.util.arazzo.ArazzoWorkflowReader;
+import io.github.microcks.util.openapi.OpenAPISchemaValidator;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import org.springframework.beans.factory.annotation.Value;
+
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
@@ -63,6 +68,10 @@ public class ArazzoSessionService {
    private final ArazzoSessionRepository arazzoSessionRepository;
    private final ArazzoSessionCallRepository arazzoSessionCallRepository;
    private final WorkflowResultRepository workflowResultRepository;
+
+   /** The URL the relative references of the stored contracts resolve against, as for OpenAPI contract tests. */
+   @Value("${validation.resourceUrl:#{null}}")
+   private String validationResourceUrl;
 
    /**
     * Build a new ArazzoSessionService with its required dependencies.
@@ -129,7 +138,7 @@ public class ArazzoSessionService {
       Map<String, ResolvedSource> sources = arazzoDocumentService.resolveSources(document);
       List<ArazzoSessionCall> calls = arazzoSessionCallRepository.findBySessionIdOrderByIndexAsc(session.getId());
       List<StepVerdict> verdicts = ArazzoSessionVerifier.verify(expectedSteps(document, session, sources), calls,
-            ArazzoCallOrder.STRICT);
+            ArazzoCallOrder.STRICT, validationResourceUrl);
 
       WorkflowResult result = new WorkflowResult();
       result.setDocumentId(document.getId());
@@ -163,18 +172,29 @@ public class ArazzoSessionService {
    }
 
    /** The steps of the workflow of the session, each with its operation in the API its source is linked to. */
-   private static List<ExpectedStep> expectedSteps(ArazzoDocument document, ArazzoSession session,
+   private List<ExpectedStep> expectedSteps(ArazzoDocument document, ArazzoSession session,
          Map<String, ResolvedSource> sources) {
       ArazzoWorkflow workflow = workflowOf(document, session);
+      Map<String, JsonNode> contracts = new HashMap<>();
       List<ExpectedStep> steps = new ArrayList<>();
       for (ArazzoStep step : workflow.steps()) {
          ArazzoStepOperation operation = ArazzoDocumentService.operationOf(
                new ArazzoStepCall(step.call().sourceName(), step.call().operationId(), step.call().channel()), sources);
          ResolvedSource source = sources.get(step.call().sourceName());
-         steps.add(
-               new ExpectedStep(steps.size(), step, operation, source.link().apiName(), source.link().apiVersion()));
+         steps.add(new ExpectedStep(steps.size(), step, operation, source.link().apiName(), source.link().apiVersion(),
+               contracts.computeIfAbsent(source.link().sourceName(), sourceName -> contractOf(source))));
       }
       return steps;
+   }
+
+   /** The main OpenAPI contract of the API a source is linked to, read; null when it has none or it cannot be read. */
+   private JsonNode contractOf(ResolvedSource source) {
+      String contract = arazzoRunService.openApiContractOf(source);
+      try {
+         return contract == null ? null : OpenAPISchemaValidator.getJsonNodeForSchema(contract);
+      } catch (IOException unreadable) {
+         return null;
+      }
    }
 
    private static ArazzoWorkflow workflowOf(ArazzoDocument document, ArazzoSession session) {

@@ -27,6 +27,7 @@ import io.github.microcks.util.arazzo.ArazzoReceivedRequest;
 import io.github.microcks.util.arazzo.ArazzoStep;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
@@ -43,7 +44,8 @@ import java.util.Set;
  * to the first call, in the order of receipt, that no earlier step took and that calls its operation, its method and
  * path template, on the mocks of the API its source is linked to. A step without call is missing; then the order of the
  * calls is checked, as the session asks, and the data of each call: the values it sends from runtime expressions must
- * be those the outputs of the steps before it give, read from the responses of the mocks.
+ * be those the outputs of the steps before it give, read from the responses of the mocks; and the request of each call
+ * must conform to the contract of the API it called.
  * @author SebastienDegodez
  */
 final class ArazzoSessionVerifier {
@@ -61,8 +63,11 @@ final class ArazzoSessionVerifier {
     * @param operation  The operation it calls in the linked API
     * @param apiName    The name of the linked API
     * @param apiVersion The version of the linked API
+    * @param contract   The OpenAPI contract of the linked API, which the calls of the step must conform to; null when
+    *                   it has none
     */
-   record ExpectedStep(int index, ArazzoStep step, ArazzoStepOperation operation, String apiName, String apiVersion) {
+   record ExpectedStep(int index, ArazzoStep step, ArazzoStepOperation operation, String apiName, String apiVersion,
+         JsonNode contract) {
    }
 
    /**
@@ -78,12 +83,14 @@ final class ArazzoSessionVerifier {
    }
 
    /**
-    * @param steps The steps of the workflow, in its order
-    * @param calls The calls of the session, in their order of receipt
-    * @param order The order the calls matched to the steps are expected in
+    * @param steps       The steps of the workflow, in its order
+    * @param calls       The calls of the session, in their order of receipt
+    * @param order       The order the calls matched to the steps are expected in
+    * @param resourceUrl The URL the relative references of the contracts resolve against; null for none
     * @return The verdict of each step, in the order of the workflow
     */
-   static List<StepVerdict> verify(List<ExpectedStep> steps, List<ArazzoSessionCall> calls, ArazzoCallOrder order) {
+   static List<StepVerdict> verify(List<ExpectedStep> steps, List<ArazzoSessionCall> calls, ArazzoCallOrder order,
+         String resourceUrl) {
       Map<ExpectedStep, ArazzoSessionCall> matched = match(steps, calls);
       Map<String, Map<String, Object>> stepOutputs = new LinkedHashMap<>();
       List<StepVerdict> verdicts = new ArrayList<>();
@@ -111,6 +118,12 @@ final class ArazzoSessionVerifier {
             step.step().requestBody().replacements().forEach((target, value) -> checkData(step, "body `" + target + "`",
                   expressionOf(value), request.bodyValue(target).orElse(null), before).ifPresent(failures::add));
          }
+         String contentType = request.parameter("header", "Content-Type").map(String::valueOf).orElse(null);
+         ArazzoRequestConformance
+               .violations(step.contract(), step.operation().method(), step.operation().path(), request, contentType,
+                     resourceUrl)
+               .forEach(violation -> failures.add("`" + step.step().stepId() + "` request does not conform to "
+                     + step.apiName() + " " + step.apiVersion() + ": " + violation));
          Map<String, Object> outputs = evaluated(step.step().outputs(),
                new ReceivedCall(Map.of(), Map.copyOf(stepOutputs), call));
          stepOutputs.put(step.step().stepId(), outputs);

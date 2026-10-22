@@ -172,6 +172,23 @@ class ArazzoSessionVerificationTest {
       assertEquals(Map.of("orderId", "o-42", "reservationId", "r-9"), verification.getOutputs());
    }
 
+   /** Each call is checked against the contract of the API it called: a request it does not allow fails its step. */
+   @Test
+   void aRequestTheContractOfItsApiDoesNotAllowFailsItsStep() throws Exception {
+      ArazzoSession session = sessionOnTheSaga();
+      ArazzoSessionCall chargeAmountAsText = chargePayment("o-42");
+      chargeAmountAsText.setRequestBody("{\"orderId\": \"o-42\", \"amount\": \"25.0\"}");
+
+      record(session, createOrder(), reserveStock("o-42"), chargeAmountAsText, confirmOrder("o-42"));
+
+      WorkflowResult verification = arazzoSessionService.verify(session.getId()).orElseThrow();
+      assertEquals(WorkflowRunStatus.FAILURE, verification.getStatus());
+      assertEquals(
+            "2 chargePayment FAILED `chargePayment` request does not conform to Payment API 1.0.0: "
+                  + "the request body does not follow its schema at /amount: string found, number expected",
+            described(verification).get(2));
+   }
+
    /** AC-04: a step the service never calls fails the verification as missing. */
    @Test
    void aMissingStepFailsTheVerification() throws Exception {

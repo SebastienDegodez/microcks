@@ -421,8 +421,11 @@ public class ArazzoRunService {
       return targets;
    }
 
-   /** The main OpenAPI or Swagger contract Microcks stored for the API a source is linked to; null when none. */
-   private String openApiContractOf(ResolvedSource source) {
+   /**
+    * The main OpenAPI or Swagger contract Microcks stored for the API a source is linked to; null when none. The calls
+    * a session verifies are checked against it too.
+    */
+   String openApiContractOf(ResolvedSource source) {
       return resourceRepository.findMainByServiceId(source.serviceId()).stream().filter(
             resource -> resource.getType() == ResourceType.OPEN_API_SPEC || resource.getType() == ResourceType.SWAGGER)
             .map(Resource::getContent).findFirst().orElse(null);
