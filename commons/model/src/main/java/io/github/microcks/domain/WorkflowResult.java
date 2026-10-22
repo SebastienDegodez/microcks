@@ -46,6 +46,7 @@ public class WorkflowResult {
    private SecretRef secretRef;
    private List<WorkflowStepResult> steps = new ArrayList<>();
    private String message;
+   private Long number;
 
    public String getId() {
       return id;
@@ -173,5 +174,13 @@ public class WorkflowResult {
 
    public void setMessage(String message) {
       this.message = message;
+   }
+
+   public Long getNumber() {
+      return number;
+   }
+
+   public void setNumber(Long number) {
+      this.number = number;
    }
 }

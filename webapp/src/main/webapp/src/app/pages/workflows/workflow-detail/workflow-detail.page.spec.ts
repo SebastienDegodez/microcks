@@ -21,7 +21,10 @@ import { of, throwError } from 'rxjs';
 import { BsModalService } from 'ngx-bootstrap/modal';
 
 import { ArazzoWorkflowDetail } from '../../../models/arazzo-workflow.model';
+import { WorkflowRunSummary } from '../../../models/arazzo-run.model';
+import { ArazzoRunHistoryService } from '../../../services/arazzo-run-history.service';
 import { ArazzoWorkflowService } from '../../../services/arazzo-workflow.service';
+import { FakeRunHistory, HOUR, pastryRuns } from '../../../../test-data/arazzo-run-history';
 import { WorkflowDetailPageComponent } from './workflow-detail.page';
 import { WorkflowRunDialogComponent } from '../workflow-run-dialog/workflow-run.dialog';
 
@@ -78,9 +81,11 @@ describe('WorkflowDetailPageComponent', () => {
   let harness: RouterTestingHarness;
   let page: HTMLElement;
   let modals: jasmine.SpyObj<BsModalService>;
+  let history: FakeRunHistory;
 
   async function open(workflow: ArazzoWorkflowDetail | Error,
-                      url = '/workflows/doc-1/readThenReprice'): Promise<void> {
+                      url = '/workflows/doc-1/readThenReprice', runs: WorkflowRunSummary[] = []): Promise<void> {
+    history = new FakeRunHistory(runs, 'doc-1');
     const service = {
       getWorkflow: jasmine.createSpy('getWorkflow')
         .and.returnValue(workflow instanceof Error ? throwError(() => workflow) : of(workflow))
@@ -90,7 +95,8 @@ describe('WorkflowDetailPageComponent', () => {
       providers: [
         provideRouter([{ path: 'workflows/:documentId/:workflowId', component: WorkflowDetailPageComponent }]),
         { provide: BsModalService, useValue: modals },
-        { provide: ArazzoWorkflowService, useValue: service }
+        { provide: ArazzoWorkflowService, useValue: service },
+        { provide: ArazzoRunHistoryService, useValue: history }
       ]
     });
     harness = await RouterTestingHarness.create();
@@ -205,22 +211,25 @@ describe('WorkflowDetailPageComponent', () => {
 
     expect(texts('.workflow-tabs li')).toEqual(['readThenReprice', 'listThenReadFirst']);
     expect(texts('.workflow-tabs li.active')).toEqual(['readThenReprice']);
+    expect(page.querySelectorAll('.workflow-tab-status').length).toEqual(0);
     expect(Array.from(page.querySelectorAll('.workflow-tabs a')).map(link => link.getAttribute('href')))
       .toEqual(['/workflows/doc-1/readThenReprice', '/workflows/doc-1/listThenReadFirst']);
   });
 
-  it('runs the workflow from its page, the runs history being available soon, and no link source control', async () => {
+  it('opens the runs history of the document and runs the workflow from its page, with no link source control', async () => {
     await open(readThenReprice());
 
+    const runsHistory = page.querySelector('.workflow-run-controls a.workflow-runs-history') as HTMLAnchorElement;
+    expect(normalized(runsHistory.textContent)).toEqual('Runs history');
+    expect(runsHistory.getAttribute('href')).toEqual('/workflows/documents/doc-1/runs');
     const controls = Array.from(page.querySelectorAll('.workflow-run-controls button')) as HTMLButtonElement[];
-    expect(controls.map(control => normalized(control.textContent))).toEqual(['Runs history', 'Run workflow']);
-    expect(controls.map(control => control.disabled)).toEqual([true, false]);
-    expect(Array.from(page.querySelectorAll('.workflow-run-controls [title]')).map(e => e.getAttribute('title')))
-      .toEqual(['Available soon']);
+    expect(controls.map(control => normalized(control.textContent))).toEqual(['Run workflow']);
+    expect(controls.map(control => control.disabled)).toEqual([false]);
+    expect(page.querySelectorAll('.workflow-run-controls [title]').length).toEqual(0);
     expect(normalized(page.textContent)).not.toContain('Change link');
     expect(normalized(page.textContent)).not.toContain('Link sources');
 
-    controls[1].click();
+    controls[0].click();
 
     expect(modals.show).toHaveBeenCalledWith(WorkflowRunDialogComponent, jasmine.objectContaining({
       initialState: { documentId: 'doc-1', workflowIds: ['readThenReprice', 'listThenReadFirst'],
@@ -234,7 +243,7 @@ describe('WorkflowDetailPageComponent', () => {
       reasons: ['Operation DeletePastry not found in API Pastry - 2.0 2.0.0', 'API Order API 1.0.0 not found'] };
     await open(workflow);
 
-    const run = page.querySelectorAll('.workflow-run-controls button')[1] as HTMLButtonElement;
+    const run = page.querySelector('.workflow-run-controls button') as HTMLButtonElement;
     expect(run.disabled).toBeTrue();
     expect(run.parentElement?.getAttribute('title'))
       .toEqual('Operation DeletePastry not found in API Pastry - 2.0 2.0.0, API Order API 1.0.0 not found');
@@ -244,6 +253,45 @@ describe('WorkflowDetailPageComponent', () => {
     await open(readThenReprice());
 
     expect(texts('.workflow-recent-runs .workflow-empty')).toEqual(['Never run']);
+    expect(page.querySelectorAll('.workflow-recent-run').length).toEqual(0);
+  });
+
+  it('lists the last three runs of the workflow under Recent runs, with a link to all its runs', async () => {
+    const runs: WorkflowRunSummary[] = [
+      { id: 'run-5', number: 5, workflowId: 'readThenReprice', target: 'MOCKS', status: 'SUCCESS',
+        startedDate: Date.now() - 0.1 * HOUR, elapsedTime: 21 },
+      { id: 'run-4', number: 4, workflowId: 'readThenReprice', target: 'IMPLEMENTATIONS', status: 'SUCCESS',
+        startedDate: Date.now() - 1 * HOUR, elapsedTime: 64 },
+      ...pastryRuns()
+    ];
+    await open(readThenReprice(), '/workflows/doc-1/readThenReprice', runs);
+
+    expect(rows('.workflow-recent-run')).toEqual([
+      '#5 Passed · Microcks mocks 6 minutes ago',
+      '#4 Passed · implementation an hour ago',
+      '#2 Failed at reprice · implementation 5 hours ago'
+    ]);
+    expect(Array.from(page.querySelectorAll('.workflow-recent-run a')).map(link => link.getAttribute('href')))
+      .toEqual(['/workflows/runs/run-5', '/workflows/runs/run-4', '/workflows/runs/run-2']);
+    expect(history.asked).toContain(
+      { documentId: 'doc-1', filter: { workflow: 'readThenReprice' }, page: 1, size: 3 });
+    const seeAll = page.querySelector('.workflow-recent-runs a.workflow-see-all-runs') as HTMLAnchorElement;
+    expect(normalized(seeAll.textContent)).toEqual('See all runs');
+    expect(seeAll.getAttribute('href')).toEqual('/workflows/documents/doc-1/runs?workflow=readThenReprice');
+    expect(page.querySelectorAll('.workflow-recent-runs .workflow-empty').length).toEqual(0);
+  });
+
+  it('marks the tab of each workflow with how its last run went', async () => {
+    await open(readThenReprice(), '/workflows/doc-1/readThenReprice', pastryRuns().slice(2));
+    expect(Array.from(page.querySelectorAll('.workflow-tabs li'))
+      .map(tab => tab.querySelector('.workflow-tab-status')?.getAttribute('title'))).toEqual(['Last run passed', undefined]);
+    expect(page.querySelectorAll('.workflow-tab-status.pficon-ok').length).toEqual(1);
+
+    TestBed.resetTestingModule();
+    await open(readThenReprice(), '/workflows/doc-1/readThenReprice', pastryRuns());
+    expect(Array.from(page.querySelectorAll('.workflow-tabs li .workflow-tab-status'))
+      .map(icon => icon.getAttribute('title'))).toEqual(['Last run failed', 'Last run failed']);
+    expect(page.querySelectorAll('.workflow-tab-status.pficon-error-circle-o').length).toEqual(2);
   });
 
   it('shows the source descriptions with the API each one is linked to, or why it is not', async () => {
@@ -420,7 +468,7 @@ describe('WorkflowDetailPageComponent', () => {
       await open(readThenReprice(), '/workflows/doc-1/readThenReprice?view=diagram');
 
       const controls = Array.from(page.querySelectorAll('.workflow-run-controls button')) as HTMLButtonElement[];
-      expect(controls.map(control => control.disabled)).toEqual([true, false]);
+      expect(controls.map(control => control.disabled)).toEqual([false]);
       expect(page.querySelectorAll('.workflow-diagram [class*="status"]').length).toEqual(0);
     });
   });

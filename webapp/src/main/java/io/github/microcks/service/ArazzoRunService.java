@@ -125,6 +125,7 @@ public class ArazzoRunService {
       run.setTimeout(timeout == null ? DEFAULT_TIMEOUT : timeout);
       run.setStatus(WorkflowRunStatus.IN_PROGRESS);
       run.setStartedDate(new Date());
+      run.setNumber(nextNumber(document.getId()));
       WorkflowResult launched = workflowResultRepository.save(run);
       try {
          arazzoMinionClient.launch(new ArazzoRunRequest(launched.getId(), workflowId, document.getContent(),
@@ -145,6 +146,12 @@ public class ArazzoRunService {
       return ArazzoWorkflowReader.workflow(ArazzoWorkflowService.parse(document.getContent()), workflowId)
             .map(ArazzoDataFlow::neededInputs).orElse(List.of()).stream()
             .filter(inputName -> givenInputs.get(inputName) == null).toList();
+   }
+
+   /** Runs are numbered per document, from 1, independently of the tests of the APIs they call. */
+   private long nextNumber(String documentId) {
+      WorkflowResult last = workflowResultRepository.findTopByDocumentIdOrderByNumberDesc(documentId);
+      return last == null || last.getNumber() == null ? 1L : last.getNumber() + 1L;
    }
 
    /** The base URL of the Microcks mocks of the API a source is linked to, as Microcks encodes it. */

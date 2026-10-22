@@ -24,10 +24,10 @@
         </p>
       </div>
       <div class="workflow-run-controls">
-        <span class="workflow-run-control workflow-run-control-disabled" [title]="availableSoon">
-          <button type="button" class="btn btn-default" disabled>
+        <span class="workflow-run-control">
+          <a class="btn btn-default workflow-runs-history" [routerLink]="['/workflows/documents', workflow.documentId, 'runs']">
             <span class="fa fa-clock-o" aria-hidden="true"></span> Runs history
-          </button>
+          </a>
         </span>
         <span class="workflow-run-control" [class.workflow-run-control-disabled]="!workflow.status.runnable"
               [attr.title]="notRunnableReason(workflow)">
@@ -53,7 +53,7 @@
 
     <ul class="nav nav-tabs workflow-tabs">
       <li *ngFor="let workflowId of workflow.workflowIds" [class.active]="workflowId === workflow.workflowId">
-        <a [routerLink]="['/workflows', workflow.documentId, workflowId]" queryParamsHandling="preserve">{{ workflowId }}</a>
+        <a [routerLink]="['/workflows', workflow.documentId, workflowId]" queryParamsHandling="preserve"><ng-container *ngIf="state.history.lastRuns[workflowId] as lastRun"><span class="pficon workflow-tab-status" [ngClass]="statusIcon(lastRun)" [title]="lastRunTitle(lastRun)"></span>&ngsp;</ng-container>{{ workflowId }}</a>
       </li>
     </ul>
 
@@ -187,7 +187,22 @@
 
         <div class="workflow-panel workflow-recent-runs">
           <h3 class="workflow-panel-title">Recent runs</h3>
-          <div class="workflow-panel-body">
+          <ng-container *ngIf="state.history.recent.length">
+            <table class="table workflow-table">
+              <tbody>
+                <tr *ngFor="let run of state.history.recent" class="workflow-recent-run">
+                  <td class="text-nowrap"><span class="pficon" [ngClass]="statusIcon(run)" aria-hidden="true"></span>&ngsp;<a [routerLink]="['/workflows/runs', run.id]">#{{ run.number }}</a></td>
+                  <td>{{ outcome(run) }} · {{ targetOf(run) }}</td>
+                  <td class="text-right text-nowrap workflow-muted">{{ startedOn(run) | timeAgo }}</td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="workflow-panel-body">
+              <a class="workflow-see-all-runs" [routerLink]="['/workflows/documents', workflow.documentId, 'runs']"
+                 [queryParams]="{ workflow: workflow.workflowId }">See all runs</a>
+            </div>
+          </ng-container>
+          <div *ngIf="!state.history.recent.length" class="workflow-panel-body">
             <span class="workflow-empty">Never run</span>
           </div>
         </div>

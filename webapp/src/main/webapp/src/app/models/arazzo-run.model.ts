@@ -16,6 +16,9 @@
 /** Where a run of an Arazzo workflow stands. */
 export type WorkflowRunStatus = 'IN_PROGRESS' | 'SUCCESS' | 'FAILURE';
 
+/** What the steps of a run call: the Microcks mocks, or the implementations of the APIs. */
+export type WorkflowRunTarget = 'MOCKS' | 'IMPLEMENTATIONS';
+
 /** How a step of a run ended. */
 export type WorkflowStepStatus = 'PASSED' | 'FAILED' | 'NOT_RUN';
 
@@ -83,7 +86,7 @@ export type WorkflowResult = {
   documentTitle: string;
   documentVersion: string;
   workflowId: string;
-  target: 'MOCKS';
+  target: WorkflowRunTarget;
   sources: WorkflowSourceTarget[];
   inputs?: Record<string, unknown>;
   outputs?: Record<string, unknown>;
@@ -93,4 +96,33 @@ export type WorkflowResult = {
   timeout?: number;
   steps: WorkflowStepResult[];
   message?: string;
+  /** The number of the run in its document, from 1; absent for a run launched before runs were numbered. */
+  number?: number;
+};
+
+/** What the runs history shows of a run, as GET /api/arazzo/documents/{documentId}/runs answers it. */
+export type WorkflowRunSummary = {
+  id: string;
+  number?: number;
+  workflowId: string;
+  target: WorkflowRunTarget;
+  status: WorkflowRunStatus;
+  /** The step the run failed at; absent when no step failed. */
+  failedStepId?: string;
+  startedDate: number | string;
+  elapsedTime: number;
+};
+
+/** How many runs a runs history lists, and how many of them passed and failed. */
+export type WorkflowRunCounts = {
+  total: number;
+  passed: number;
+  failed: number;
+};
+
+/** The filters of a runs history; an absent filter keeps every run. */
+export type WorkflowRunFilter = {
+  workflow?: string;
+  target?: WorkflowRunTarget;
+  result?: WorkflowRunStatus;
 };

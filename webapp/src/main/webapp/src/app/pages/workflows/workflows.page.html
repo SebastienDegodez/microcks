@@ -43,12 +43,13 @@
         <option value="">All APIs</option>
         <option *ngFor="let apiName of apiNames" [value]="apiName">{{ apiName }}</option>
       </select>
-      <span class="workflows-soon" title="Available soon">
-        <label class="sr-only" for="workflows-result-filter">Filter by last result</label>
-        <select id="workflows-result-filter" class="form-control" disabled>
-          <option>Any last result</option>
-        </select>
-      </span>
+      <label class="sr-only" for="workflows-result-filter">Filter by last result</label>
+      <select id="workflows-result-filter" class="form-control" [(ngModel)]="resultFilter">
+        <option value="">Any last result</option>
+        <option value="PASSED">Passed</option>
+        <option value="FAILED">Failed</option>
+        <option value="NEVER_RUN">Never run</option>
+      </select>
       <div class="workflows-count">
         {{ documents.length }} {{ documents.length === 1 ? 'document' : 'documents' }} ·
         {{ workflowCount }} {{ workflowCount === 1 ? 'workflow' : 'workflows' }}
@@ -81,7 +82,7 @@
               </ng-container>
               <ng-container *ngIf="!isExpanded(document)">
                 <ng-container *ngIf="document.fileName || document.importDate != null"> · </ng-container>
-                {{ document.workflows.length }} {{ document.workflows.length === 1 ? 'workflow' : 'workflows' }}
+                {{ visibleWorkflows(document).length }} {{ visibleWorkflows(document).length === 1 ? 'workflow' : 'workflows' }}
               </ng-container>
             </div>
           </div>
@@ -107,11 +108,22 @@
           <div class="workflows-document-runs">
             <div class="workflows-column-label">Last runs</div>
             <div *ngIf="neverRun(document)" class="workflows-document-result">Never run</div>
+            <div *ngIf="!neverRun(document)" class="workflows-document-result">
+              <span *ngIf="lastResultCount(document, 'PASSED') as passed" class="workflows-last-runs">
+                <span class="pficon pficon-ok arazzo-run-passed" aria-hidden="true"></span> {{ passed }} passed
+              </span>
+              <span *ngIf="lastResultCount(document, 'FAILED') as failed" class="workflows-last-runs">
+                <span class="pficon pficon-error-circle-o arazzo-run-failed" aria-hidden="true"></span> {{ failed }} failed
+              </span>
+              <span *ngIf="lastResultCount(document, 'IN_PROGRESS') as inProgress" class="workflows-last-runs">
+                <span class="pficon pficon-in-progress" aria-hidden="true"></span> {{ inProgress }} in progress
+              </span>
+            </div>
           </div>
         </div>
 
         <ng-container *ngIf="isExpanded(document)">
-          <div *ngFor="let workflow of document.workflows" class="workflows-workflow">
+          <div *ngFor="let workflow of visibleWorkflows(document)" class="workflows-workflow">
             <span class="fa fa-sitemap workflows-workflow-icon" aria-hidden="true"></span>
             <div class="workflows-workflow-info">
               <a class="workflows-workflow-id"
@@ -126,7 +138,15 @@
               </div>
             </div>
             <div class="workflows-workflow-result">
-              <ng-container *ngIf="workflow.lastResult === 'NEVER_RUN'">Never run</ng-container>
+              <a *ngIf="workflow.lastRun as run; else neverRunResult" class="workflows-last-run"
+                [class.workflows-last-run-failed]="run.status === 'FAILURE'" [routerLink]="['/workflows/runs', run.id]">
+                <span class="pficon" aria-hidden="true" [class.pficon-ok]="run.status === 'SUCCESS'"
+                  [class.arazzo-run-passed]="run.status === 'SUCCESS'" [class.pficon-error-circle-o]="run.status === 'FAILURE'"
+                  [class.arazzo-run-failed]="run.status === 'FAILURE'"
+                  [class.pficon-in-progress]="run.status === 'IN_PROGRESS'"></span>
+                {{ lastRunOutcome(run) }} · {{ startedOn(run) | timeAgo }}
+              </a>
+              <ng-template #neverRunResult>Never run</ng-template>
             </div>
             <span class="workflows-run-control" [class.workflows-soon]="!workflow.status.runnable"
               [attr.title]="notRunnableReason(workflow)">

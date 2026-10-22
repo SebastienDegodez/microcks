@@ -5,8 +5,8 @@
         <li><a [routerLink]="['/workflows']">Workflows</a></li>
         <ng-container *ngIf="state.run as run">
           <li><a [routerLink]="['/workflows', run.documentId, run.workflowId]">{{ run.documentTitle }} - {{ run.documentVersion }}</a></li>
-          <li><span [title]="availableSoon">Runs</span></li>
-          <li>Run</li>
+          <li><a [routerLink]="['/workflows/documents', run.documentId, 'runs']">Runs</a></li>
+          <li>Run<ng-container *ngIf="run.number"> #{{ run.number }}</ng-container></li>
         </ng-container>
       </ol>
     </div>
@@ -22,7 +22,7 @@
         <h1 class="workflow-run-title">
           <span class="workflow-run-status-icon" aria-hidden="true"
                 [ngClass]="{ 'pficon pficon-ok': run.status === 'SUCCESS', 'pficon pficon-error-circle-o': run.status === 'FAILURE', 'spinner spinner-inline': run.status === 'IN_PROGRESS' }"></span>
-          Run ·&ngsp;<code class="workflow-run-title-id">{{ run.workflowId }}</code>&ngsp;{{ outcome(run) }}
+          Run<ng-container *ngIf="run.number">&ngsp;#{{ run.number }}</ng-container>&ngsp;·&ngsp;<code class="workflow-run-title-id">{{ run.workflowId }}</code>&ngsp;{{ outcome(run) }}
         </h1>
         <p class="workflow-run-subtitle">Ran {{ startedOn(run) | timeAgo }} against Microcks mocks · {{ run.elapsedTime }} ms</p>
       </div>

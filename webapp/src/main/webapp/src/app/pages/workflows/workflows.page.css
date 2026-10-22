@@ -259,6 +259,15 @@
   text-align: right;
 }
 
+/* Last runs: a passed run reads as text, a failed one as a link to investigate; both open the run. */
+.workflows-last-runs + .workflows-last-runs {
+  margin-left: 12px;
+}
+
+.workflows-last-run:not(.workflows-last-run-failed) {
+  color: var(--text-default);
+}
+
 .workflows-run {
   min-width: 78px;
   font-weight: 600;

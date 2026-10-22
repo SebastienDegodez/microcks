@@ -1,0 +1,102 @@
+/* Screen 7 of the mock-up: the runs of the workflows of a document, newest first, with their filters. */
+.workflow-runs-title {
+  margin: 8px 0 4px;
+  font-size: 30px;
+  font-weight: 300;
+  color: var(--text-strong);
+}
+
+.workflow-runs-subtitle {
+  margin: 0;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--divider);
+  color: var(--text-secondary);
+}
+
+/* Toolbar: workflow, target and result filters, and the count on the right. */
+.workflow-runs-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--divider);
+  margin-bottom: 12px;
+}
+
+.workflow-runs-toolbar .form-control {
+  height: 40px;
+  width: auto;
+  max-width: 100%;
+}
+
+.workflow-runs-count {
+  margin-left: auto;
+  color: var(--text-default);
+}
+
+.workflow-runs-empty {
+  margin: 20px 0;
+  color: var(--text-secondary);
+}
+
+/* One aligned table of runs, as the test runs are listed. */
+.workflow-runs-table {
+  margin-bottom: 12px;
+  border: 1px solid var(--divider-light);
+  background: var(--background);
+}
+
+.workflow-runs-table > thead > tr > th {
+  padding: 12px 10px;
+  border-bottom: 1px solid var(--divider-light);
+  background: var(--surface-subtle);
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.workflow-runs-table > tbody > tr > td {
+  padding: 10px;
+  border-top: 1px solid var(--divider-light);
+  vertical-align: middle;
+  color: var(--text-default);
+}
+
+.workflow-runs-table > tbody > tr:hover > td {
+  background: var(--surface-hover);
+}
+
+:host-context(.dark) .workflow-runs-table > thead > tr > th,
+:host-context(.dark) .workflow-runs-table > tbody > tr:hover > td {
+  background: color-mix(in srgb, var(--text-default) 8%, var(--background));
+}
+
+.workflow-runs-number {
+  font-weight: 600;
+}
+
+.workflow-runs-page code.workflow-runs-chip {
+  padding: 1px 4px;
+  border-radius: 1px;
+  background: var(--surface-muted);
+  color: var(--text-strong);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+:host-context(.dark) .workflow-runs-page code.workflow-runs-chip {
+  background: color-mix(in srgb, var(--text-default) 12%, var(--background));
+}
+
+.workflow-runs-failed {
+  font-weight: 600;
+}
+
+.workflow-runs-muted {
+  color: var(--text-secondary);
+}
+
+.workflow-runs-table .workflow-runs-duration {
+  text-align: right;
+  white-space: nowrap;
+}

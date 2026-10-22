@@ -1,0 +1,92 @@
+<div class="workflow-runs-page">
+  <div class="container-fluid breadcrumb-bar">
+    <div class="row">
+      <ol class="breadcrumb">
+        <li><a [routerLink]="['/workflows']">Workflows</a></li>
+        <li *ngIf="document">
+          <a *ngIf="documentLink as link; else documentTitle" [routerLink]="link">{{ document.title }} - {{ document.version }}</a>
+          <ng-template #documentTitle>{{ document.title }} - {{ document.version }}</ng-template>
+        </li>
+        <li>Runs</li>
+      </ol>
+    </div>
+  </div>
+
+  <h1 class="workflow-runs-title">Runs history</h1>
+  <p *ngIf="document" class="workflow-runs-subtitle">
+    {{ document.title }} {{ document.version }} · every run of its workflows, newest first
+  </p>
+
+  <div class="workflow-runs-toolbar">
+    <label class="sr-only" for="workflow-runs-workflow">Filter by workflow</label>
+    <select id="workflow-runs-workflow" class="form-control" [ngModel]="filter.workflow ?? ''"
+            (ngModelChange)="applyFilter('workflow', $event)">
+      <option value="">All workflows</option>
+      <option *ngFor="let workflow of document?.workflows" [value]="workflow.status.workflowId">{{ workflow.status.workflowId }}</option>
+    </select>
+    <label class="sr-only" for="workflow-runs-target">Filter by target</label>
+    <select id="workflow-runs-target" class="form-control" [ngModel]="filter.target ?? ''"
+            (ngModelChange)="applyFilter('target', $event)">
+      <option value="">All targets</option>
+      <option value="MOCKS">Microcks mocks</option>
+      <option value="IMPLEMENTATIONS">Implementations</option>
+    </select>
+    <label class="sr-only" for="workflow-runs-result">Filter by result</label>
+    <select id="workflow-runs-result" class="form-control" [ngModel]="filter.result ?? ''"
+            (ngModelChange)="applyFilter('result', $event)">
+      <option value="">All results</option>
+      <option value="SUCCESS">Passed</option>
+      <option value="FAILURE">Failed</option>
+      <option value="IN_PROGRESS">In progress</option>
+    </select>
+    <div *ngIf="counts" class="workflow-runs-count">
+      {{ counts.total }} {{ counts.total === 1 ? 'run' : 'runs' }} · {{ counts.passed }} passed · {{ counts.failed }} failed
+    </div>
+  </div>
+
+  <ng-container *ngIf="runs">
+    <p *ngIf="!runs.length" class="workflow-runs-empty">
+      {{ filtered ? 'No run matches the filters.' : 'No workflow of this document has run yet.' }}
+    </p>
+
+    <div *ngIf="runs.length" class="table-responsive">
+      <table class="table workflow-runs-table">
+        <thead>
+          <tr>
+            <th>Run</th>
+            <th>Workflow</th>
+            <th>Target</th>
+            <th>Result</th>
+            <th>Failed step</th>
+            <th>Started</th>
+            <th class="workflow-runs-duration">Duration</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let run of runs">
+            <td><a class="workflow-runs-number" [routerLink]="['/workflows/runs', run.id]">#{{ run.number ?? '?' }}</a></td>
+            <td><code class="workflow-runs-chip">{{ run.workflowId }}</code></td>
+            <td>{{ targetLabels[run.target] }}</td>
+            <td [ngSwitch]="run.status">
+              <span *ngSwitchCase="'SUCCESS'" class="workflow-runs-passed">
+                <span class="pficon pficon-ok arazzo-run-passed" aria-hidden="true"></span>&ngsp;Passed
+              </span>
+              <span *ngSwitchCase="'FAILURE'" class="workflow-runs-failed arazzo-run-failed">
+                <span class="pficon pficon-error-circle-o" aria-hidden="true"></span>&ngsp;Failed
+              </span>
+              <span *ngSwitchDefault class="workflow-runs-in-progress">
+                <span class="spinner spinner-xs spinner-inline" aria-hidden="true"></span>&ngsp;In progress
+              </span>
+            </td>
+            <td>{{ run.failedStepId ?? '—' }}</td>
+            <td class="workflow-runs-muted">{{ startedOn(run) | timeAgo }}</td>
+            <td class="workflow-runs-duration">{{ run.elapsedTime }} ms</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <pfng-pagination *ngIf="paginationConfig.totalItems! > paginationConfig.pageSize!" [config]="paginationConfig"
+                     (onPageNumberChange)="handlePageNumber($event)"></pfng-pagination>
+  </ng-container>
+</div>
