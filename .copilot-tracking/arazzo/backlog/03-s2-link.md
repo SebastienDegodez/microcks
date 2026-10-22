@@ -68,6 +68,7 @@ Then `orderApi` is linked and `placeOrder` is runnable
 
 - The overlay is a secondary artifact (`mainArtifact=false`), imported like `APIMetadata` / `APIExamples`. It is matched to its Arazzo document by `metadata.name` and `metadata.version` = Arazzo `info.title` / `info.version`.
 - The `kind` name (`APIWorkflowSources`) is a proposal to confirm.
+- [S15](17-s15-verify-consumer.md) extends the same overlay with a `workflows.<id>.correlation` section, which says where each step carries the saga's correlation key, and [S16](18-s16-stateful-saga-mocks.md) with what a step writes. This story only parses and keeps `sources`.
 - Links are recomputed when an API or an overlay is imported or deleted.
 - Acceptance tests enter through the import use cases (document and overlay), with in-memory gateways for documents and services.
 - Out of scope: resolving the `url` of a source to read its OpenAPI `info.title` / `info.version`.

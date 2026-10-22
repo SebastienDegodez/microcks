@@ -49,15 +49,16 @@ Then only the first one receives *card refused*
 
 ## Technical notes
 
-- **Blocked by [ADR 2](16-adr2-mock-sessions.md).**
+- The injection is scoped to a session ([S18](20-s18-verification-session.md)), because the order id of the saga does not exist yet when the test asks for the failure.
 - The compensation path is a **separate workflow** of the same Arazzo document, because `onFailure` is outside the supported subset. Supporting `onFailure: goto` later could express the saga as one workflow.
 - The injected answer is chosen among the operation's existing examples, by name. No new example is invented.
 - "Unexpected call" means a call to an operation of a linked API, inside the session, that matches no remaining step of the workflow.
 
 ## Dependencies
 
-- [S15](17-s15-verify-consumer.md) — verification of a session.
-- [S16](18-s16-stateful-saga-mocks.md) — consistent ids (`o-42`, `r-9`) along the saga.
+- [S15](17-s15-verify-consumer.md) — verification of a saga.
+- [S16](18-s16-stateful-saga-mocks.md) — state of the saga across steps.
+- [S18](20-s18-verification-session.md) — the session that scopes the injected failure.
 
 ## Effort
 
@@ -72,7 +73,7 @@ Then only the first one receives *card refused*
 - [x] Each AC traces to an example
 - [x] Right-sized (≤ 8)
 - [x] Technical notes
-- [ ] Dependencies: **blocked by ADR 2**
+- [x] Dependencies listed
 
 ---
 _Drafted with AI assistance (Claude); to be reviewed by the maintainer._

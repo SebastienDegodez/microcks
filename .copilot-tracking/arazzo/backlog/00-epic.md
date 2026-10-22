@@ -24,7 +24,7 @@ Two outcomes matter most:
 | 2 | Where do workflows execute? | In a **dedicated minion**. The webapp delegates the run and receives results back, like the AsyncAPI minion does. |
 | 3 | UI style | New screens follow the current Microcks style. Refreshing existing layouts happens in **dedicated PRs** ([S13](14-s13-refresh.md)). |
 | 4 | How a source description finds its Microcks API | By API **name and version**, as everywhere in Microcks. Arazzo does not carry them, so they come from a secondary artifact overlay (like `APIExamples`): see [S2](03-s2-link.md). |
-| 5 | How Microcks records the calls an application makes to its mocks (consumer side) | Pending in [ADR 2](16-adr2-mock-sessions.md). It blocks S15 to S17. |
+| 5 | How a consumer's calls to the mocks are grouped into one saga | **By its correlation key first**, declared per step in the overlay ([S15](17-s15-verify-consumer.md)). A session (`x-microcks-session`, or the `traceparent` trace id) is a safety net ([S18](20-s18-verification-session.md)). |
 
 ## Delivery conventions (SKRAFT)
 
@@ -38,9 +38,9 @@ Two outcomes matter most:
 
 ## Stories
 
-Delivery order. ADR 1 blocks the run stories (S5 and after); ADR 2 blocks the consumer-side stories (S15 to S17).
+Delivery order. The ADR blocks the run stories (S5 and after).
 
-This folder is the only backlog: there are no GitHub issues. A story is identified by its key (S1…S17) and its file. Its state is read from git:
+This folder is the only backlog: there are no GitHub issues. A story is identified by its key (S1…S18) and its file. Its state is read from git:
 - **in progress:** a branch `arazzo/<key>-<slug>` exists, for example `arazzo/s1-import`;
 - **done:** that branch's PR is merged into `master`.
 
@@ -59,9 +59,9 @@ The checkboxes below are ticked by the maintainer when merging.
 - [ ] [S9](10-s9-schema.md) Validate step responses against the OpenAPI schema
 - [ ] [S10](11-s10-coherence.md) Spot mock examples that do not form a coherent scenario
 - [ ] [S11](12-s11-history.md) Follow the runs history
-- [ ] [ADR 2](16-adr2-mock-sessions.md) ADR — recording the calls an application makes to the mocks
-- [ ] [S15](17-s15-verify-consumer.md) Verify that my application followed a workflow against the mocks (consumer side)
-- [ ] [S16](18-s16-stateful-saga-mocks.md) Mocks answer consistently along a workflow
+- [ ] [S15](17-s15-verify-consumer.md) Verify a saga against its workflow by its correlation key (consumer side)
+- [ ] [S18](20-s18-verification-session.md) Isolate a saga verification with a dedicated session
+- [ ] [S16](18-s16-stateful-saga-mocks.md) Mocks remember what a saga created
 - [ ] [S17](19-s17-saga-compensation.md) Make a saga step fail on the mocks and verify the compensation
 - [ ] [S12](13-s12-service-page.md) See the workflows that use an API on its page
 - [ ] [S13](14-s13-refresh.md) Refresh the API page layout (dedicated PR)
