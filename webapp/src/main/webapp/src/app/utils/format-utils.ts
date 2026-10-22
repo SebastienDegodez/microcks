@@ -32,12 +32,7 @@ import {
 export function formatMockUrl(serviceView: ServiceView, operation: Operation,
       urlType: 'raw' | 'valid',
       dispatchCriteria: string | null, queryParameters: Parameter[] | null): string {
-  let result = document.location.origin;
-
-  // Manage dev mode.
-  if (result.endsWith('localhost:4200')) {
-    result = 'http://localhost:8080';
-  }
+  let result = mockServerOrigin();
 
   if (serviceView.service.type === ServiceType.REST) {
     if (urlType === 'raw') {
@@ -138,6 +133,19 @@ export function formatMockUrl(serviceView: ServiceView, operation: Operation,
   return result;
 }
 
+/**
+ * The origin of the Microcks server serving the mocks: the origin of the page, or the backend in dev mode.
+ * @returns The origin the mock URLs start with.
+ */
+export function mockServerOrigin(): string {
+  const origin = document.location.origin;
+  // Manage dev mode.
+  if (origin.endsWith('localhost:4200')) {
+    return 'http://localhost:8080';
+  }
+  return origin;
+}
+
 function removeVerbInUrl(operationName: string): string {
   if (
     operationName.startsWith('GET ') ||
@@ -158,7 +166,12 @@ function removeVerbInUrl(operationName: string): string {
   return operationName;
 }
 
-function encodeUrl(url: string): string {
+/**
+ * Encode a name for a mock URL the way Microcks reads it back: a space becomes a +.
+ * @param url The name to encode.
+ * @returns The encoded name.
+ */
+export function encodeUrl(url: string): string {
   return url.replace(/\s/g, '+');
 }
 

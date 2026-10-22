@@ -35,6 +35,7 @@ import { openRunDialog } from '../workflow-run-dialog/workflow-run.dialog';
 import { TimeAgoPipe } from '../../../components/time-ago.pipe';
 import { ImportArazzoDialogComponent } from '../import-arazzo-dialog/import-arazzo-dialog.component';
 import { WorkflowDiagramComponent } from './workflow-diagram/workflow-diagram.component';
+import { WorkflowMockUrlComponent } from './workflow-mock-url/workflow-mock-url.component';
 import { StepActionLine, stepActionLines } from './step-actions';
 import { stepAction, stepEndpoint } from './step-messaging';
 
@@ -61,7 +62,8 @@ type WorkflowState = { workflow: ArazzoWorkflowDetail | null; view: WorkflowView
     CommonModule,
     RouterLink,
     TimeAgoPipe,
-    WorkflowDiagramComponent
+    WorkflowDiagramComponent,
+    WorkflowMockUrlComponent
   ]
 })
 export class WorkflowDetailPageComponent implements OnInit {

@@ -1,0 +1,52 @@
+/* The Mock URL of the workflow of the tab, with how to call it, aligned as one compact row. */
+.workflow-mock-url {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 4px 16px;
+  margin: 16px 0;
+}
+
+.workflow-mock-url-label {
+  flex: 0 0 auto;
+  margin: 0;
+  line-height: 26px;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.workflow-mock-url-field {
+  flex: 1 1 480px;
+  max-width: 900px;
+  min-width: 0;
+}
+
+.workflow-mock-url .form-control[readonly] {
+  color: var(--text-default);
+  font-family: SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  cursor: text;
+}
+
+.workflow-mock-url-help {
+  margin: 6px 0;
+  color: var(--text-secondary);
+}
+
+.workflow-mock-url-curl-block {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.workflow-mock-url-curl {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: 1px;
+  background: var(--surface-muted);
+  color: var(--text-strong);
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
