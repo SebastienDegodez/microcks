@@ -45,17 +45,17 @@ import java.util.Set;
  * carries there.
  * @author SebastienDegodez
  */
-final class ArazzoSessionAnswer {
+final class ArazzoSessionAnswerFiller {
 
    private static final ObjectMapper JSON = new ObjectMapper();
    private static final ArazzoExpressionEvaluator EXPRESSIONS = new ArazzoExpressionEvaluator();
 
-   private ArazzoSessionAnswer() {
+   private ArazzoSessionAnswerFiller() {
    }
 
    /**
     * @param step     The step the call is answered for
-    * @param example  The request of the example the mocks answer with; null when the example has none
+    * @param example  The request of the example the mocks answer with
     * @param received The request the mocks received for the step
     * @param session  What the runtime expressions of the step see in the session
     * @return The value of the session each value of the example request is replaced with, by the text of the example
@@ -64,9 +64,6 @@ final class ArazzoSessionAnswer {
    static Map<String, Object> replacements(ArazzoStep step, Request example, ArazzoReceivedRequest received,
          ArazzoExpressionContext session) {
       Map<String, Object> replacements = new LinkedHashMap<>();
-      if (example == null) {
-         return replacements;
-      }
       for (ArazzoParameter parameter : step.parameters()) {
          exampleParameter(example, parameter).ifPresent(
                exampleValue -> valueOf(parameter.value(), received.parameter(parameter.in(), parameter.name()), session)
@@ -111,42 +108,37 @@ final class ArazzoSessionAnswer {
    /**
     * @param body         The body of the example response
     * @param replacements The value each value of the example is replaced with, by the text of the example value
-    * @return The body with the values replaced; the body as it is when it is not JSON or holds none of these values
+    * @return The body with the values replaced; the body as it is when there is nothing to replace or it is not JSON
     */
    static String filled(String body, Map<String, Object> replacements) {
-      JsonNode tree;
+      if (replacements.isEmpty()) {
+         return body;
+      }
       try {
-         tree = JSON.readTree(body);
+         JsonNode tree = JSON.readTree(body);
+         replace(tree, replacements);
+         return tree.toString();
       } catch (IllegalArgumentException | JsonProcessingException notJson) {
          return body;
       }
-      return replace(tree, replacements) ? tree.toString() : body;
    }
 
-   /** Replace the scalar values of a JSON tree in place; whether one was. */
-   private static boolean replace(JsonNode node, Map<String, Object> replacements) {
-      boolean replaced = false;
+   /** Replace the scalar values of the members or items of a JSON tree, in place, at any depth. */
+   private static void replace(JsonNode node, Map<String, Object> replacements) {
       if (node instanceof ObjectNode object) {
-         for (Map.Entry<String, JsonNode> member : object.properties()) {
-            JsonNode value = member.getValue();
-            if (value.isValueNode() && replacements.containsKey(value.asText())) {
-               member.setValue(JSON.valueToTree(replacements.get(value.asText())));
-               replaced = true;
-            } else {
-               replaced |= replace(value, replacements);
-            }
-         }
+         object.properties().forEach(member -> member.setValue(replaced(member.getValue(), replacements)));
       } else if (node instanceof ArrayNode array) {
          for (int index = 0; index < array.size(); index++) {
-            JsonNode item = array.get(index);
-            if (item.isValueNode() && replacements.containsKey(item.asText())) {
-               array.set(index, JSON.valueToTree(replacements.get(item.asText())));
-               replaced = true;
-            } else {
-               replaced |= replace(item, replacements);
-            }
+            array.set(index, replaced(array.get(index), replacements));
          }
       }
-      return replaced;
+   }
+
+   private static JsonNode replaced(JsonNode node, Map<String, Object> replacements) {
+      if (node.isValueNode() && replacements.containsKey(node.asText())) {
+         return JSON.valueToTree(replacements.get(node.asText()));
+      }
+      replace(node, replacements);
+      return node;
    }
 }

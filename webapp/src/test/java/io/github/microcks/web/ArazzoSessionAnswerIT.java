@@ -82,8 +82,8 @@ class ArazzoSessionAnswerIT extends AbstractBaseIT {
       for (String api : List.of("order-api", "stock-api", "payment-api")) {
          uploadArtifactFile(example("stateful-saga.contracts.yaml", api), true);
       }
-      uploadArtifactFile(example("order-saga.arazzo.yaml", "order-saga"), true);
-      uploadArtifactFile(example("order-saga.arazzo.yaml", "order-saga-sources"), false);
+      uploadArtifactFile(example("stateful-saga.arazzo.yaml", "order-saga"), true);
+      uploadArtifactFile(example("stateful-saga.arazzo.yaml", "order-saga-sources"), false);
    }
 
    @AfterEach

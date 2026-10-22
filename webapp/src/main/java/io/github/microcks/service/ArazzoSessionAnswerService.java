@@ -19,7 +19,6 @@ import io.github.microcks.domain.ArazzoDocument;
 import io.github.microcks.domain.ArazzoSession;
 import io.github.microcks.domain.ArazzoSessionCall;
 import io.github.microcks.domain.ArazzoStepCall;
-import io.github.microcks.domain.Request;
 import io.github.microcks.domain.Response;
 import io.github.microcks.repository.ArazzoSessionRepository;
 import io.github.microcks.repository.RequestRepository;
@@ -95,21 +94,27 @@ public class ArazzoSessionAnswerService {
       Date now = new Date();
       return arazzoSessionRepository.findById(sessionId)
             .filter(session -> session.getClosedDate() == null && session.getExpireAt().after(now))
-            .flatMap(this::stepsOf).flatMap(steps -> steps.stepOf(received).flatMap(step -> {
-               Response example = dispatched != null ? dispatched : exampleOf(steps.sources(), step, received);
-               if (example == null) {
-                  return Optional.empty();
-               }
-               Request exampleRequest = requestRepository
-                     .findByOperationIdAndName(example.getOperationId(), example.getName()).stream().findFirst()
-                     .orElse(null);
-               Response answer = copyOf(example);
-               answer.setContent(ArazzoSessionAnswer.filled(example.getContent(),
-                     ArazzoSessionAnswer.replacements(step.step(), exampleRequest,
-                           ArazzoSessionVerifier.requestOf(step, received),
-                           new ReceivedCall(Map.of(), steps.outputs(), null))));
-               return Optional.of(answer);
-            }));
+            .flatMap(this::stepsOf).flatMap(
+                  steps -> steps.stepOf(received)
+                        .flatMap(step -> Optional.ofNullable(dispatched)
+                              .or(() -> exampleOf(steps.serviceIdOf(step), received))
+                              .map(example -> filled(example, step, received, steps.outputs()))));
+   }
+
+   /**
+    * The example the step answers with, filled with the values of the session; as it is when Microcks keeps no request
+    * with it.
+    */
+   private Response filled(Response example, ExpectedStep step, ArazzoSessionCall received,
+         Map<String, Map<String, Object>> outputs) {
+      Map<String, Object> replacements = requestRepository
+            .findByOperationIdAndName(example.getOperationId(), example.getName()).stream().findFirst()
+            .map(exampleRequest -> ArazzoSessionAnswerFiller.replacements(step.step(), exampleRequest,
+                  ArazzoSessionVerifier.requestOf(step, received), new ReceivedCall(Map.of(), outputs, null)))
+            .orElse(Map.of());
+      Response answer = copyOf(example);
+      answer.setContent(ArazzoSessionAnswerFiller.filled(example.getContent(), replacements));
+      return answer;
    }
 
    /**
@@ -153,9 +158,9 @@ public class ArazzoSessionAnswerService {
       }));
    }
 
-   /** The steps of the workflow of a session; empty when its document or its workflow is gone. */
+   /** The steps of the workflow of a session; empty when it names no document, or its document or workflow is gone. */
    private Optional<SessionSteps> stepsOf(ArazzoSession session) {
-      return arazzoDocumentService.getDocument(session.getDocumentId())
+      return Optional.ofNullable(session.getDocumentId()).flatMap(arazzoDocumentService::getDocument)
             .flatMap(document -> workflowOf(document, session.getWorkflowId()).map(workflow -> {
                Map<String, ResolvedSource> sources = arazzoDocumentService.resolveSources(document);
                List<ExpectedStep> steps = new ArrayList<>();
@@ -175,12 +180,13 @@ public class ArazzoSessionAnswerService {
             .flatMap(content -> ArazzoWorkflowReader.workflow(content, workflowId));
    }
 
-   /** The first success example of the operation a call reached, else its first example; null when it has none. */
-   private Response exampleOf(Map<String, ResolvedSource> sources, ExpectedStep step, ArazzoSessionCall received) {
-      String operationId = sources.get(step.step().call().sourceName()).serviceId() + "-" + received.getOperationName();
-      return responseRepository.findByOperationId(operationId).stream()
-            .filter(response -> response.getCallbackName() == null).min(Comparator.comparing(Response::isFault))
-            .orElse(null);
+   /**
+    * The first success example of the operation a call reached, else its first example; empty when it has none. The
+    * responses of its callbacks are not examples of the operation.
+    */
+   private Optional<Response> exampleOf(String serviceId, ArazzoSessionCall received) {
+      return responseRepository.findByOperationId(serviceId + "-" + received.getOperationName()).stream()
+            .filter(response -> response.getCallbackName() == null).min(Comparator.comparing(Response::isFault));
    }
 
    private static String stateKey(String sessionId, ExpectedStep step) {
@@ -210,9 +216,14 @@ public class ArazzoSessionAnswerService {
    private record SessionSteps(String sessionId, Map<String, ResolvedSource> sources, List<ExpectedStep> steps,
          ServiceStateRepository states) {
 
+      /** The id of the API the source of a step is linked to. */
+      private String serviceIdOf(ExpectedStep step) {
+         return sources.get(step.step().call().sourceName()).serviceId();
+      }
+
       /** The state store of the API the source of a step is linked to. */
       private StateStore store(ExpectedStep step) {
-         return new ServiceStateStore(states, sources.get(step.step().call().sourceName()).serviceId());
+         return new ServiceStateStore(states, serviceIdOf(step));
       }
 
       /**

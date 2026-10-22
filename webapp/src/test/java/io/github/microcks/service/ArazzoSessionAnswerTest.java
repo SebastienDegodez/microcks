@@ -22,8 +22,10 @@ import io.github.microcks.domain.Header;
 import io.github.microcks.domain.Response;
 import io.github.microcks.domain.Service;
 import io.github.microcks.domain.ServiceState;
+import io.github.microcks.repository.ArazzoDocumentRepository;
 import io.github.microcks.repository.ArazzoSessionRepository;
 import io.github.microcks.repository.RepositoryTestsConfiguration;
+import io.github.microcks.repository.RequestRepository;
 import io.github.microcks.repository.ResponseRepository;
 import io.github.microcks.repository.ServiceRepository;
 import io.github.microcks.repository.ServiceStateRepository;
@@ -42,6 +44,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -86,10 +89,16 @@ class ArazzoSessionAnswerTest {
    private ResponseRepository responseRepository;
 
    @Autowired
+   private RequestRepository requestRepository;
+
+   @Autowired
    private ServiceStateRepository serviceStateRepository;
 
    @Autowired
    private ArazzoSessionRepository arazzoSessionRepository;
+
+   @Autowired
+   private ArazzoDocumentRepository arazzoDocumentRepository;
 
    /** Walking skeleton, AC-02: the order reserveStock receives flows into the reservation the mock answers. */
    @Test
@@ -110,13 +119,17 @@ class ArazzoSessionAnswerTest {
    @Test
    void aLaterStepAnswersWithTheOutputOfAnEarlierStep() throws Exception {
       ArazzoSession session = sessionOnTheSaga();
-      mocksAnswer(session, createOrder(), dispatched("Order API", "POST /orders"));
+      Response placed = mocksAnswer(session, createOrder(), dispatched("Order API", "POST /orders"));
 
       Response answer = arazzoSessionAnswerService.answer(session.getId(), confirmOrder("o-42"), null).orElseThrow();
 
       assertJson("{\"id\": \"o-42\", \"customerId\": \"c-7\", \"amount\": 25.0, \"status\": \"CONFIRMED\"}",
             answer.getContent());
-      assertEquals(List.of("200", "application/json"), List.of(answer.getStatus(), answer.getMediaType()));
+      assertEquals(List.of("o-1", "200", "application/json"),
+            List.of(answer.getName(), answer.getStatus(), answer.getMediaType()));
+      // The answer keeps the headers of its example.
+      assertEquals(List.of("Location=[/orders/o-42]"),
+            placed.getHeaders().stream().map(header -> header.getName() + "=" + header.getValues()).toList());
    }
 
    /** A value a step does not send is taken from the outputs of the earlier steps of the session. */
@@ -169,13 +182,81 @@ class ArazzoSessionAnswerTest {
             received("Order API", operation, "/orders/o-42/confirm", null), null));
    }
 
-   /** An operation without example has nothing to answer with: the mocks answer as they do today. */
+   /**
+    * An operation without example has nothing to answer with, as the response of one of its callbacks is not one: the
+    * mocks answer as they do today.
+    */
    @Test
    void anOperationWithoutExampleIsAnsweredAsToday() throws Exception {
       ArazzoSession session = sessionOnTheSaga();
-      responseRepository.delete(dispatched("Order API", "POST /orders/{orderId}/confirm"));
+      Response example = dispatched("Order API", "POST /orders/{orderId}/confirm");
+      responseRepository.deleteAll(responseRepository.findByOperationId(example.getOperationId()));
+      Response callback = new Response();
+      callback.setOperationId(example.getOperationId());
+      callback.setName("confirmed");
+      callback.setCallbackName("onConfirmed");
+      callback.setStatus("200");
+      responseRepository.save(callback);
 
       assertEquals(Optional.empty(), arazzoSessionAnswerService.answer(session.getId(), confirmOrder("o-42"), null));
+   }
+
+   /**
+    * A session whose document is gone, or that names none, has no workflow to answer: its calls are still recorded, and
+    * the mocks answer them as they do today.
+    */
+   @ParameterizedTest(name = "{0}")
+   @CsvSource({ "a document deleted since the session was opened, deleted", "a session naming no document, none" })
+   void aSessionWithoutDocumentRecordsItsCallsAndAnswersAsToday(String what, String document) throws Exception {
+      ArazzoSession session = sessionOnTheSaga();
+      if ("deleted".equals(document)) {
+         arazzoDocumentRepository.deleteById(session.getDocumentId());
+      } else {
+         session.setDocumentId(null);
+         session = arazzoSessionRepository.save(session);
+      }
+
+      mocksAnswer(session, createOrder(), dispatched("Order API", "POST /orders"));
+
+      assertEquals(1, arazzoSessionRepository.findById(session.getId()).orElseThrow().getCallCount());
+      assertEquals(Optional.empty(), arazzoSessionAnswerService.answer(session.getId(), confirmOrder("o-42"), null));
+   }
+
+   /** An example Microcks keeps no request with does not tell where the values go: it answers as it is. */
+   @Test
+   void anExampleWithoutRequestAnswersAsItIs() throws Exception {
+      ArazzoSession session = sessionOnTheSaga();
+      mocksAnswer(session, createOrder(), dispatched("Order API", "POST /orders"));
+      Response example = dispatched("Order API", "POST /orders/{orderId}/confirm");
+      requestRepository.deleteAll(requestRepository.findByOperationId(example.getOperationId()));
+
+      Response answer = arazzoSessionAnswerService.answer(session.getId(), confirmOrder("o-42"), null).orElseThrow();
+
+      assertEquals(example.getContent(), answer.getContent());
+   }
+
+   /**
+    * In reserveInTwoParts, two steps call reserveStock: each call answers the next of them, and a call after both
+    * answers the last one again.
+    */
+   @Test
+   void eachCallOfAnOperationSeveralStepsCallAnswersTheNextOfThem() throws Exception {
+      ArazzoSession session = arazzoSessionService
+            .openSession(orderSagaIsImportedAndLinked().getId(), "reserveInTwoParts").orElseThrow();
+      Service stockApi = serviceRepository.findByNameAndVersion("Stock API", "1.0.0");
+
+      List<String> answered = new ArrayList<>();
+      for (int call = 0; call < 3; call++) {
+         mocksAnswer(session, reserveStock("o-42"), dispatched("Stock API", "POST /reservations"));
+         answered.add(String.join(",",
+               List.of("reserveFirstPart", "reserveSecondPart").stream().filter(step -> serviceStateRepository
+                     .findByServiceIdAndKey(stockApi.getId(), "arazzo-session:" + session.getId() + ":" + step) != null)
+                     .toList()));
+      }
+
+      assertEquals(
+            List.of("reserveFirstPart", "reserveFirstPart,reserveSecondPart", "reserveFirstPart,reserveSecondPart"),
+            answered);
    }
 
    /** A step called again in the session answers again with the values of the session. */
@@ -240,7 +321,8 @@ class ArazzoSessionAnswerTest {
    /** The example of an operation, as the mocks of an API 1.0.0 dispatch it. */
    private Response dispatched(String apiName, String operationName) {
       Service api = serviceRepository.findByNameAndVersion(apiName, "1.0.0");
-      return responseRepository.findByOperationId(api.getId() + "-" + operationName).get(0);
+      return responseRepository.findByOperationId(api.getId() + "-" + operationName).stream()
+            .filter(response -> !response.isFault()).findFirst().orElseThrow();
    }
 
    /**
@@ -298,8 +380,8 @@ class ArazzoSessionAnswerTest {
          Files.writeString(contract, example("stateful-saga.contracts.yaml", api));
          serviceService.importServiceDefinition(contract.toFile(), null, new ArtifactInfo(api + ".yaml", true));
       }
-      arazzoDocumentService.importArazzoSources(example("order-saga.arazzo.yaml", "order-saga-sources"));
-      return arazzoDocumentService.importArazzoDocument(example("order-saga.arazzo.yaml", "order-saga"));
+      arazzoDocumentService.importArazzoSources(example("stateful-saga.arazzo.yaml", "order-saga-sources"));
+      return arazzoDocumentService.importArazzoDocument(example("stateful-saga.arazzo.yaml", "order-saga"));
    }
 
    /** One YAML document per example of a fixture, each announced by a {@code # example: <name> - <what>} comment. */
