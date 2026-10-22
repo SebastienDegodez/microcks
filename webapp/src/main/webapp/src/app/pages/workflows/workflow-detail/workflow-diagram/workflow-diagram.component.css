@@ -139,7 +139,7 @@
   --node-accent: var(--warning-500);
 }
 
-.workflow-protocol-event {
+.workflow-protocol-chip.workflow-protocol-event {
   border-color: var(--warning-500);
 }
 
