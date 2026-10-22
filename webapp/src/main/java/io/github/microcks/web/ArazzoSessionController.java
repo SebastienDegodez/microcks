@@ -56,14 +56,24 @@ public class ArazzoSessionController {
     * @param documentId The id of the Arazzo document, or its title and version as {@code <title>:<version>}
     * @param workflowId The id of the workflow in that document
     * @param inputs     The inputs of the workflow whose values the calls must carry, by name; null to check none
+    * @param failures   The steps set to fail in the session, by step id, with the name of the existing example of their
+    *                   operation the mocks answer them with; null for none
     */
-   public record ArazzoSessionRequest(String documentId, String workflowId, Map<String, Object> inputs) {
+   public record ArazzoSessionRequest(String documentId, String workflowId, Map<String, Object> inputs,
+         Map<String, String> failures) {
+
+      /** A session with inputs, in which no step is set to fail. */
+      public ArazzoSessionRequest(String documentId, String workflowId, Map<String, Object> inputs) {
+         this(documentId, workflowId, inputs, null);
+      }
    }
 
    @PostMapping(value = "/sessions")
    public ResponseEntity<Object> openSession(@RequestBody ArazzoSessionRequest request) {
       try {
-         return arazzoSessionService.openSession(request.documentId(), request.workflowId(), request.inputs())
+         return arazzoSessionService
+               .openSession(request.documentId(), request.workflowId(), request.inputs(),
+                     request.failures() == null ? Map.of() : request.failures())
                .<ResponseEntity<Object>>map(session -> ResponseEntity
                      .created(URI.create("/api/arazzo/sessions/" + session.getId())).body(session))
                .orElseGet(() -> ResponseEntity.notFound().build());

@@ -71,6 +71,7 @@ public class ArazzoSessionService {
    private final ArazzoSessionCallRepository arazzoSessionCallRepository;
    private final WorkflowResultRepository workflowResultRepository;
    private final ArazzoSessionAnswerService arazzoSessionAnswerService;
+   private final ArazzoSessionFailures arazzoSessionFailures;
 
    /** The URL the relative references of the stored contracts resolve against, as for OpenAPI contract tests. */
    @Value("${validation.resourceUrl:#{null}}")
@@ -96,16 +97,19 @@ public class ArazzoSessionService {
     * @param arazzoSessionCallRepository The repository of the calls the sessions received
     * @param workflowResultRepository    The repository the verifications are kept in, with the runs
     * @param arazzoSessionAnswerService  The service keeping the state of the sessions the mocks answer with
+    * @param arazzoSessionFailures       The service resolving the steps a session sets to fail
     */
    public ArazzoSessionService(ArazzoDocumentService arazzoDocumentService, ArazzoRunService arazzoRunService,
          ArazzoSessionRepository arazzoSessionRepository, ArazzoSessionCallRepository arazzoSessionCallRepository,
-         WorkflowResultRepository workflowResultRepository, ArazzoSessionAnswerService arazzoSessionAnswerService) {
+         WorkflowResultRepository workflowResultRepository, ArazzoSessionAnswerService arazzoSessionAnswerService,
+         ArazzoSessionFailures arazzoSessionFailures) {
       this.arazzoDocumentService = arazzoDocumentService;
       this.arazzoRunService = arazzoRunService;
       this.arazzoSessionRepository = arazzoSessionRepository;
       this.arazzoSessionCallRepository = arazzoSessionCallRepository;
       this.workflowResultRepository = workflowResultRepository;
       this.arazzoSessionAnswerService = arazzoSessionAnswerService;
+      this.arazzoSessionFailures = arazzoSessionFailures;
    }
 
    /**
@@ -131,6 +135,24 @@ public class ArazzoSessionService {
     */
    public Optional<ArazzoSession> openSession(String documentId, String workflowId, Map<String, Object> inputs)
          throws ArazzoRunRefusedException {
+      return openSession(documentId, workflowId, inputs, Map.of());
+   }
+
+   /**
+    * Open a verification session on a workflow, with the inputs of the workflow whose values the calls must carry, and
+    * the steps that fail on the mocks in this session.
+    * @param documentId The id of the Arazzo document, or its title and version as {@code <title>:<version>}
+    * @param workflowId The id of the workflow in that document
+    * @param inputs     The inputs of the workflow, by name; null to check no value coming from them
+    * @param failures   The steps set to fail in the session, by step id, with the name of the existing example of their
+    *                   operation the mocks answer them with
+    * @return The session, open; empty if the document does not exist
+    * @throws ArazzoRunRefusedException if the workflow is unknown, if one of its steps calls no operation of a linked
+    *                                   API, if an input is unknown, invalid or missing, or if a failure names a step or
+    *                                   an example that does not exist
+    */
+   public Optional<ArazzoSession> openSession(String documentId, String workflowId, Map<String, Object> inputs,
+         Map<String, String> failures) throws ArazzoRunRefusedException {
       Optional<ArazzoDocument> found = arazzoDocumentService.getDocument(documentId);
       if (found.isEmpty()) {
          return Optional.empty();
@@ -139,8 +161,9 @@ public class ArazzoSessionService {
       if (!document.getWorkflowIds().contains(workflowId)) {
          throw new ArazzoRunRefusedException("Unknown workflow: " + workflowId);
       }
+      Map<String, ResolvedSource> sources = arazzoDocumentService.resolveSources(document);
       ArazzoWorkflowStatus status = ArazzoDocumentService.status(workflowId,
-            document.getWorkflowCalls().get(workflowId), arazzoDocumentService.resolveSources(document));
+            document.getWorkflowCalls().get(workflowId), sources);
       if (!status.runnable()) {
          throw new ArazzoRunRefusedException(
                "Workflow " + workflowId + " cannot be verified: " + String.join(", ", status.reasons()));
@@ -161,6 +184,11 @@ public class ArazzoSessionService {
       session.setInputs(inputs);
       // A session that is never closed expires after its maximum duration, so that its calls are not kept forever.
       session.setExpireAt(new Date(now.getTime() + maxOpenDuration * 1000L));
+      if (!failures.isEmpty()) {
+         session
+               .setInjectedFailures(arazzoSessionFailures.resolve(failures, workflowOf(document, workflowId), sources));
+         session.setFailures(new LinkedHashMap<>(failures));
+      }
       return Optional.of(arazzoSessionRepository.save(session));
    }
 
