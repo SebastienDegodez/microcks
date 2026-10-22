@@ -136,7 +136,8 @@ class ArazzoRunControllerTest {
             .getStatusCode().value());
       ResponseEntity<Object> refused = controller.launchRun(document.getId(), "unknown",
             new ArazzoRunLaunchDTO(Map.of(), null));
-      assertEquals("400 Unknown workflow: unknown", refused.getStatusCode().value() + " " + refused.getBody());
+      assertEquals("400 text/plain Unknown workflow: unknown",
+            refused.getStatusCode().value() + " " + refused.getHeaders().getContentType() + " " + refused.getBody());
       assertEquals(404, controller.getRun("unknown").getStatusCode().value());
       assertEquals(404, controller.reportStep("unknown", contract("passedStep", ArazzoStepReportDTO.class))
             .getStatusCode().value());
