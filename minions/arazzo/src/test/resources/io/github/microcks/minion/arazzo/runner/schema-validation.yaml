@@ -109,7 +109,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Pastry'
         "202":
-          description: Accepted, with any body
+          description: Accepted, described without schema
           content:
             application/json: {}
         "404":
@@ -185,7 +185,7 @@ paths:
           schema:
             $ref: '#/definitions/Pastry'
         "202":
-          description: Accepted, with any body
+          description: Accepted, described without schema
         "404":
           $ref: '#/responses/NotFound'
 responses:

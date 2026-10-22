@@ -102,8 +102,10 @@ class ResponseSchemaValidationTest {
                + "Content type application/problem+json of status 200 of GetPastryByName is not described in the "
                + "OpenAPI contract of pastryApi",
          "200 | application/json | price is 2.5 | FAILED | The response body is not JSON",
-         "202 | application/json | {\"any\":true} | PASSED | ", "200 | text/plain | price is 2.5 | PASSED | ",
-         "200 | application/xml | <pastry/> | PASSED | ", "204 | application/json | | PASSED | " })
+         "202 | application/json | {\"any\":true} | FAILED | Content type application/json of status 202 of "
+               + "GetPastryByName has no schema in the OpenAPI contract of pastryApi",
+         "200 | text/plain | price is 2.5 | PASSED | ", "200 | application/xml | <pastry/> | PASSED | ",
+         "204 | application/json | | PASSED | " })
    void eachResponseIsCheckedLikeOpenApiContractTestsCheckIt(int status, String contentType, String body,
          StepStatus stepStatus, String message) throws IOException {
       implementation.answer("GET /pastry/Eclair%20Cafe", status, contentType, body);
@@ -144,7 +146,9 @@ class ResponseSchemaValidationTest {
                + "`The response body does not match the Error schema: required property 'message' not found`",
          "500 | application/json | {} | FAILED | "
                + "Status 500 of GetPastryByName is not described in the OpenAPI contract of pastryApi",
-         "200 | text/plain | price is 2.5 | PASSED | ", "202 | application/json | {\"any\":true} | PASSED | " })
+         "200 | text/plain | price is 2.5 | PASSED | ",
+         "202 | application/json | {\"any\":true} | FAILED | Content type application/json of status 202 of "
+               + "GetPastryByName has no schema in the OpenAPI contract of pastryApi" })
    void aSwaggerContractIsCheckedLikeSwaggerContractTestsCheckIt(int status, String contentType, String body,
          StepStatus stepStatus, String message) throws IOException {
       implementation.answer("GET /pastry/Eclair%20Cafe", status, contentType, body);

@@ -84,15 +84,16 @@ final class ResponseSchemaValidator {
    /** Why a response the contract does not describe, or describes without schema, does not conform. */
    private static Optional<String> undescribed(JsonSchemaViolation violation, StepOperation operation, int status,
          String contentType) {
-      String notDescribed = " is not described in the OpenAPI contract of " + operation.sourceName();
-      return switch (violation.message()) {
+      String inContract = " in the OpenAPI contract of " + operation.sourceName();
+      String contentTypeOfStatus = "Content type " + contentType + " of status " + status + " of "
+            + operation.operationId();
+      return Optional.of(switch (violation.message()) {
          case OpenAPISchemaValidator.MESSAGE_NOT_FOUND ->
-            Optional.of("Status " + status + " of " + operation.operationId() + notDescribed);
-         case OpenAPISchemaValidator.CONTENT_NOT_FOUND -> Optional.of("Content type " + contentType + " of status "
-               + status + " of " + operation.operationId() + notDescribed);
-         // A response described without schema accepts any body.
-         default -> Optional.empty();
-      };
+            "Status " + status + " of " + operation.operationId() + " is not described" + inContract;
+         case OpenAPISchemaValidator.CONTENT_NOT_FOUND -> contentTypeOfStatus + " is not described" + inContract;
+         // Described without schema: contract tests fail it too.
+         default -> contentTypeOfStatus + " has no schema" + inContract;
+      });
    }
 
    private static String described(JsonSchemaViolation violation, String schema) {
