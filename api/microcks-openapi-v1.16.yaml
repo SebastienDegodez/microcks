@@ -1261,6 +1261,92 @@ paths:
         type: string
       in: path
       required: true
+  /arazzo/documents/{documentId}/workflows/{workflowId}/runs:
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkflowRunRequest'
+        required: true
+      tags:
+      - test
+      responses:
+        "201":
+          headers:
+            Location:
+              description: URL of the created WorkflowResult, to read until it is
+                no longer in progress
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowResult'
+          description: Created WorkflowResult (in progress, as workflows are run
+            asynchronously by the Arazzo minion)
+        "400":
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: "Unknown workflow: deleteAll"
+          description: "The run is refused and no WorkflowResult is created. The\
+            \ body tells why: the workflow is unknown, cannot run, misses an input,\
+            \ misses the base URL of a source, or the secret is unknown"
+        "404":
+          description: No Arazzo document has this identifier, or this title and
+            version
+      security:
+      - jwt-bearer:
+        - user
+      operationId: LaunchWorkflowRun
+      summary: Run a workflow of an Arazzo document
+      description: Run a workflow against the Microcks mocks of the APIs its source
+        descriptions are linked to, or against their implementations when a base
+        URL is given for each linked source. The run is executed asynchronously;
+        read it with GetWorkflowRun until its status is no longer IN_PROGRESS.
+    parameters:
+    - name: documentId
+      description: "Unique identifier of the Arazzo document, or its title and version\
+        \ as {title}:{version} (for example API Pastry scenarios:1.0.0)"
+      schema:
+        type: string
+      in: path
+      required: true
+    - name: workflowId
+      description: Identifier of the workflow in the Arazzo document
+      schema:
+        type: string
+      in: path
+      required: true
+  /arazzo/runs/{runId}:
+    get:
+      tags:
+      - test
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowResult'
+          description: Requested WorkflowResult
+        "404":
+          description: No WorkflowResult has this identifier
+      security:
+      - jwt-bearer:
+        - user
+      operationId: GetWorkflowRun
+      summary: Get WorkflowResult
+      description: Read a workflow run, with its status, its outputs and the result
+        of each of its steps.
+    parameters:
+    - name: runId
+      description: Unique identifier of the WorkflowResult
+      schema:
+        type: string
+      in: path
+      required: true
 components:
   schemas:
     TestCaseResult:
@@ -2512,6 +2598,317 @@ components:
           description: Maximum number of consecutive errors before the Webhook is
             considered failed (defaults to 5)
           type: integer
+    WorkflowRunRequest:
+      description: Workflow run request is a minimalist wrapper for requesting the
+        run of a workflow of an Arazzo document
+      properties:
+        inputs:
+          description: The inputs of the workflow, by name
+          type: object
+          additionalProperties: {}
+        timeout:
+          format: int64
+          description: The maximum time (in milliseconds) a step waits for its response
+            (defaults to 10000)
+          type: integer
+        implementations:
+          description: The base URL of the implementation of each linked source
+            description, by source name. When absent, the workflow runs against
+            the Microcks mocks
+          type: object
+          additionalProperties:
+            type: string
+        secretName:
+          description: The name of Secret whose authorization every call to the
+            implementations carries
+          type: string
+        validateSchema:
+          description: Whether each response is validated against the OpenAPI schema
+            of its operation (defaults to false)
+          type: boolean
+      example: |-
+        {
+            "inputs": {
+                "pastry": "Eclair Cafe",
+                "newPrice": 2.6
+            },
+            "implementations": {
+                "pastryApi": "http://pastry-app:8080"
+            }
+        }
+    WorkflowRunStatus:
+      description: Status of a workflow run
+      enum:
+      - IN_PROGRESS
+      - SUCCESS
+      - FAILURE
+      type: string
+    WorkflowRunTarget:
+      description: What a workflow run calls, the Microcks mocks or implementations
+      enum:
+      - MOCKS
+      - IMPLEMENTATIONS
+      type: string
+    WorkflowStepStatus:
+      description: Status of a step of a workflow run
+      enum:
+      - PASSED
+      - FAILED
+      - NOT_RUN
+      type: string
+    WorkflowSourceTarget:
+      description: Where a source description of a workflow run is called
+      required:
+      - sourceName
+      - apiName
+      - apiVersion
+      - baseUrl
+      properties:
+        sourceName:
+          description: Name of the source description in the Arazzo document
+          type: string
+        serviceId:
+          description: Unique identifier of the Microcks API it is linked to
+          type: string
+        apiName:
+          description: Name of the Microcks API it is linked to
+          type: string
+        apiVersion:
+          description: Version of the Microcks API it is linked to
+          type: string
+        baseUrl:
+          description: Base URL its operations are called on
+          type: string
+    WorkflowStepOperation:
+      description: The operation a step of a workflow run calls
+      properties:
+        sourceName:
+          description: Name of the source description of the operation
+          type: string
+        operationId:
+          description: Identifier of the operation
+          type: string
+        method:
+          description: HTTP method of the operation
+          type: string
+        path:
+          description: Path template of the operation
+          type: string
+    WorkflowExpressionValue:
+      description: The value of a runtime expression when a step was run
+      required:
+      - expression
+      properties:
+        expression:
+          description: The runtime expression, such as $statusCode
+          type: string
+        value:
+          description: Its value
+    WorkflowCriterionResult:
+      description: A success criterion of a step, as evaluated
+      required:
+      - condition
+      - held
+      properties:
+        condition:
+          description: The condition of the criterion, such as $statusCode == 200
+          type: string
+        values:
+          description: The values of the runtime expressions of the condition
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkflowExpressionValue'
+        held:
+          description: Whether the criterion held
+          type: boolean
+    WorkflowParameterValue:
+      description: A parameter a step sent, resolved
+      required:
+      - name
+      - in
+      properties:
+        name:
+          description: Name of the parameter
+          type: string
+        in:
+          description: Where it was sent (path, query or header)
+          type: string
+        value:
+          description: The value it was sent with
+        expression:
+          description: The runtime expression the value came from; absent for
+            a constant
+          type: string
+    WorkflowStepResult:
+      description: The result of a step of a workflow run
+      required:
+      - index
+      - stepId
+      - status
+      - elapsedTime
+      properties:
+        index:
+          description: Place of the step in the execution order of the run, from
+            0
+          type: integer
+        stepId:
+          description: Identifier of the step in the workflow
+          type: string
+        operation:
+          $ref: '#/components/schemas/WorkflowStepOperation'
+          description: The operation the step called
+        status:
+          $ref: '#/components/schemas/WorkflowStepStatus'
+          description: Status of the step
+        statusCode:
+          description: Status code of the response the step received
+          type: integer
+        elapsedTime:
+          format: int64
+          description: Elapsed time of the step in milliseconds
+          type: integer
+        criteria:
+          description: The success criteria of the step, as evaluated
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkflowCriterionResult'
+        outputs:
+          description: The outputs of the step, by name
+          type: object
+          additionalProperties: {}
+        testCaseId:
+          description: Identifier of the request and response of the step, to
+            read them with GetMessagesByTestCase
+          type: string
+        message:
+          description: Why the step failed when no criterion tells it
+          type: string
+        requestUrl:
+          description: Full URL of the request the step sent
+          type: string
+        parameters:
+          description: The parameters the step sent, resolved
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkflowParameterValue'
+        outputOrigins:
+          description: The runtime expression each output of the step came from,
+            by output name
+          type: object
+          additionalProperties:
+            type: string
+    WorkflowMissingExample:
+      description: The example the Microcks mocks lack for a step of a run against
+        them to pass
+      properties:
+        stepIndex:
+          description: Place of the step in the execution order of the run
+          type: integer
+        stepId:
+          description: Identifier of the step
+          type: string
+        serviceId:
+          description: Unique identifier of the Microcks API of the operation
+          type: string
+        operationId:
+          description: Identifier of the operation in its source description
+          type: string
+        operationName:
+          description: Name of the operation in Microcks
+          type: string
+        parameters:
+          description: The parameters the step sent
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkflowParameterValue'
+    WorkflowResult:
+      description: "Represents a run of a workflow of an Arazzo document by Microcks.\
+        \ It is made of the result of each step, in their execution order, and holds\
+        \ global markers telling if the run is still in progress or how it ended,\
+        \ the outputs of the workflow, and what the run called."
+      required:
+      - id
+      - documentId
+      - documentTitle
+      - documentVersion
+      - workflowId
+      - target
+      - sources
+      - status
+      - startedDate
+      - elapsedTime
+      - steps
+      properties:
+        id:
+          description: Unique identifier of WorkflowResult
+          type: string
+        number:
+          format: int64
+          description: Incremental number of the runs of the Arazzo document
+          type: integer
+        documentId:
+          description: Unique identifier of the Arazzo document
+          type: string
+        documentTitle:
+          description: Title of the Arazzo document
+          type: string
+        documentVersion:
+          description: Version of the Arazzo document
+          type: string
+        workflowId:
+          description: Identifier of the workflow run
+          type: string
+        target:
+          $ref: '#/components/schemas/WorkflowRunTarget'
+          description: What the run calls
+        sources:
+          description: Where each linked source description is called
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkflowSourceTarget'
+        secretRef:
+          $ref: '#/components/schemas/SecretRef'
+          description: The reference of the Secret whose authorization the calls
+            carry
+        inputs:
+          description: The inputs of the workflow, by name
+          type: object
+          additionalProperties: {}
+        outputs:
+          description: The outputs of the workflow, by name, once the run is finished
+          type: object
+          additionalProperties: {}
+        status:
+          $ref: '#/components/schemas/WorkflowRunStatus'
+          description: Status of the run; IN_PROGRESS until it is finished
+        startedDate:
+          format: int64
+          description: Timestamp of the start of the run
+          type: integer
+        elapsedTime:
+          format: int64
+          description: Elapsed time of the run in milliseconds, once it is finished
+          type: integer
+        timeout:
+          format: int64
+          description: The maximum time (in milliseconds) a step waits for its response
+          type: integer
+        validateSchema:
+          description: Whether each response is validated against the OpenAPI schema
+            of its operation
+          type: boolean
+        steps:
+          description: The result of each step, in their execution order
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkflowStepResult'
+        message:
+          description: Why the run failed when no step tells it
+          type: string
+        missingExample:
+          $ref: '#/components/schemas/WorkflowMissingExample'
+          description: The example the Microcks mocks lack for the failing step
+            of a run against them
   responses:
     ServiceResponse:
       content:
