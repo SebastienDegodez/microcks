@@ -38,6 +38,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -122,6 +123,53 @@ class ArazzoSessionAnswerIT extends AbstractBaseIT {
       assertEquals(
             JSON.readTree("{\"id\": \"o-42\", \"customerId\": \"c-7\", \"amount\": 25.0, \"status\": \"CONFIRMED\"}"),
             JSON.readTree(confirmed.getBody()));
+   }
+
+   /**
+    * Along the whole saga, the mocks answer each step with o-42, and the verification of the session passes on the
+    * responses they recorded.
+    */
+   @Test
+   void theMocksAnswerTheWholeSagaWithTheOrderOfTheSession() throws Exception {
+      String sessionId = openSession();
+
+      List<ResponseEntity<String>> answers = List.of(callMocks(sessionId, "Order+API", "/orders", PLACE_ORDER),
+            callMocks(sessionId, "Stock+API", "/reservations",
+                  "{\"orderId\": \"o-42\", \"items\": [{\"sku\": \"ABC-1\", \"quantity\": 2}]}"),
+            callMocks(sessionId, "Payment+API", "/payments", "{\"orderId\": \"o-42\", \"amount\": 25.0}"),
+            callMocks(sessionId, "Order+API", "/orders/o-42/confirm", null));
+
+      List<String> orders = new ArrayList<>();
+      for (ResponseEntity<String> answer : answers) {
+         JsonNode body = JSON.readTree(answer.getBody());
+         orders.add(answer.getStatusCode().value() + " " + body.path("orderId").asText(body.path("id").asText()));
+      }
+      assertEquals(List.of("201 o-42", "201 o-42", "201 o-42", "200 o-42"), orders);
+      ResponseEntity<String> verified = restTemplate.exchange("/api/arazzo/sessions/{sessionId}/verification",
+            HttpMethod.POST, new HttpEntity<>(jsonHeaders()), String.class, sessionId);
+      JsonNode verification = JSON.readTree(verified.getBody());
+      assertEquals("SUCCESS", verification.get("status").asText(), verification.toPrettyString());
+      assertEquals("{\"orderId\":\"o-42\",\"reservationId\":\"r-9\"}", verification.get("outputs").toString());
+   }
+
+   /**
+    * AC-03: outside a session, the mocks keep answering with their examples: they have none for o-42, and the
+    * reservation they answer is the one of the example, for o-1. A session placing o-42 at the same time changes
+    * nothing.
+    */
+   @Test
+   void outsideASessionTheMocksAnswerAsToday() throws Exception {
+      String sessionId = openSession();
+      callMocks(sessionId, "Order+API", "/orders", PLACE_ORDER);
+
+      ResponseEntity<String> confirmed = callMocks(null, "Order+API", "/orders/o-42/confirm", null);
+      ResponseEntity<String> reserved = callMocks(null, "Stock+API", "/reservations",
+            "{\"orderId\": \"o-42\", \"items\": [{\"sku\": \"ABC-1\", \"quantity\": 2}]}");
+
+      assertEquals("400 The response /orderId=o-42 does not exist!",
+            confirmed.getStatusCode().value() + " " + confirmed.getBody());
+      assertEquals(201, reserved.getStatusCode().value(), reserved.getBody());
+      assertEquals(JSON.readTree("{\"id\": \"r-9\", \"orderId\": \"o-1\"}"), JSON.readTree(reserved.getBody()));
    }
 
    private String openSession() throws Exception {

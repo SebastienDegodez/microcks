@@ -21,12 +21,17 @@ import io.github.microcks.domain.ArazzoSessionCall;
 import io.github.microcks.domain.Header;
 import io.github.microcks.domain.Response;
 import io.github.microcks.domain.Service;
+import io.github.microcks.domain.ServiceState;
+import io.github.microcks.repository.ArazzoSessionRepository;
 import io.github.microcks.repository.RepositoryTestsConfiguration;
 import io.github.microcks.repository.ResponseRepository;
 import io.github.microcks.repository.ServiceRepository;
+import io.github.microcks.repository.ServiceStateRepository;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.TestPropertySource;
@@ -39,9 +44,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Acceptance tests of the mocks answering an order saga service consistently along the workflow placeOrderSaga of Order
@@ -76,6 +84,12 @@ class ArazzoSessionAnswerTest {
 
    @Autowired
    private ResponseRepository responseRepository;
+
+   @Autowired
+   private ServiceStateRepository serviceStateRepository;
+
+   @Autowired
+   private ArazzoSessionRepository arazzoSessionRepository;
 
    /** Walking skeleton, AC-02: the order reserveStock receives flows into the reservation the mock answers. */
    @Test
@@ -132,6 +146,90 @@ class ArazzoSessionAnswerTest {
             .answer(session.getId(), reserveStock("o-7"), dispatched("Stock API", "POST /reservations")).orElseThrow();
 
       assertJson("{\"id\": \"r-9\", \"orderId\": \"o-42\"}", answer.getContent());
+   }
+
+   /** AC-03: a call naming no open session, or matching no step of its workflow, is answered as it is today. */
+   @ParameterizedTest(name = "{0}")
+   @CsvSource({ "an unknown session, unknown, POST /orders/{orderId}/confirm",
+         "a closed session, closed, POST /orders/{orderId}/confirm",
+         "an operation no step calls, open, GET /orders/{orderId}" })
+   void aCallOutsideTheWorkflowOfAnOpenSessionIsAnsweredAsToday(String what, String session, String operation)
+         throws Exception {
+      ArazzoSession opened = sessionOnTheSaga();
+      String sessionId = switch (session) {
+         case "unknown" -> "s-unknown";
+         case "closed" -> {
+            arazzoSessionService.closeSession(opened.getId());
+            yield opened.getId();
+         }
+         default -> opened.getId();
+      };
+
+      assertEquals(Optional.empty(), arazzoSessionAnswerService.answer(sessionId,
+            received("Order API", operation, "/orders/o-42/confirm", null), null));
+   }
+
+   /** An operation without example has nothing to answer with: the mocks answer as they do today. */
+   @Test
+   void anOperationWithoutExampleIsAnsweredAsToday() throws Exception {
+      ArazzoSession session = sessionOnTheSaga();
+      responseRepository.delete(dispatched("Order API", "POST /orders/{orderId}/confirm"));
+
+      assertEquals(Optional.empty(), arazzoSessionAnswerService.answer(session.getId(), confirmOrder("o-42"), null));
+   }
+
+   /** A step called again in the session answers again with the values of the session. */
+   @Test
+   void aStepCalledAgainAnswersTheSameWay() throws Exception {
+      ArazzoSession session = sessionOnTheSaga();
+      mocksAnswer(session, createOrder(), dispatched("Order API", "POST /orders"));
+      mocksAnswer(session, confirmOrder("o-42"), null);
+
+      Response again = arazzoSessionAnswerService.answer(session.getId(), confirmOrder("o-42"), null).orElseThrow();
+
+      assertEquals("o-42", JSON.readTree(again.getContent()).get("id").asText(), again.getContent());
+   }
+
+   /** Each session has its own state: the order another session placed does not flow into this one. */
+   @Test
+   void theStateOfASessionIsItsOwn() throws Exception {
+      ArazzoSession session = sessionOnTheSaga();
+      ArazzoSession another = arazzoSessionService.openSession(session.getDocumentId(), SAGA).orElseThrow();
+      mocksAnswer(another, createOrder(), dispatched("Order API", "POST /orders"));
+
+      Response answer = arazzoSessionAnswerService
+            .answer(session.getId(), received("Payment API", "POST /payments", "/payments", "{\"amount\": 25.0}"),
+                  dispatched("Payment API", "POST /payments"))
+            .orElseThrow();
+
+      assertJson("{\"id\": \"p-3\", \"orderId\": \"o-1\", \"status\": \"CHARGED\"}", answer.getContent());
+   }
+
+   /**
+    * The outputs of a step the mocks answered are kept in the state store of the API that answered it, under a key of
+    * the session, and expire with the session, even once closing it moved its expiry.
+    */
+   @Test
+   void theStateOfASessionIsKeptByTheApiThatAnsweredAndExpiresWithTheSession() throws Exception {
+      ArazzoSession session = sessionOnTheSaga();
+      mocksAnswer(session, createOrder(), dispatched("Order API", "POST /orders"));
+      Service orderApi = serviceRepository.findByNameAndVersion("Order API", "1.0.0");
+      String key = "arazzo-session:" + session.getId() + ":createOrder";
+
+      ServiceState state = serviceStateRepository.findByServiceIdAndKey(orderApi.getId(), key);
+      assertEquals(Map.of("id", "o-42", "amount", 25.0), JSON.readValue(state.getValue(), Map.class));
+      assertExpiresWith(session, state);
+
+      arazzoSessionService.closeSession(session.getId());
+
+      assertExpiresWith(arazzoSessionRepository.findById(session.getId()).orElseThrow(),
+            serviceStateRepository.findByServiceIdAndKey(orderApi.getId(), key));
+   }
+
+   /** The state store keeps a value for a number of seconds: the state expires in the last second of the session. */
+   private static void assertExpiresWith(ArazzoSession session, ServiceState state) {
+      long before = session.getExpireAt().getTime() - state.getExpireAt().getTime();
+      assertTrue(before >= 0 && before <= 1000, () -> "the state expires " + before + " ms before the session");
    }
 
    private ArazzoSession sessionOnTheSaga() throws Exception {
