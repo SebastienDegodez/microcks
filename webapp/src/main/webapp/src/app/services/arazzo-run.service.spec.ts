@@ -49,4 +49,27 @@ describe('ArazzoRunService', () => {
       implementations: { pastryApi: 'http://localhost:8080' }, secretName: 'pastry-staging-token', validateSchema: false });
     request.flush({ id: 'run-1' });
   });
+
+  it('launches the run of a recorded example, which plays the inputs of the example', () => {
+    service.launchRun('doc-1', 'readThenReprice', { pastry: 'Eclair Cafe', newPrice: 2.6 }, 10000, undefined, true,
+      'eclair-repriced').subscribe();
+
+    const request = http.expectOne('/api/arazzo/documents/doc-1/workflows/readThenReprice/runs');
+    expect(request.request.body).toEqual({ inputs: { pastry: 'Eclair Cafe', newPrice: 2.6 }, timeout: 10000,
+      validateSchema: true, example: 'eclair-repriced' });
+    request.flush({ id: 'run-1' });
+  });
+
+  it('runs all the recorded examples of a workflow in one call', () => {
+    let launches: unknown;
+    service.launchExampleRuns('doc 1', 'readThenReprice', 5000,
+      { baseUrls: { pastryApi: 'http://localhost:8080' } }, true).subscribe(answer => launches = answer);
+
+    const request = http.expectOne('/api/arazzo/documents/doc%201/workflows/readThenReprice/examples/runs');
+    expect(request.request.method).toEqual('POST');
+    expect(request.request.body).toEqual({ timeout: 5000, implementations: { pastryApi: 'http://localhost:8080' },
+      secretName: undefined, validateSchema: true });
+    request.flush([{ example: 'eclair-repriced', runId: 'run-1', number: 1 }]);
+    expect(launches).toEqual([{ example: 'eclair-repriced', runId: 'run-1', number: 1 }]);
+  });
 });

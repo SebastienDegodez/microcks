@@ -13,16 +13,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { Component, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { forkJoin } from 'rxjs';
+import { Subscription, forkJoin, timer } from 'rxjs';
+import { switchMap, takeWhile } from 'rxjs/operators';
 
 import { BsModalRef, BsModalService } from 'ngx-bootstrap/modal';
 
-import { ArazzoSourceDescription, ArazzoWorkflowDetail, ArazzoWorkflowInput } from '../../../models/arazzo-workflow.model';
-import { WorkflowRunImplementations } from '../../../models/arazzo-run.model';
+import {
+  ArazzoSourceDescription,
+  ArazzoWorkflowDetail,
+  ArazzoWorkflowExample,
+  ArazzoWorkflowInput
+} from '../../../models/arazzo-workflow.model';
+import {
+  ArazzoExampleLaunch,
+  ArazzoStepExpectation,
+  WorkflowResult,
+  WorkflowRunImplementations
+} from '../../../models/arazzo-run.model';
 import { Secret } from '../../../models/secret.model';
 import { ArazzoRunService } from '../../../services/arazzo-run.service';
 import { ArazzoWorkflowService } from '../../../services/arazzo-workflow.service';
@@ -39,21 +50,28 @@ const PLACES: Record<string, string> = {
   body: 'body'
 };
 
+/** How often the runs of the examples are read again until they end, in milliseconds. */
+export const EXAMPLE_RUNS_POLLING_INTERVAL = 2000;
+
 /**
  * Open the dialog running a workflow of an Arazzo document.
  * @param workflowIds The workflows of the document that the dialog offers
  * @param workflowId  The workflow selected when the dialog opens
+ * @param exampleName The recorded example picked when the dialog opens, to run it again
  */
 export function openRunDialog(modals: BsModalService, documentId: string, workflowIds: string[],
-                              workflowId: string): void {
+                              workflowId: string, exampleName?: string): void {
   modals.show(WorkflowRunDialogComponent, {
-    initialState: { documentId, workflowIds, workflowId },
+    initialState: { documentId, workflowIds, workflowId, ...(exampleName ? { exampleName } : {}) },
     class: 'workflow-run-modal'
   });
 }
 
 /** What the steps of a run call. */
 export type RunTarget = 'MOCKS' | 'IMPLEMENTATIONS';
+
+/** How the run of an example launched by Run all examples goes: its launch, then the run as it is read again. */
+export type ExampleRunReport = { launch: ArazzoExampleLaunch; run?: WorkflowResult };
 
 /**
  * The dialog running a workflow of an Arazzo document against the Microcks mocks of its linked APIs, or against their
@@ -65,13 +83,15 @@ export type RunTarget = 'MOCKS' | 'IMPLEMENTATIONS';
   styleUrls: ['./workflow-run.dialog.css'],
   imports: [CommonModule, FormsModule]
 })
-export class WorkflowRunDialogComponent implements OnInit {
+export class WorkflowRunDialogComponent implements OnInit, OnDestroy {
 
   readonly availableSoon = 'Available soon';
 
   documentId!: string;
   workflowIds!: string[];
   workflowId!: string;
+  /** The recorded example picked when the dialog opens, to run it again. */
+  exampleName?: string;
 
   workflows: ArazzoWorkflowDetail[] = [];
   values: Record<string, string | number | null> = {};
@@ -88,6 +108,13 @@ export class WorkflowRunDialogComponent implements OnInit {
   secretName: string | null = null;
   /** Once a run is refused, the inputs it needs that are still empty are marked. */
   refused = false;
+  /** The name of the recorded example picked to fill the inputs; empty when none is picked. */
+  pickedExample = '';
+  /** Once an input is edited after an example was picked, the run plays no example. */
+  detached = false;
+  /** The runs of Run all examples, once launched. */
+  reports?: ExampleRunReport[];
+  private polling = new Subscription();
 
   constructor(public bsModalRef: BsModalRef, private workflowSvc: ArazzoWorkflowService,
               private runSvc: ArazzoRunService, private router: Router, private secretsSvc: SecretsService) {
@@ -95,7 +122,16 @@ export class WorkflowRunDialogComponent implements OnInit {
 
   ngOnInit(): void {
     forkJoin(this.workflowIds.map(workflowId => this.workflowSvc.getWorkflow(this.documentId, workflowId)))
-      .subscribe(workflows => this.workflows = workflows);
+      .subscribe(workflows => {
+        this.workflows = workflows;
+        if (this.exampleName) {
+          this.pickExample(this.exampleName);
+        }
+      });
+  }
+
+  ngOnDestroy(): void {
+    this.polling.unsubscribe();
   }
 
   get selected(): ArazzoWorkflowDetail | undefined {
@@ -107,6 +143,47 @@ export class WorkflowRunDialogComponent implements OnInit {
     this.values = {};
     this.error = undefined;
     this.refused = false;
+    this.pickedExample = '';
+    this.detached = false;
+  }
+
+  /** The recorded examples of the selected workflow. */
+  get examples(): ArazzoWorkflowExample[] {
+    return this.selected?.examples ?? [];
+  }
+
+  /** The example the run plays: the one picked, unless an input was edited since. */
+  get played(): ArazzoWorkflowExample | undefined {
+    return this.detached ? undefined : this.examples.find(example => example.name === this.pickedExample);
+  }
+
+  /** Picking an example fills the inputs with its own; picking none empties them. */
+  pickExample(exampleName: string): void {
+    this.pickedExample = exampleName;
+    this.detached = false;
+    this.error = undefined;
+    this.refused = false;
+    this.values = {};
+    const example = this.played;
+    this.selected?.inputs.filter(input => example && input.name in example.inputs)
+      .forEach(input => this.values[input.name] = example!.inputs[input.name] as string | number);
+  }
+
+  /** Editing an input after an example was picked detaches the run from it: its expectations are not checked. */
+  inputChanged(): void {
+    if (this.pickedExample) {
+      this.detached = true;
+    }
+  }
+
+  /** What an example expects of the outputs of the workflow: "after = 2.6". */
+  expectedValues(values: Record<string, unknown>): { name: string; value: string }[] {
+    return Object.entries(values).map(([name, value]) => ({ name, value: JSON.stringify(value) }));
+  }
+
+  /** What an example expects of a step: its status, then its outputs. */
+  expectedStatus(step: ArazzoStepExpectation): string {
+    return step.status == null ? '' : ' ' + step.status;
   }
 
   /** Whether an input a run needs is still empty after a run was refused. */
@@ -183,8 +260,13 @@ export class WorkflowRunDialogComponent implements OnInit {
     this.running = true;
     this.error = undefined;
     const implementations = this.target === 'IMPLEMENTATIONS' ? this.implementations(workflow) : undefined;
-    this.runSvc.launchRun(this.documentId, workflow.workflowId, inputs, this.timeout, implementations,
-      this.validateSchema).subscribe({
+    const example = this.played;
+    const launched = example
+      ? this.runSvc.launchRun(this.documentId, workflow.workflowId, inputs, this.timeout, implementations,
+        this.validateSchema, example.name)
+      : this.runSvc.launchRun(this.documentId, workflow.workflowId, inputs, this.timeout, implementations,
+        this.validateSchema);
+    launched.subscribe({
       next: run => {
         this.bsModalRef.hide();
         this.router.navigate(['/workflows/runs', run.id]);
@@ -195,6 +277,54 @@ export class WorkflowRunDialogComponent implements OnInit {
         this.error = typeof refusal.error === 'string' ? refusal.error : 'Microcks could not run the workflow.';
       }
     });
+  }
+
+  /** Run every example of the workflow, then follow each run until it tells whether it matches its example. */
+  runAllExamples(): void {
+    const workflow = this.selected!;
+    this.running = true;
+    this.error = undefined;
+    const implementations = this.target === 'IMPLEMENTATIONS' ? this.implementations(workflow) : undefined;
+    this.runSvc.launchExampleRuns(this.documentId, workflow.workflowId, this.timeout, implementations,
+      this.validateSchema).subscribe({
+      next: launches => {
+        this.running = false;
+        this.reports = launches.map(launch => ({ launch }));
+        this.reports.filter(report => report.launch.runId).forEach(report => this.follow(report));
+      },
+      error: refusal => {
+        this.running = false;
+        this.error = typeof refusal.error === 'string' ? refusal.error : 'Microcks could not run the examples.';
+      }
+    });
+  }
+
+  private follow(report: ExampleRunReport): void {
+    this.polling.add(timer(0, EXAMPLE_RUNS_POLLING_INTERVAL).pipe(
+      switchMap(() => this.runSvc.getRun(report.launch.runId!)),
+      takeWhile(run => run.status === 'IN_PROGRESS', true)
+    ).subscribe(run => report.run = run));
+  }
+
+  /** How the run of an example went: in progress, or whether it matches the example and why not. */
+  verdictOf(report: ExampleRunReport): string {
+    const example = report.run?.example;
+    if (!example?.verdict) {
+      return 'In progress';
+    }
+    return example.verdict === 'MATCHES' ? 'Matches the example'
+      : 'Does not match the example: ' + example.unmetExpectations.join('; ');
+  }
+
+  openRun(runId: string): void {
+    this.bsModalRef.hide();
+    this.router.navigate(['/workflows/runs', runId]);
+  }
+
+  /** The runs history of the document, filtered on the workflow whose examples ran. */
+  openHistory(): void {
+    this.bsModalRef.hide();
+    this.router.navigate(['/workflows/documents', this.documentId, 'runs'], { queryParams: { workflow: this.workflowId } });
   }
 
   private implementations(workflow: ArazzoWorkflowDetail): WorkflowRunImplementations {

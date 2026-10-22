@@ -17,7 +17,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
-import { WorkflowResult, WorkflowRunImplementations } from '../models/arazzo-run.model';
+import { ArazzoExampleLaunch, WorkflowResult, WorkflowRunImplementations } from '../models/arazzo-run.model';
 import { RequestResponsePair } from '../models/service.model';
 
 @Injectable({ providedIn: 'root' })
@@ -33,14 +33,36 @@ export class ArazzoRunService {
    * @param timeout         How long a step waits for its response, in milliseconds
    * @param implementations The base URL of each linked source and the secret of the calls; none for the mocks
    * @param validateSchema  Whether each response is validated against the OpenAPI schema of its operation
+   * @param example         The recorded example the run plays; none for a run that plays no example
    */
   public launchRun(documentId: string, workflowId: string, inputs: Record<string, unknown>,
                    timeout: number, implementations?: WorkflowRunImplementations,
-                   validateSchema = false): Observable<WorkflowResult> {
+                   validateSchema = false, example?: string): Observable<WorkflowResult> {
     const target = implementations
       ? { implementations: implementations.baseUrls, secretName: implementations.secretName } : {};
-    return this.http.post<WorkflowResult>(this.rootUrl + '/documents/' + encodeURIComponent(documentId)
-      + '/workflows/' + encodeURIComponent(workflowId) + '/runs', { inputs, timeout, ...target, validateSchema });
+    const played = example ? { example } : {};
+    return this.http.post<WorkflowResult>(this.workflowUrl(documentId, workflowId) + '/runs',
+      { inputs, timeout, ...target, validateSchema, ...played });
+  }
+
+  /**
+   * Run every recorded example of a workflow, one run per example, against the mocks or the implementations.
+   * @param timeout         How long a step waits for its response, in milliseconds
+   * @param implementations The base URL of each linked source and the secret of the calls; none for the mocks
+   * @param validateSchema  Whether each response is validated against the OpenAPI schema of its operation
+   * @return How the run of each example was launched, or why it was refused
+   */
+  public launchExampleRuns(documentId: string, workflowId: string, timeout: number,
+                           implementations?: WorkflowRunImplementations,
+                           validateSchema = false): Observable<ArazzoExampleLaunch[]> {
+    const target = implementations
+      ? { implementations: implementations.baseUrls, secretName: implementations.secretName } : {};
+    return this.http.post<ArazzoExampleLaunch[]>(this.workflowUrl(documentId, workflowId) + '/examples/runs',
+      { timeout, ...target, validateSchema });
+  }
+
+  private workflowUrl(documentId: string, workflowId: string): string {
+    return this.rootUrl + '/documents/' + encodeURIComponent(documentId) + '/workflows/' + encodeURIComponent(workflowId);
   }
 
   public getRun(runId: string): Observable<WorkflowResult> {

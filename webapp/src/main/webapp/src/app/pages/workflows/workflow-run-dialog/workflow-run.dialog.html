@@ -5,7 +5,21 @@
   </button>
 </div>
 
-<div class="modal-body workflow-run-dialog">
+<div *ngIf="reports" class="modal-body workflow-run-dialog workflow-run-example-results">
+  <h5 class="workflow-run-section">Runs of the examples of <code class="workflow-run-chip">{{ workflowId }}</code></h5>
+  <ul class="workflow-run-example-list">
+    <li *ngFor="let report of reports" class="workflow-run-example-result">
+      <span *ngIf="report.run?.example?.verdict || report.launch.refusal; else inProgress"
+            class="workflow-run-example-icon pficon" aria-hidden="true"
+            [class.pficon-ok]="report.run?.example?.verdict === 'MATCHES'"
+            [class.pficon-error-circle-o]="report.run?.example?.verdict !== 'MATCHES'"></span>
+      <ng-template #inProgress><span class="spinner spinner-xs spinner-inline" aria-hidden="true"></span></ng-template>
+      <code class="workflow-run-chip workflow-run-example-name">{{ report.launch.example }}</code>&ngsp;<ng-container *ngIf="report.launch.runId as runId"><button type="button" class="btn btn-link workflow-run-example-run" (click)="openRun(runId)">Run #{{ report.launch.number }}</button>&ngsp;<span class="workflow-run-example-verdict">{{ verdictOf(report) }}</span></ng-container><span *ngIf="report.launch.refusal" class="workflow-run-example-verdict">Refused: {{ report.launch.refusal }}</span>
+    </li>
+  </ul>
+</div>
+
+<div *ngIf="!reports" class="modal-body workflow-run-dialog">
   <div class="workflow-run-field">
     <label for="workflow-run-workflow" class="workflow-run-label">Workflow</label>
     <select id="workflow-run-workflow" class="form-control" name="workflow" [ngModel]="workflowId"
@@ -63,16 +77,24 @@
     </fieldset>
 
     <h5 class="workflow-run-section">Inputs</h5>
+    <div *ngIf="examples.length" class="workflow-run-field workflow-run-example">
+      <label for="workflow-run-example" class="workflow-run-label">Example</label>
+      <select id="workflow-run-example" class="form-control" name="example" [ngModel]="pickedExample"
+              (ngModelChange)="pickExample($event)">
+        <option value="">None, I enter the inputs</option>
+        <option *ngFor="let example of examples" [value]="example.name">{{ example.name }}</option>
+      </select>
+    </div>
     <div *ngIf="workflow.inputs.length" class="workflow-run-inputs">
       <div *ngFor="let input of workflow.inputs" class="workflow-run-input" [class.has-error]="isMissing(input)">
         <label [for]="'workflow-run-input-' + input.name" class="workflow-run-input-label">
           <code class="workflow-run-chip workflow-run-input-name">{{ input.name }}</code>
         </label>
         <input *ngIf="inputKind(input) === 'number'" [id]="'workflow-run-input-' + input.name" class="form-control"
-               type="number" [name]="'input-' + input.name" [(ngModel)]="values[input.name]"
+               type="number" [name]="'input-' + input.name" [(ngModel)]="values[input.name]" (ngModelChange)="inputChanged()"
                [required]="!!input.required" [attr.aria-invalid]="isMissing(input) || null">
         <input *ngIf="inputKind(input) !== 'number'" [id]="'workflow-run-input-' + input.name" class="form-control"
-               type="text" [name]="'input-' + input.name" [(ngModel)]="values[input.name]"
+               type="text" [name]="'input-' + input.name" [(ngModel)]="values[input.name]" (ngModelChange)="inputChanged()"
                [required]="!!input.required" [attr.aria-invalid]="isMissing(input) || null">
         <p *ngIf="input.usedBy.length" class="workflow-run-input-use">
           <ng-container *ngFor="let part of useOf(input)">{{ part.text }}<code *ngIf="part.code" class="workflow-run-chip">{{ part.code }}</code></ng-container>
@@ -80,6 +102,28 @@
       </div>
     </div>
     <p *ngIf="!workflow.inputs.length" class="workflow-run-no-input">This workflow declares no input.</p>
+
+    <div *ngIf="played as example" class="workflow-run-expected">
+      <h6 class="workflow-run-expected-title">Expected by {{ example.name }}</h6>
+      <dl class="workflow-run-expected-list">
+        <div *ngIf="expectedValues(example.outputs).length" class="workflow-run-expected-row">
+          <dt>Outputs</dt>
+          <dd><span *ngFor="let output of expectedValues(example.outputs)" class="workflow-run-expected-output"><code class="workflow-run-chip">{{ output.name }}</code> = <code class="workflow-run-chip">{{ output.value }}</code></span></dd>
+        </div>
+        <div *ngIf="example.steps.length" class="workflow-run-expected-row">
+          <dt>Steps</dt>
+          <dd><span *ngFor="let step of example.steps" class="workflow-run-expected-step"><code class="workflow-run-chip">{{ step.stepId }}</code>{{ expectedStatus(step) }}<ng-container *ngFor="let output of expectedValues(step.outputs)">&ngsp;·&ngsp;<code class="workflow-run-chip">{{ output.name }}</code> = <code class="workflow-run-chip">{{ output.value }}</code></ng-container></span></dd>
+        </div>
+        <div class="workflow-run-expected-row">
+          <dt>End</dt>
+          <dd class="workflow-run-expected-stop"><ng-container *ngIf="example.stopsAt; else runsToEnd">Stops at <code class="workflow-run-chip">{{ example.stopsAt }}</code></ng-container><ng-template #runsToEnd>Runs to its end</ng-template></dd>
+        </div>
+      </dl>
+    </div>
+    <p *ngIf="detached" class="workflow-run-detached" role="status">
+      <span class="pficon pficon-info" aria-hidden="true"></span>
+      You changed an input: this run plays no example, so its expected outputs will not be checked.
+    </p>
 
     <h5 class="workflow-run-section">Options</h5>
     <label class="workflow-run-validation">
@@ -105,9 +149,16 @@
   </ng-container>
 </div>
 
-<div class="modal-footer workflow-run-footer">
-  <span class="workflow-run-summary">{{ workflowId }} against {{ target === 'IMPLEMENTATIONS' ? 'implementations' : 'Microcks mocks' }}</span>
+<div *ngIf="reports" class="modal-footer workflow-run-footer">
+  <button type="button" class="btn btn-default workflow-run-history" (click)="openHistory()">Runs history</button>
+  <button type="button" class="btn btn-primary workflow-run-close" (click)="bsModalRef.hide()">Close</button>
+</div>
+
+<div *ngIf="!reports" class="modal-footer workflow-run-footer">
+  <span class="workflow-run-summary">{{ workflowId }}<ng-container *ngIf="played as example"> · example {{ example.name }}</ng-container> against {{ target === 'IMPLEMENTATIONS' ? 'implementations' : 'Microcks mocks' }}</span>
   <button type="button" class="btn btn-default workflow-run-cancel" (click)="bsModalRef.hide()">Cancel</button>
+  <button *ngIf="examples.length" type="button" class="btn btn-default workflow-run-all-examples"
+          [disabled]="running || !canRun()" (click)="runAllExamples()">Run all {{ examples.length }} {{ examples.length === 1 ? 'example' : 'examples' }}</button>
   <button type="button" class="btn btn-primary workflow-run-launch" [disabled]="running || !canRun()"
           (click)="run()">
     <span class="workflow-run-play" aria-hidden="true"></span>Run

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 import { ArazzoWorkflowStatus } from './arazzo-document.model';
+import { ArazzoStepExpectation } from './arazzo-run.model';
 
 /** The link between a source description of an Arazzo document and the Microcks API it describes. */
 export type ArazzoSourceLink = {
@@ -125,4 +126,17 @@ export type ArazzoWorkflowDetail = {
   dataPassings: ArazzoDataPassing[];
   /** Whether the workflow can run, else why. */
   status: ArazzoWorkflowStatus;
+  /** The recorded examples of the workflow, from its ArazzoSources overlay. */
+  examples?: ArazzoWorkflowExample[];
+};
+
+/** A recorded example of a workflow: the inputs to run it with, and what the run is expected to show. */
+export type ArazzoWorkflowExample = {
+  workflowId: string;
+  name: string;
+  inputs: Record<string, unknown>;
+  outputs: Record<string, unknown>;
+  steps: ArazzoStepExpectation[];
+  /** The step the workflow is expected to stop at; absent when it is expected to run to its end. */
+  stopsAt?: string;
 };
