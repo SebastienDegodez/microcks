@@ -86,7 +86,8 @@ class OpenAPIResponseValidatorTest {
          "GET | /pastry/{name} | 200 | application/problem+json | {\"price\":2.5} | "
                + "`=required property 'name' not found`",
          "GET | /pastry/{name} | 404 | application/json | {} | `=required property 'message' not found`",
-         "GET | /pastry/{name} | 500 | application/json | {} | " + MESSAGE_NOT_FOUND })
+         "GET | /pastry/{name} | 500 | application/json | {} | " + MESSAGE_NOT_FOUND,
+         "GET | /pastry/{name} | 202 | application/json | {} | null=" + OpenAPISchemaValidator.SCHEMA_NOT_FOUND })
    void aSwaggerResponseIsValidatedAgainstTheSchemaOfItsStatus(String verb, String path, int status, String contentType,
          String body, String violations) throws IOException {
       OpenAPIResponseValidator validator = new OpenAPIResponseValidator(contractOf("swagger-pastry"), true, null);

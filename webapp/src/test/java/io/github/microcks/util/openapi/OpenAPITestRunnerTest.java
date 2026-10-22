@@ -42,7 +42,6 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -103,22 +102,14 @@ class OpenAPITestRunnerTest {
          "500 | application/json | {} | 1 | "
                + "messagePathPointer does not represent a valid JSON Pointer in OpenAPI specification",
          "200 | application/json | price is 2.5 | 1 | ", "200 | text/plain | price is 2.5 | 0 | ",
-         "204 | application/json | | 0 | " })
+         "204 | application/json | | 0 | ", "202 | application/json | {} | 1 | "
+               + "schemaPathPointer does not represent an existing JSON Pointer in OpenAPI specification" })
    void eachResponseIsValidatedAgainstItsSwaggerSchema(int status, String contentType, String body, int code,
          String message) throws IOException {
       given(ResourceType.SWAGGER, contractOf("swagger-pastry"));
 
       assertTest(new OpenAPITestRunner(resources, responses, false), "GET /pastry/{name}", status, contentType, body,
             code, message);
-   }
-
-   @Test
-   void aSwaggerResponseWithoutSchemaCannotBeValidated() throws IOException {
-      given(ResourceType.SWAGGER, contractOf("swagger-pastry"));
-      OpenAPITestRunner runner = new OpenAPITestRunner(resources, responses, false);
-
-      assertThrows(ClassCastException.class, () -> runner.extractTestReturnCode(service,
-            operation("GET /pastry/{name}"), request, response(202, "application/json", "{}"), "{}"));
    }
 
    @Test

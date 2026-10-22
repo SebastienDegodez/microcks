@@ -50,6 +50,8 @@ class SwaggerSchemaViolationsTest {
                      $ref: '#/definitions/Pastry'
                  "404":
                    $ref: '#/responses/NotFound'
+                 "409":
+                   description: Conflict, without schema
                  "410":
                    $ref: '#/responses/Gone'
          responses:
@@ -87,7 +89,9 @@ class SwaggerSchemaViolationsTest {
          "{} | /paths/~1pastry/get/responses/500 | "
                + "null=messagePathPointer does not represent a valid JSON Pointer in OpenAPI specification",
          "{} | /paths/~1pastry/get/responses/410 | "
-               + "null=messagePathPointer does not represent an existing JSON Pointer in OpenAPI specification" })
+               + "null=messagePathPointer does not represent an existing JSON Pointer in OpenAPI specification",
+         "{} | /paths/~1pastry/get/responses/409 | "
+               + "null=schemaPathPointer does not represent an existing JSON Pointer in OpenAPI specification" })
    void eachViolationTellsTheJsonPointerOfTheValueThatViolatesTheSchema(String message, String messagePathPointer,
          String violations) throws IOException {
       JsonNode specification = OpenAPISchemaValidator.getJsonNodeForSchema(SPECIFICATION);

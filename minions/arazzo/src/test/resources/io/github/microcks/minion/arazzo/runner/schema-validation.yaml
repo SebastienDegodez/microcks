@@ -184,6 +184,8 @@ paths:
           description: Pastry with specified name
           schema:
             $ref: '#/definitions/Pastry'
+        "202":
+          description: Accepted, with any body
         "404":
           $ref: '#/responses/NotFound'
 responses:

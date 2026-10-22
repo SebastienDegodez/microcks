@@ -138,7 +138,7 @@ class ResponseSchemaValidationTest {
                + "`The response body does not match the Error schema: required property 'message' not found`",
          "500 | application/json | {} | FAILED | "
                + "Status 500 of GetPastryByName is not described in the OpenAPI contract of pastryApi",
-         "200 | text/plain | price is 2.5 | PASSED | " })
+         "200 | text/plain | price is 2.5 | PASSED | ", "202 | application/json | {\"any\":true} | PASSED | " })
    void aSwaggerContractIsCheckedLikeSwaggerContractTestsCheckIt(int status, String contentType, String body,
          StepStatus stepStatus, String message) throws IOException {
       implementation.answer("GET /pastry/Eclair%20Cafe", status, contentType, body);
