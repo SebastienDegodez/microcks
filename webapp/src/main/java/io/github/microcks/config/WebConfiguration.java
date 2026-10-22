@@ -77,6 +77,7 @@ public class WebConfiguration implements ServletContextInitializer {
          dynamicCorsFilter.addMappingForUrlPatterns(disps, true, "/rest-valid/*");
          dynamicCorsFilter.addMappingForUrlPatterns(disps, true, "/soap/*");
          dynamicCorsFilter.addMappingForUrlPatterns(disps, true, "/graphql/*");
+         dynamicCorsFilter.addMappingForUrlPatterns(disps, true, "/arazzo/*");
       }
    }
 }
