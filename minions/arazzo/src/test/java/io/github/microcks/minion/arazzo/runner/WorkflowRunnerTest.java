@@ -115,9 +115,55 @@ class WorkflowRunnerTest {
       StepResult reprice = reporter.step("reprice");
       assertEquals(
             new StepResult(2, "reprice", new StepOperation("pastryApi", "PatchPastry", "PATCH", "/pastry/{name}"),
-                  StepStatus.NOT_RUN, null, 0, List.of(), Map.of(), null, null, null),
+                  StepStatus.NOT_RUN, null, 0, List.of(), Map.of(), null, null, null, List.of(), Map.of()),
             reprice);
       assertEquals(2, mocks.calls().size());
+   }
+
+   @Test
+   void theFailingStepReportsWhatItSentAndReceived() throws IOException {
+      runner.run(RunFixtures.runOf("pastry-scenarios", "listThenReadFirst", Map.of()), reporter);
+
+      StepResult readFirst = reporter.step("readFirst");
+      assertEquals("GET " + PastryMocks.BASE_URL + "/pastry/Baba%20Rhum",
+            readFirst.request().method() + " " + readFirst.request().uri());
+      assertEquals("400 The response /pastry/Baba%20Rhum does not exist!",
+            readFirst.response().status() + " " + readFirst.response().body());
+   }
+
+   @Test
+   void valuesPassedBetweenStepsShowTheirOrigin() throws IOException {
+      runner.run(RunFixtures.runOf("pastry-scenarios", "listThenReadFirst", Map.of()), reporter);
+
+      assertEquals(List.of(new ParameterValue("name", "path", "Baba Rhum", "$steps.list.outputs.first")),
+            reporter.step("readFirst").parameters());
+      assertEquals(Map.of("first", "$response.body#/0/name"), reporter.step("list").outputOrigins());
+   }
+
+   @ParameterizedTest
+   @CsvSource(delimiter = '|', value = {
+         "readThenReprice | readPastry | name in path = Eclair Cafe from $inputs.pastry, Accept in header = "
+               + "application/json from null | {name=$response.body#/name, price=$response.body#/price}",
+         "readThenReprice | reprice | name in path = Eclair Cafe from $steps.readPastry.outputs.name, Accept in "
+               + "header = application/json from null | {price=$response.body#/price}",
+         "listThenReadFirst | list | size in query = S from null | {first=$response.body#/0/name}" })
+   void eachStepReportsTheParametersItSentAndWhereItsOutputsCameFrom(String workflowId, String stepId,
+         String parameters, String outputOrigins) throws IOException {
+      runner.run(RunFixtures.runOf("pastry-scenarios", workflowId, Map.of("pastry", "Eclair Cafe", "newPrice", 2.6)),
+            reporter);
+
+      StepResult step = reporter.step(stepId);
+      assertEquals(parameters, String.join(", ", step.parameters().stream().map(parameter -> parameter.name() + " in "
+            + parameter.in() + " = " + parameter.value() + " from " + parameter.expression()).toList()));
+      assertEquals(outputOrigins, step.outputOrigins().toString());
+   }
+
+   @Test
+   void aStepWhoseParametersCannotBeResolvedReportsNoneSent() throws IOException {
+      runner.run(RunFixtures.runOf("unexecutable", "missingInput", Map.of()), reporter);
+
+      assertEquals(List.of(), reporter.step("readPastry").parameters());
+      assertEquals(Map.of(), reporter.step("readPastry").outputOrigins());
    }
 
    @ParameterizedTest
@@ -126,6 +172,8 @@ class WorkflowRunnerTest {
          "textBodyCriterion | 0 readMissing FAILED 400 {} | No value at JSON pointer /status in $response.body | 1 "
                + "| FAILURE | ",
          "textPayload | 0 reprice PASSED 200 {} | | 1 | SUCCESS | ",
+         "unknownOperation | 0 deletePastry FAILED null {} | Operation DeletePastry not found in source pastryApi | 0 "
+               + "| FAILURE | ",
          "missingOutput | 0 list PASSED 200 {} | | 1 | FAILURE | Unknown output of step list: first" })
    void aStepOrOutputWhoseExpressionsHaveNoValueFailsWithTheReason(String workflowId, String step, String stepMessage,
          int calls, RunStatus status, String runMessage) throws IOException {

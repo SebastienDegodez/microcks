@@ -17,11 +17,13 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, ParamMap, RouterLink } from '@angular/router';
 import { Observable, of, timer } from 'rxjs';
-import { catchError, map, switchMap, takeWhile } from 'rxjs/operators';
+import { catchError, map, shareReplay, switchMap, takeWhile, tap } from 'rxjs/operators';
 
 import { BsModalService } from 'ngx-bootstrap/modal';
+import { HighlightAuto } from 'ngx-highlightjs';
 
 import { WorkflowCriterionResult, WorkflowResult, WorkflowStepResult } from '../../../models/arazzo-run.model';
+import { RequestResponsePair } from '../../../models/service.model';
 import { ArazzoRunService } from '../../../services/arazzo-run.service';
 import { TimeAgoPipe } from '../../../components/time-ago.pipe';
 import { openRunDialog } from '../workflow-run-dialog/workflow-run.dialog';
@@ -39,20 +41,26 @@ export type RunFailure = {
   message?: string;
 };
 
+/** The request and response a step exchanged, as stored; absent when the step sent nothing. */
+export type StepExchange = { pair?: RequestResponsePair };
+
 /** The page of a run of a workflow: its status, then its steps in the order they were executed. */
 @Component({
   selector: 'app-workflow-run-page',
   templateUrl: './workflow-run.page.html',
   styleUrls: ['./workflow-run.page.css'],
-  imports: [CommonModule, RouterLink, TimeAgoPipe]
+  imports: [CommonModule, RouterLink, TimeAgoPipe, HighlightAuto]
 })
 export class WorkflowRunPageComponent implements OnInit {
 
   readonly availableSoon = 'Available soon';
+  readonly hlLang: string[] = ['json', 'xml', 'yaml'];
 
   state!: Observable<RunState>;
-  /** The steps the API developer collapsed, by index. */
-  collapsed = new Set<number>();
+  /** The steps the API developer expanded or collapsed, by index: the failing step comes expanded, the others not. */
+  toggled = new Set<number>();
+  /** The exchange of each step, by testCaseId, read once. */
+  private exchanges = new Map<string, Observable<StepExchange>>();
 
   constructor(private runSvc: ArazzoRunService, private route: ActivatedRoute, private modals: BsModalService) {
   }
@@ -60,6 +68,8 @@ export class WorkflowRunPageComponent implements OnInit {
   ngOnInit(): void {
     // A run in progress is read again until it is final, so that the page follows it without reload.
     this.state = this.route.paramMap.pipe(
+      // The page is kept from one run to another: each run opens with its own steps expanded.
+      tap(() => this.toggled.clear()),
       switchMap((params: ParamMap) => timer(0, POLLING_INTERVAL).pipe(
         switchMap(() => this.runSvc.getRun(params.get('runId')!)),
         takeWhile(run => run.status === 'IN_PROGRESS', true),
@@ -101,15 +111,47 @@ export class WorkflowRunPageComponent implements OnInit {
   }
 
   isExpanded(step: WorkflowStepResult): boolean {
-    return step.status !== 'NOT_RUN' && !this.collapsed.has(step.index);
+    return step.status !== 'NOT_RUN' && (step.status === 'FAILED') !== this.toggled.has(step.index);
   }
 
   toggle(step: WorkflowStepResult): void {
-    if (this.collapsed.has(step.index)) {
-      this.collapsed.delete(step.index);
+    if (this.toggled.has(step.index)) {
+      this.toggled.delete(step.index);
     } else {
-      this.collapsed.add(step.index);
+      this.toggled.add(step.index);
     }
+  }
+
+  /** The request and response of a step, stored under its testCaseId as those of tests. */
+  exchange(run: WorkflowResult, step: WorkflowStepResult): Observable<StepExchange> {
+    const testCaseId = step.testCaseId;
+    if (!testCaseId) {
+      return of({});
+    }
+    if (!this.exchanges.has(testCaseId)) {
+      this.exchanges.set(testCaseId, this.runSvc.getExchanges(run.id, testCaseId).pipe(
+        map(pairs => ({ pair: pairs[0] })),
+        catchError(() => of({})),
+        shareReplay(1)
+      ));
+    }
+    return this.exchanges.get(testCaseId)!;
+  }
+
+  /** Where a step sent its request, relative to Microcks whose mocks the run targets. */
+  requestTarget(step: WorkflowStepResult): string {
+    const url = new URL(step.requestUrl!);
+    return url.pathname + url.search;
+  }
+
+  /** The value of a parameter as it was sent: text as is, anything else as JSON. */
+  sent(value: unknown): string {
+    return typeof value === 'string' ? value : this.json(value);
+  }
+
+  /** The outputs of a step, each with the runtime expression it came from when the minion tells it. */
+  outputsOf(step: WorkflowStepResult): { name: string; value: string; origin?: string }[] {
+    return this.entries(step.outputs).map(output => ({ ...output, origin: step.outputOrigins?.[output.name] }));
   }
 
   entries(values: Record<string, unknown> | undefined): { name: string; value: string }[] {

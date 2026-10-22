@@ -14,12 +14,15 @@
  * limitations under the License.
  */
 import { ComponentFixture, TestBed, fakeAsync, tick, discardPeriodicTasks } from '@angular/core/testing';
-import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
-import { of, throwError } from 'rxjs';
+import { By } from '@angular/platform-browser';
+import { ActivatedRoute, ParamMap, convertToParamMap, provideRouter } from '@angular/router';
+import { BehaviorSubject, of, throwError } from 'rxjs';
 
 import { BsModalService } from 'ngx-bootstrap/modal';
+import { HighlightAuto, HighlightJS } from 'ngx-highlightjs';
 
 import { WorkflowResult, WorkflowStepResult } from '../../../models/arazzo-run.model';
+import { RequestResponsePair } from '../../../models/service.model';
 import { ArazzoRunService } from '../../../services/arazzo-run.service';
 import { routes } from '../../../app.routes';
 import { WorkflowRunDialogComponent } from '../workflow-run-dialog/workflow-run.dialog';
@@ -27,6 +30,7 @@ import { POLLING_INTERVAL, WorkflowRunPageComponent } from './workflow-run.page'
 
 const MOCKS = { sourceName: 'pastryApi', serviceId: 'svc-1', apiName: 'API Pastry - 2.0', apiVersion: '2.0.0',
   baseUrl: '/rest/API+Pastry+-+2.0/2.0.0' };
+const MICROCKS = 'http://localhost:8080';
 const GET_PASTRY_BY_NAME = { sourceName: 'pastryApi', operationId: 'GetPastryByName', method: 'GET',
   path: '/pastry/{name}' };
 
@@ -59,9 +63,14 @@ function failedRun(): WorkflowResult {
     status: 'FAILURE', startedDate: Date.now() - 3 * 60 * 1000, elapsedTime: 13, timeout: 10000,
     steps: [
       step(0, 'list', 'PASSED', { statusCode: 200, outputs: { first: 'Baba Rhum' },
-        operation: { sourceName: 'pastryApi', operationId: 'GetPastries', method: 'GET', path: '/pastry' } }),
+        operation: { sourceName: 'pastryApi', operationId: 'GetPastries', method: 'GET', path: '/pastry' },
+        testCaseId: 'run-2-0', requestUrl: MICROCKS + '/rest/API+Pastry+-+2.0/2.0.0/pastry?size=S',
+        parameters: [{ name: 'size', in: 'query', value: 'S' }], outputOrigins: { first: '$response.body#/0/name' } }),
       step(1, 'readFirst', 'FAILED', { statusCode: 400, elapsedTime: 5,
-        criteria: [{ condition: '$statusCode == 200', values: [{ expression: '$statusCode', value: 400 }], held: false }] }),
+        criteria: [{ condition: '$statusCode == 200', values: [{ expression: '$statusCode', value: 400 }], held: false }],
+        testCaseId: 'run-2-1', requestUrl: MICROCKS + '/rest/API+Pastry+-+2.0/2.0.0/pastry/Baba%20Rhum',
+        parameters: [{ name: 'name', in: 'path', value: 'Baba Rhum', expression: '$steps.list.outputs.first' }],
+        outputOrigins: {} }),
       step(2, 'reprice', 'NOT_RUN', { elapsedTime: 0,
         operation: { sourceName: 'pastryApi', operationId: 'PatchPastry', method: 'PATCH', path: '/pastry/{name}' } })
     ]
@@ -72,19 +81,38 @@ describe('WorkflowRunPageComponent', () => {
   let fixture: ComponentFixture<WorkflowRunPageComponent>;
   let runs: jasmine.SpyObj<ArazzoRunService>;
   let modals: jasmine.SpyObj<BsModalService>;
+  /** The request and response of each step, by testCaseId. */
+  let exchanges: Record<string, RequestResponsePair[]>;
+  /** The parameters of the route of the page, the run it shows. */
+  let params: BehaviorSubject<ParamMap>;
+
+  beforeEach(() => {
+    exchanges = {};
+  });
+
+  function exchange(name: string, status: string, content: string | undefined,
+                    requestContent?: string): RequestResponsePair[] {
+    return [{ type: 'reqRespPair',
+      request: { name, content: requestContent, headers: [] } as unknown as RequestResponsePair['request'],
+      response: { name, status, content, mediaType: 'text/plain', headers: [] } as unknown as RequestResponsePair['response'] }];
+  }
 
   function open(...answers: (WorkflowResult | Error)[]): void {
-    runs = jasmine.createSpyObj<ArazzoRunService>('ArazzoRunService', ['getRun']);
+    params = new BehaviorSubject<ParamMap>(convertToParamMap({ runId: 'run-1' }));
+    runs = jasmine.createSpyObj<ArazzoRunService>('ArazzoRunService', ['getRun', 'getExchanges']);
     runs.getRun.and.returnValues(...answers.map(answer => answer instanceof Error
       ? throwError(() => answer) : of(answer)));
+    runs.getExchanges.and.callFake((runId: string, testCaseId: string) => of(exchanges[testCaseId] ?? []));
     modals = jasmine.createSpyObj<BsModalService>('BsModalService', ['show']);
     TestBed.configureTestingModule({
       imports: [WorkflowRunPageComponent],
       providers: [
         provideRouter([]),
-        { provide: ActivatedRoute, useValue: { paramMap: of(convertToParamMap({ runId: 'run-1' })) } },
+        { provide: ActivatedRoute, useValue: { paramMap: params } },
         { provide: ArazzoRunService, useValue: runs },
-        { provide: BsModalService, useValue: modals }
+        { provide: BsModalService, useValue: modals },
+        // The bodies are shown as given to the highlighting, which is left out of these tests.
+        { provide: HighlightJS, useValue: { highlightAuto: () => new Promise(() => undefined) } }
       ]
     });
     fixture = TestBed.createComponent(WorkflowRunPageComponent);
@@ -139,8 +167,6 @@ describe('WorkflowRunPageComponent', () => {
       '1 · readPastry REST GET /pastry/{name} GetPastryByName 200 · 8 ms',
       '2 · reprice REST PATCH /pastry/{name} PatchPastry 200 · 5 ms'
     ]);
-    expect(texts('.workflow-run-step-output', stepElement('readPastry')))
-      .toEqual(['name = "Eclair Cafe"', 'price = 2.5']);
   }));
 
   it('tells where a failed run stopped, and which criterion did not hold', fakeAsync(() => {
@@ -155,7 +181,6 @@ describe('WorkflowRunPageComponent', () => {
     expect(texts('.workflow-run-property')[2]).toEqual('Inputs None declared');
     expect(Array.from(stepElement('readFirst').querySelectorAll('.workflow-run-criterion'))
       .map(row => texts('td', row).join(' | '))).toEqual(['$statusCode == 200 | $statusCode = 400 | Failed']);
-    expect(texts('.workflow-run-step-output', stepElement('list'))).toEqual(['first = "Baba Rhum"']);
     expect(stepElement('readFirst').classList).toContain('workflow-run-step-failed');
   }));
 
@@ -195,18 +220,153 @@ describe('WorkflowRunPageComponent', () => {
       .toEqual(['The run failed: The Arazzo minion at http://localhost:8082 did not receive the run']);
   }));
 
-  it('collapses and expands a step', fakeAsync(() => {
-    open(passedRun());
+  function toggle(stepId: string): void {
+    (stepElement(stepId).querySelector('.workflow-run-step-toggle') as HTMLButtonElement).click();
+    fixture.detectChanges();
+  }
+
+  function body(stepId: string): HTMLElement | null {
+    return stepElement(stepId).querySelector('.workflow-run-step-body');
+  }
+
+  /** The text given to the highlighting of a body, under the element of the given class in a step. */
+  function highlighted(stepId: string, selector: string): string[] {
+    return fixture.debugElement.queryAll(By.css('[data-step-id="' + stepId + '"] ' + selector))
+      .flatMap(section => section.queryAll(By.directive(HighlightAuto)))
+      .map(element => element.injector.get(HighlightAuto).code() ?? '');
+  }
+
+  it('expands the failing step, the steps that passed being expanded on demand', fakeAsync(() => {
+    open(failedRun());
     tick();
     fixture.detectChanges();
 
-    (stepElement('readPastry').querySelector('.workflow-run-step-toggle') as HTMLButtonElement).click();
-    fixture.detectChanges();
-    expect(stepElement('readPastry').querySelector('.workflow-run-step-body')).toBeNull();
+    expect(body('readFirst')).not.toBeNull();
+    expect(body('list')).toBeNull();
+    expect(stepElement('list').querySelector('.workflow-run-step-toggle')?.getAttribute('aria-expanded')).toEqual('false');
 
-    (stepElement('readPastry').querySelector('.workflow-run-step-toggle') as HTMLButtonElement).click();
+    toggle('list');
+    expect(body('list')).not.toBeNull();
+    toggle('list');
+    expect(body('list')).toBeNull();
+    toggle('readFirst');
+    expect(body('readFirst')).toBeNull();
+  }));
+
+  it('opens another run with its failing step expanded and the others not', fakeAsync(() => {
+    open(failedRun(), failedRun());
+    tick();
     fixture.detectChanges();
-    expect(stepElement('readPastry').querySelector('.workflow-run-step-body')).not.toBeNull();
+    toggle('list');
+    toggle('readFirst');
+
+    params.next(convertToParamMap({ runId: 'run-3' }));
+    tick();
+    fixture.detectChanges();
+
+    expect(runs.getRun).toHaveBeenCalledWith('run-3');
+    expect(body('list')).toBeNull();
+    expect(body('readFirst')).not.toBeNull();
+    discardPeriodicTasks();
+  }));
+
+  it('shows the request URL, the response status and the response body of the failing step', fakeAsync(() => {
+    exchanges['run-2-1'] = exchange('readFirst', '400', 'The response /name=Baba Rhum does not exist!');
+    open(failedRun());
+    tick();
+    fixture.detectChanges();
+
+    expect(runs.getExchanges).toHaveBeenCalledWith('run-2', 'run-2-1');
+    expect(texts('.workflow-run-request-url', stepElement('readFirst')))
+      .toEqual(['GET /rest/API+Pastry+-+2.0/2.0.0/pastry/Baba%20Rhum']);
+    expect(stepElement('readFirst').querySelector('.workflow-run-request-url')?.getAttribute('title'))
+      .toEqual(MICROCKS + '/rest/API+Pastry+-+2.0/2.0.0/pastry/Baba%20Rhum');
+    expect(texts('.workflow-run-response .workflow-run-exchange-property', stepElement('readFirst')))
+      .toEqual(['Status 400', 'Body']);
+    expect(highlighted('readFirst', '.workflow-run-response'))
+      .toEqual(['The response /name=Baba Rhum does not exist!']);
+  }));
+
+  it('shows the body a step sent, and says when a response has no body', fakeAsync(() => {
+    const run = passedRun();
+    run.steps[1] = { ...run.steps[1], testCaseId: 'run-1-1',
+      requestUrl: MICROCKS + '/rest/API+Pastry+-+2.0/2.0.0/pastry/Eclair%20Cafe' };
+    exchanges['run-1-1'] = exchange('reprice', '200', undefined, '{"price":2.6}');
+    open(run);
+    tick();
+    fixture.detectChanges();
+
+    toggle('reprice');
+
+    expect(highlighted('reprice', '.workflow-run-request')).toEqual(['{"price":2.6}']);
+    expect(texts('.workflow-run-response .workflow-run-exchange-property', stepElement('reprice')))
+      .toEqual(['Status 200', 'Body Empty']);
+  }));
+
+  it('still shows what the run recorded of a step whose exchange cannot be read', fakeAsync(() => {
+    open(failedRun());
+    runs.getExchanges.and.returnValue(throwError(() => new Error('500')));
+    tick();
+    fixture.detectChanges();
+
+    expect(texts('.workflow-run-request-url', stepElement('readFirst')))
+      .toEqual(['GET /rest/API+Pastry+-+2.0/2.0.0/pastry/Baba%20Rhum']);
+    expect(texts('.workflow-run-response .workflow-run-exchange-property', stepElement('readFirst')))
+      .toEqual(['Status 400', 'Body Empty']);
+  }));
+
+  it('reads the exchange of a step once while the run is followed', fakeAsync(() => {
+    const inProgress = failedRun();
+    inProgress.status = 'IN_PROGRESS';
+    open(inProgress, failedRun());
+    tick();
+    fixture.detectChanges();
+    tick(POLLING_INTERVAL);
+    fixture.detectChanges();
+
+    expect(runs.getRun).toHaveBeenCalledTimes(2);
+    expect(runs.getExchanges.calls.allArgs()).toEqual([['run-2', 'run-2-1']]);
+    discardPeriodicTasks();
+  }));
+
+  it('says when a step received no response', fakeAsync(() => {
+    const run = failedRun();
+    run.steps[1] = { ...run.steps[1], statusCode: undefined, criteria: [],
+      message: 'No response: java.net.ConnectException' };
+    open(run);
+    tick();
+    fixture.detectChanges();
+
+    expect(texts('.workflow-run-request-url', stepElement('readFirst')))
+      .toEqual(['GET /rest/API+Pastry+-+2.0/2.0.0/pastry/Baba%20Rhum']);
+    expect(texts('.workflow-run-response .workflow-run-no-response', stepElement('readFirst')))
+      .toEqual(['No response']);
+    expect(texts('.workflow-run-response .workflow-run-exchange-property', stepElement('readFirst'))).toEqual([]);
+  }));
+
+  it('shows each parameter of the failing step with its value and the expression it came from', fakeAsync(() => {
+    const run = failedRun();
+    run.steps[1].parameters!.push({ name: 'Accept', in: 'header', value: 'application/json' });
+    open(run);
+    tick();
+    fixture.detectChanges();
+
+    expect(Array.from(stepElement('readFirst').querySelectorAll('.workflow-run-parameter'))
+      .map(row => texts('td', row).join(' | '))).toEqual([
+      'name path | Baba Rhum | $steps.list.outputs.first',
+      'Accept header | application/json | Constant'
+    ]);
+  }));
+
+  it('shows each output of a step with the expression it came from', fakeAsync(() => {
+    open(failedRun());
+    tick();
+    fixture.detectChanges();
+
+    toggle('list');
+
+    expect(texts('.workflow-run-step-output', stepElement('list')))
+      .toEqual(['first = "Baba Rhum" from $response.body#/0/name']);
   }));
 
   it('shows a run in progress, then its final result without reload', fakeAsync(() => {

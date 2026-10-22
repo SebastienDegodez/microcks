@@ -111,10 +111,13 @@ public class WorkflowRunner {
       StepOperation operation = operationOf(step, specification);
       Instant start = clock.instant();
       EvaluationContext context = new EvaluationContext(specification.inputs(), stepOutputs, null);
+      List<ParameterValue> parameters = List.of();
       HttpCall call = null;
       HttpOutcome response = null;
       try {
-         call = call(step, operation, specification, context);
+         requireCallable(operation);
+         parameters = resolve(step.parameters(), context);
+         call = call(step, operation, parameters, specification, context);
          response = transport.send(call, specification.timeout());
          EvaluationContext answered = context.with(response);
          List<CriterionResult> criteria = step.successCriteria().stream()
@@ -122,11 +125,12 @@ public class WorkflowRunner {
          boolean passed = criteria.stream().allMatch(CriterionResult::held);
          return new StepResult(index, step.stepId(), operation, passed ? StepStatus.PASSED : StepStatus.FAILED,
                response.status(), elapsedSince(start), criteria,
-               passed ? evaluateAll(step.outputs(), answered) : Map.of(), call, response, null);
+               passed ? evaluateAll(step.outputs(), answered) : Map.of(), call, response, null, parameters,
+               passed ? step.outputs() : Map.of());
       } catch (IOException ioe) {
-         return failed(index, step, operation, start, new Exchange(call, null), "No response: " + ioe);
+         return failed(index, step, operation, start, new Exchange(parameters, call, null), "No response: " + ioe);
       } catch (ArazzoRunException are) {
-         return failed(index, step, operation, start, new Exchange(call, response), are.getMessage());
+         return failed(index, step, operation, start, new Exchange(parameters, call, response), are.getMessage());
       }
    }
 
@@ -134,16 +138,19 @@ public class WorkflowRunner {
          String message) {
       return new StepResult(index, step.stepId(), operation, StepStatus.FAILED,
             exchange.response() == null ? null : exchange.response().status(), elapsedSince(start), List.of(), Map.of(),
-            exchange.request(), exchange.response(), message);
+            exchange.request(), exchange.response(), message, exchange.parameters(), Map.of());
    }
 
-   /** What a step sent and received, each null when it did not happen. */
-   private record Exchange(HttpCall request, HttpOutcome response) {
+   /**
+    * What a step sent and received: the parameters it resolved, empty when it resolved none, and its request and
+    * response, each null when it did not happen.
+    */
+   private record Exchange(List<ParameterValue> parameters, HttpCall request, HttpOutcome response) {
    }
 
    private static StepResult notRun(int index, ArazzoStep step, RunSpecification specification) {
       return new StepResult(index, step.stepId(), operationOf(step, specification), StepStatus.NOT_RUN, null, 0,
-            List.of(), Map.of(), null, null, null);
+            List.of(), Map.of(), null, null, null, List.of(), Map.of());
    }
 
    /** The operation a step calls, with its method and path when its source gives them. */
@@ -156,17 +163,29 @@ public class WorkflowRunner {
             : new StepOperation(sourceName, operationId, target.method(), target.path());
    }
 
-   private HttpCall call(ArazzoStep step, StepOperation operation, RunSpecification specification,
-         EvaluationContext context) {
+   private static void requireCallable(StepOperation operation) {
       if (operation.method() == null) {
          throw new ArazzoRunException(
                "Operation " + operation.operationId() + " not found in source " + operation.sourceName());
       }
+   }
+
+   /** The parameters of a step with their values, each keeping the runtime expression it came from. */
+   private List<ParameterValue> resolve(List<ArazzoParameter> parameters, EvaluationContext context) {
+      return parameters.stream()
+            .map(parameter -> new ParameterValue(parameter.name(), parameter.in(),
+                  expressions.resolve(parameter.value(), context),
+                  ExpressionEvaluator.isExpression(parameter.value()) ? parameter.value() : null))
+            .toList();
+   }
+
+   private HttpCall call(ArazzoStep step, StepOperation operation, List<ParameterValue> parameters,
+         RunSpecification specification, EvaluationContext context) {
       String path = operation.path();
       StringJoiner query = new StringJoiner("&", "?", "").setEmptyValue("");
       Map<String, String> headers = new LinkedHashMap<>();
-      for (ArazzoParameter parameter : step.parameters()) {
-         String value = String.valueOf(expressions.resolve(parameter.value(), context));
+      for (ParameterValue parameter : parameters) {
+         String value = String.valueOf(parameter.value());
          switch (parameter.in()) {
             case "path" -> path = path.replace("{" + parameter.name() + "}", encode(value).replace("+", "%20"));
             case "query" -> query.add(encode(parameter.name()) + "=" + encode(value));

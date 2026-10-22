@@ -193,7 +193,8 @@ public class ArazzoRunService {
          List<WorkflowStepResult> steps = new ArrayList<>(
                run.getSteps().stream().filter(recorded -> recorded.index() != step.index()).toList());
          steps.add(new WorkflowStepResult(step.index(), step.stepId(), step.operation(), step.status(),
-               step.statusCode(), step.elapsedTime(), step.criteria(), step.outputs(), testCaseId, step.message()));
+               step.statusCode(), step.elapsedTime(), step.criteria(), step.outputs(), testCaseId, step.message(),
+               step.requestUrl(), step.parameters(), step.outputOrigins()));
          steps.sort(Comparator.comparingInt(WorkflowStepResult::index));
          run.setSteps(steps);
          return workflowResultRepository.save(run);
