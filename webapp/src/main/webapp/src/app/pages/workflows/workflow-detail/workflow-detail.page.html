@@ -144,6 +144,16 @@
                       <span *ngIf="criterion.type !== 'simple'" class="workflow-muted">&ngsp;({{ criterion.type }})</span>
                     </div>
                   </ng-container>
+
+                  <ng-container *ngIf="actionLines(step) as actions">
+                    <ng-container *ngIf="actions.length">
+                      <h4 class="workflow-step-section">Actions</h4>
+                      <div *ngFor="let line of actions" class="workflow-step-action" [attr.title]="line.action.name">
+                        <span class="fa workflow-step-action-icon" [class.fa-repeat]="line.action.type === 'retry'"
+                              [class.fa-sign-out]="line.action.type !== 'retry'" aria-hidden="true"></span>&ngsp;<span class="workflow-step-action-when">{{ line.when }}:</span>&ngsp;{{ line.text }}<ng-container *ngIf="line.action.criteria.length">&ngsp;<span class="workflow-muted">when</span><ng-container *ngFor="let criterion of line.action.criteria; let last = last">&ngsp;<code class="workflow-chip">{{ criterion.condition }}</code><ng-container *ngIf="criterion.context">&ngsp;<span class="workflow-muted">on</span>&ngsp;<code class="workflow-chip">{{ criterion.context }}</code></ng-container>{{ last ? '' : ',' }}</ng-container></ng-container>
+                      </div>
+                    </ng-container>
+                  </ng-container>
                 </div>
               </div>
             </div>

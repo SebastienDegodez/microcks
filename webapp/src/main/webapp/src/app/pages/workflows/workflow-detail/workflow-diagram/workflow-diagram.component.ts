@@ -33,10 +33,12 @@ import { startWith } from 'rxjs/operators';
 
 import { ArazzoStepDetail, ArazzoWorkflowDetail } from '../../../../models/arazzo-workflow.model';
 import { DiagramEdge, DiagramNode, WorkflowDiagram, layoutWorkflowDiagram } from './workflow-diagram.layout';
+import { StepActionLine, stepActionLines } from '../step-actions';
 
 /**
  * A read-only, top-down diagram of an Arazzo workflow: its inputs, its steps and its outputs chained by sequence
- * edges, and the values given to each step drawn as labelled data edges. The layout comes from
+ * edges, the values given to each step drawn as labelled data edges, and the actions of the steps drawn next to them:
+ * a loop for a retry, an exit for an end. The layout comes from
  * {@link layoutWorkflowDiagram}; once the nodes are rendered, their measured heights are given back to it so the
  * edges meet nodes whose text wrapped on more lines than estimated.
  */
@@ -58,6 +60,7 @@ export class WorkflowDiagramComponent implements AfterViewInit, OnDestroy {
 
   private current!: ArazzoWorkflowDetail;
   private observer?: ResizeObserver;
+  private stepActions = new WeakMap<ArazzoStepDetail, StepActionLine[]>();
   private nodesChanges?: Subscription;
 
   constructor(private cdr: ChangeDetectorRef, private zone: NgZone) {
@@ -97,6 +100,14 @@ export class WorkflowDiagramComponent implements AfterViewInit, OnDestroy {
   /** The success criteria of a step on one compact line. */
   criteriaOf(step: ArazzoStepDetail): string {
     return step.successCriteria.map(criterion => criterion.condition).join(' · ');
+  }
+
+  /** What a step does on success and on failure, one line each, read once per step. */
+  actionLines(step: ArazzoStepDetail): StepActionLine[] {
+    if (!this.stepActions.has(step)) {
+      this.stepActions.set(step, stepActionLines(step));
+    }
+    return this.stepActions.get(step)!;
   }
 
   outputsOf(workflow: ArazzoWorkflowDetail): { name: string; expression: string }[] {

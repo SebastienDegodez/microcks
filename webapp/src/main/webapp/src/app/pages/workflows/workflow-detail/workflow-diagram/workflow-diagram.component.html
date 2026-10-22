@@ -11,15 +11,26 @@
                 markerWidth="7" markerHeight="7" orient="auto-start-reverse">
           <path d="M 0 0 L 10 5 L 0 10 z" />
         </marker>
+        <marker id="workflow-diagram-arrow-retry" class="diagram-arrow-retry" viewBox="0 0 10 10" refX="9" refY="5"
+                markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" />
+        </marker>
+        <marker id="workflow-diagram-arrow-end" class="diagram-arrow-end" viewBox="0 0 10 10" refX="9" refY="5"
+                markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" />
+        </marker>
       </defs>
       <path *ngFor="let edge of diagram.edges; trackBy: trackEdge" class="diagram-edge"
             [class.diagram-edge-sequence]="edge.kind === 'sequence'" [class.diagram-edge-data]="edge.kind === 'data'"
+            [class.diagram-edge-retry]="edge.kind === 'retry'" [class.diagram-edge-end]="edge.kind === 'end'"
             [attr.data-from]="edge.from" [attr.data-to]="edge.to" [attr.d]="edge.path"
             [attr.marker-end]="'url(#workflow-diagram-arrow-' + edge.kind + ')'" />
     </svg>
 
     <ng-container *ngFor="let edge of diagram.edges; trackBy: trackEdge">
-      <div *ngIf="edge.label as label" class="diagram-data-label" [class.diagram-data-label-end]="label.align === 'end'"
+      <div *ngIf="edge.label as label" [class.diagram-data-label]="edge.kind === 'data'"
+           [class.diagram-action-label]="edge.kind !== 'data'" [class.diagram-action-label-end]="edge.kind === 'end'"
+           [class.diagram-data-label-end]="label.align === 'end'"
            [attr.data-from]="edge.from" [attr.data-to]="edge.to"
            [style.left.px]="label.x" [style.top.px]="label.y" [style.width.px]="label.width">
         <ng-container *ngFor="let line of label.lines"><div>{{ line }}</div>&ngsp;</ng-container>
@@ -48,6 +59,9 @@
           {{ step.operation.operationId }}<ng-container *ngIf="step.operation.reason">&ngsp;<span class="workflow-problem"><span class="pficon pficon-warning-triangle-o" aria-hidden="true"></span>&ngsp;{{ step.operation.reason }}</span></ng-container>
         </div>&ngsp;<div *ngIf="criteriaOf(step) as criteria" class="diagram-step-criteria">
           <span class="fa fa-check" aria-hidden="true"></span><code class="diagram-mono">{{ criteria }}</code>
+        </div>&ngsp;<div *ngFor="let line of actionLines(step)" class="diagram-step-action" [attr.title]="line.action.name">
+          <span class="fa" [class.fa-repeat]="line.action.type === 'retry'" [class.fa-sign-out]="line.action.type !== 'retry'"
+                aria-hidden="true"></span><span>{{ line.summary }}</span>
         </div>
       </div>
 

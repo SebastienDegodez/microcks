@@ -35,7 +35,7 @@
       <span class="pficon pficon-error-circle-o" aria-hidden="true"></span>
       <p>
         <ng-container *ngIf="failure.step as step">
-          <strong>Step {{ step.index + 1 }}, {{ step.stepId }}, failed</strong><ng-container *ngIf="failure.unmet.length">.
+          <strong>Step {{ step.index + 1 }}, {{ step.stepId }}, failed<ng-container *ngIf="failure.attempts > 1">&ngsp;after {{ failure.attempts }} attempts</ng-container></strong><ng-container *ngIf="failure.unmet.length">.
             Success {{ failure.unmet.length === 1 ? 'criterion' : 'criteria' }}<ng-container *ngFor="let criterion of failure.unmet; let last = last">&ngsp;<code class="workflow-run-chip">{{ criterion.condition }}</code>{{ last ? '' : ',' }}</ng-container>
             did not hold<ng-container *ngIf="evaluated(failure.unmet) as seen">: {{ seen }}</ng-container></ng-container><ng-container *ngIf="!failure.unmet.length && failure.message">: {{ failure.message }}</ng-container>. The workflow stopped there and produced no outputs.
         </ng-container>
@@ -79,20 +79,20 @@
            [class.workflow-run-step-not-run]="step.status === 'NOT_RUN'">
         <div class="workflow-run-step-heading">
           <button *ngIf="step.status !== 'NOT_RUN'" type="button" class="btn btn-link workflow-run-step-toggle"
-                  [attr.aria-expanded]="isExpanded(step)"
-                  [attr.aria-label]="(isExpanded(step) ? 'Collapse ' : 'Expand ') + step.stepId" (click)="toggle(step)">
-            <span class="fa" [class.fa-angle-down]="isExpanded(step)" [class.fa-angle-right]="!isExpanded(step)" aria-hidden="true"></span>
+                  [attr.aria-expanded]="isExpanded(step, run)"
+                  [attr.aria-label]="(isExpanded(step, run) ? 'Collapse ' : 'Expand ') + step.stepId" (click)="toggle(step)">
+            <span class="fa" [class.fa-angle-down]="isExpanded(step, run)" [class.fa-angle-right]="!isExpanded(step, run)" aria-hidden="true"></span>
           </button>
           <span *ngIf="step.status === 'NOT_RUN'" class="workflow-run-step-toggle-space"></span>
           <span class="workflow-run-step-status" aria-hidden="true"
                 [ngClass]="{ 'pficon pficon-ok': step.status === 'PASSED', 'pficon pficon-error-circle-o': step.status === 'FAILED', 'fa fa-circle-o': step.status === 'NOT_RUN' }"></span>
-          <span class="workflow-run-step-title">{{ step.index + 1 }} · {{ step.stepId }}</span>&ngsp;<span class="workflow-run-protocol-chip">REST</span>&ngsp;<code class="workflow-run-endpoint">{{ step.operation.method }} {{ step.operation.path }}</code>&ngsp;<span class="workflow-run-operation">{{ step.operation.operationId }}</span>&ngsp;<span class="workflow-run-step-result">
+          <span class="workflow-run-step-title">{{ step.index + 1 }} · {{ step.stepId }}</span>&ngsp;<span *ngIf="attemptOf(run, step) as attempt" class="workflow-run-step-attempt">attempt {{ attempt.attempt }} of {{ attempt.attempts }}<ng-container *ngIf="attempt.retried">, retried</ng-container></span>&ngsp;<span class="workflow-run-protocol-chip">REST</span>&ngsp;<code class="workflow-run-endpoint">{{ step.operation.method }} {{ step.operation.path }}</code>&ngsp;<span class="workflow-run-operation">{{ step.operation.operationId }}</span>&ngsp;<span class="workflow-run-step-result">
             <ng-container *ngIf="step.status === 'NOT_RUN'">Not run</ng-container>
             <ng-container *ngIf="step.status !== 'NOT_RUN'">{{ step.statusCode ?? 'No response' }} · {{ step.elapsedTime }} ms</ng-container>
           </span>
         </div>
 
-        <div *ngIf="isExpanded(step)" class="workflow-run-step-body">
+        <div *ngIf="isExpanded(step, run)" class="workflow-run-step-body">
           <p *ngIf="step.message" class="workflow-run-step-message">
             <span class="pficon pficon-error-circle-o" aria-hidden="true"></span>&ngsp;<span>{{ step.message }}</span>
           </p>
