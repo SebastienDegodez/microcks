@@ -280,8 +280,22 @@
 .workflow-step-replacement,
 .workflow-step-output,
 .workflow-step-criterion,
+.workflow-step-action,
 .workflow-output {
   margin-bottom: 6px;
+}
+
+/* An action of a step: what it does on success or on failure, with the criteria it applies on. */
+.workflow-step-action-icon {
+  color: var(--primary-400);
+}
+
+.workflow-step-action-icon.fa-sign-out {
+  color: var(--text-secondary);
+}
+
+.workflow-step-action-when {
+  font-weight: 600;
 }
 
 .workflow-step-body-payload {

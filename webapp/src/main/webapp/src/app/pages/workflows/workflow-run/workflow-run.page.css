@@ -306,3 +306,9 @@
     margin-left: 0;
   }
 }
+
+/* The attempt a slot is of a step called again by a retry action. */
+.workflow-run-step-attempt {
+  color: var(--text-secondary);
+  font-size: 12px;
+}

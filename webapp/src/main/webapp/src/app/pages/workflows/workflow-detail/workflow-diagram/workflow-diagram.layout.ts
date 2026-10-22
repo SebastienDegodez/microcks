@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 import { ArazzoExpressionUse, ArazzoStepDetail, ArazzoWorkflowDetail } from '../../../../models/arazzo-workflow.model';
+import { stepActionLines } from '../step-actions';
 
 /** A rectangle of the diagram, in pixels from its top left corner. */
 export type DiagramBox = { x: number; y: number; width: number; height: number };
@@ -33,9 +34,12 @@ export type DiagramNode = DiagramBox & {
 /** What a data edge carries, one line per text line; 'end' aligns the lines on the right edge of the box. */
 export type DiagramLabel = DiagramBox & { lines: string[]; align: 'start' | 'end' };
 
-/** A sequence edge goes from a node to the next one; a data edge brings a value to a step, on one side. */
+/**
+ * A sequence edge goes from a node to the next one; a data edge brings a value to a step, on one side; a retry edge
+ * loops on the step it calls again; an end edge leaves the step whose action ends the workflow.
+ */
 export type DiagramEdge = {
-  kind: 'sequence' | 'data';
+  kind: 'sequence' | 'data' | 'retry' | 'end';
   from: string;
   to: string;
   side?: 'left' | 'right';
@@ -63,6 +67,13 @@ const EXIT_ABOVE_BOTTOM = 12;
 const ENTRY_BELOW_TOP = 18;
 const ENTRY_STEP = 10;
 
+/** How far a retry loop and an end exit reach out of the right side of their step. */
+const ACTION_REACH = 24;
+/** The space between two end exits of a step, and between the lowest one and the bottom of the step. */
+const EXIT_STEP = 24;
+const EXIT_ABOVE_BOTTOM_ACTION = 30;
+const LOOP_HEIGHT = 26;
+
 const LABEL_MAX_CHARS = 28;
 const LABEL_GAP = 6;
 const LABEL_LINE = 16;
@@ -73,6 +84,8 @@ const LABEL_PADDING_Y = 3;
  * Lays the workflow out as a top-down flow chart: the inputs, each step in order, then the outputs, in one column
  * linked by sequence edges. Each value given to a step is a data edge curving on a side of the column: values of
  * the workflow inputs on the left, step outputs on the right, each with a label telling where the value goes.
+ * The actions of a step sit right next to it, on the right: a loop for a retry, a short exit for each action ending
+ * the workflow, each labelled; the data edges of the right side then curve beyond them.
  *
  * Node heights are estimated from their text; the heights measured once rendered (by node id) replace them.
  */
@@ -80,11 +93,15 @@ export function layoutWorkflowDiagram(workflow: ArazzoWorkflowDetail,
                                       measuredHeights: Record<string, number> = {}): WorkflowDiagram {
   const nodes = placeNodes(workflow, measuredHeights);
   const flows = dataFlows(workflow, nodes);
-  const left = sideExtent(flows.filter(flow => flow.side === 'left'));
-  const right = sideExtent(flows.filter(flow => flow.side === 'right'));
+  const left = sideExtent(flows.filter(flow => flow.side === 'left'), 0);
   nodes.forEach(node => node.x = MARGIN + left);
+  const actions = actionEdges(nodes);
+  const actionsExtent = Math.max(0, ...actions.map(edge => edge.label!.x + edge.label!.width - nodeRight(nodes)));
+  // Data edges on the right curve beyond the actions: their apex, at 3/4 of their lane, clears the action labels.
+  const shift = actionsExtent ? Math.ceil(actionsExtent * 4 / 3) : 0;
+  const right = Math.max(actionsExtent, sideExtent(flows.filter(flow => flow.side === 'right'), shift));
 
-  const edges = [...sequenceEdges(nodes), ...dataEdges(flows, nodes)];
+  const edges = [...sequenceEdges(nodes), ...actions, ...dataEdges(flows, nodes, shift)];
   const bottoms = [...nodes, ...edges.filter(edge => edge.label).map(edge => edge.label!)]
     .map(box => box.y + box.height);
   return {
@@ -131,12 +148,56 @@ function stepHeight(step: ArazzoStepDetail): number {
   const endpoint = operation.reason ? 0 : 20 * linesOf('REST  ' + operation.method + ' ' + operation.path, MONO_12);
   const operationId = 20 * linesOf(operation.operationId + (operation.reason ? '  ' + operation.reason : ''), SANS_13);
   const criteria = step.successCriteria.map(criterion => criterion.condition).join(' · ');
-  return NODE_PADDING + 28 + endpoint + operationId + (criteria ? 6 + 16 * linesOf('✓ ' + criteria, MONO_11) : 0);
+  const actions = stepActionLines(step).reduce((height, line) => height + 4 + 18 * linesOf('↻ ' + line.summary, SANS_13), 0);
+  return NODE_PADDING + 28 + endpoint + operationId + (criteria ? 6 + 16 * linesOf('✓ ' + criteria, MONO_11) : 0)
+    + actions;
+}
+
+function nodeRight(nodes: DiagramNode[]): number {
+  return nodes[0].x + nodes[0].width;
+}
+
+/**
+ * A retry loop leaves the right side of its step and comes back into it higher, as the step is called again; each
+ * action ending the workflow leaves it below the loop, success first, in a short labelled exit.
+ */
+function actionEdges(nodes: DiagramNode[]): DiagramEdge[] {
+  const edges: DiagramEdge[] = [];
+  nodes.filter(node => node.step).forEach(node => {
+    const step = node.step!;
+    const right = node.x + node.width;
+    const exits = stepActionLines(step).filter(line => line.action.type === 'end');
+    const lowest = node.y + node.height - EXIT_ABOVE_BOTTOM_ACTION;
+    exits.forEach((line, k) => {
+      const y = Math.round(lowest - (exits.length - 1 - k) * EXIT_STEP);
+      const label = actionLabel(['end on ' + line.outcome], right + ACTION_REACH, y);
+      edges.push({ kind: 'end', from: node.id, to: 'end:' + step.stepId + ':' + line.outcome + ':' + line.position,
+        path: `M ${right} ${y} L ${right + ACTION_REACH} ${y}`, label });
+    });
+    const retry = stepActionLines(step).find(line => line.action.type === 'retry');
+    if (retry) {
+      const startY = Math.round(lowest - exits.length * EXIT_STEP + (exits.length ? 10 : 0));
+      const endY = startY - LOOP_HEIGHT;
+      const control = right + Math.ceil(ACTION_REACH * 4 / 3);
+      const action = retry.action;
+      const label = actionLabel(['retry ×' + action.retryLimit + (action.retryAfter ? ' · ' + action.retryAfter + ' s' : '')],
+        right + ACTION_REACH, (startY + endY) / 2);
+      edges.push({ kind: 'retry', from: node.id, to: node.id, label,
+        path: `M ${right} ${startY} C ${control} ${startY} ${control} ${endY} ${right} ${endY}` });
+    }
+  });
+  return edges;
+}
+
+/** The label of an action, left aligned after the end of its edge, centred on the height it is given. */
+function actionLabel(lines: string[], x: number, middle: number): DiagramLabel {
+  const size = labelSize(lines);
+  return { lines, align: 'start', x: x + LABEL_GAP, y: Math.round(middle - size.height / 2), ...size };
 }
 
 function sequenceEdges(nodes: DiagramNode[]): DiagramEdge[] {
-  // The Arazzo subset read today only runs steps one after the other: onSuccess, onFailure and goto are refused at
-  // import. Branching edges, from a step to the step its success or failure action goes to, would be added here.
+  // The Arazzo subset read today runs steps one after the other, retrying a step or ending the workflow early (see
+  // actionEdges); goto is refused at import. Branching edges, to the step a goto goes to, would be added here.
   return nodes.slice(1).map((node, i) => {
     const above = nodes[i];
     const middle = above.x + above.width / 2;
@@ -192,8 +253,8 @@ function laneOffset(lane: number): number {
 }
 
 /** How far a curve bulges from the side of the nodes: a cubic curve reaches 3/4 of its control points. */
-function bulge(lane: number): number {
-  return Math.ceil(laneOffset(lane) * 3 / 4);
+function bulge(lane: number, shift: number): number {
+  return Math.ceil((laneOffset(lane) + shift) * 3 / 4);
 }
 
 function labelSize(lines: string[]): { width: number; height: number } {
@@ -204,11 +265,12 @@ function labelSize(lines: string[]): { width: number; height: number } {
 }
 
 /** The room a side takes next to the nodes: the widest bulge plus its label. */
-function sideExtent(flows: DataFlow[]): number {
-  return Math.max(0, ...flows.map(flow => bulge(flow.lane) + LABEL_GAP + labelSize(flow.lines).width));
+function sideExtent(flows: DataFlow[], shift: number): number {
+  return Math.max(0, ...flows.map(flow => bulge(flow.lane, shift) + LABEL_GAP + labelSize(flow.lines).width));
 }
 
-function dataEdges(flows: DataFlow[], nodes: DiagramNode[]): DiagramEdge[] {
+/** The data edges; those of the right side curve further out by the given shift, beyond the actions of the steps. */
+function dataEdges(flows: DataFlow[], nodes: DiagramNode[], rightShift: number): DiagramEdge[] {
   const entries = new Map<string, number>();
   const edges = flows.map(flow => {
     const source = nodes[indexOf(nodes, flow.from)];
@@ -218,11 +280,12 @@ function dataEdges(flows: DataFlow[], nodes: DiagramNode[]): DiagramEdge[] {
     const entry = entries.get(flow.side + flow.to) ?? 0;
     entries.set(flow.side + flow.to, entry + 1);
 
+    const shift = flow.side === 'right' ? rightShift : 0;
     const startY = source.y + source.height - EXIT_ABOVE_BOTTOM;
     const endY = target.y + ENTRY_BELOW_TOP + entry * ENTRY_STEP;
-    const laneX = x + direction * laneOffset(flow.lane);
+    const laneX = x + direction * (laneOffset(flow.lane) + shift);
     const size = labelSize(flow.lines);
-    const apex = x + direction * (bulge(flow.lane) + LABEL_GAP);
+    const apex = x + direction * (bulge(flow.lane, shift) + LABEL_GAP);
     const label: DiagramLabel = { lines: flow.lines, align: flow.side === 'left' ? 'end' : 'start',
       x: flow.side === 'left' ? apex - size.width : apex, y: Math.round((startY + endY - size.height) / 2), ...size };
     return { kind: 'data' as const, from: flow.from, to: flow.to, side: flow.side, label,

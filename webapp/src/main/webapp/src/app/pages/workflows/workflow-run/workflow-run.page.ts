@@ -35,12 +35,19 @@ export const POLLING_INTERVAL = 2000;
 /** The run read from the API, or null when it does not exist. */
 type RunState = { run: WorkflowResult | null };
 
-/** Why a run failed: at a step, with its unmet criteria or its message, or before any step tells it. */
+/**
+ * Why a run failed: at a step, with its unmet criteria or its message, or before any step tells it; attempts tells how
+ * many times the step was called, more than once when it was retried.
+ */
 export type RunFailure = {
   step?: WorkflowStepResult;
   unmet: WorkflowCriterionResult[];
   message?: string;
+  attempts: number;
 };
+
+/** Which attempt of a retried step a slot of the run is, from 1, out of how many, and whether a later one followed. */
+export type StepAttempt = { attempt: number; attempts: number; retried: boolean };
 
 /** The request and response a step exchanged, as stored; absent when the step sent nothing. */
 export type StepExchange = { pair?: RequestResponsePair };
@@ -93,16 +100,35 @@ export class WorkflowRunPageComponent implements OnInit {
     return new Date(run.startedDate).toISOString();
   }
 
-  /** Why the run failed; null when it did not. */
+  /**
+   * Why the run failed; null when it did not. A run fails at its last failed slot: the attempts of a retried step
+   * before it failed too.
+   */
   failure(run: WorkflowResult): RunFailure | null {
     if (run.status !== 'FAILURE') {
       return null;
     }
-    const step = run.steps.find(candidate => candidate.status === 'FAILED');
+    const step = [...run.steps].reverse().find(candidate => candidate.status === 'FAILED');
     if (!step) {
-      return { unmet: [], message: run.message };
+      return { unmet: [], message: run.message, attempts: 0 };
     }
-    return { step, unmet: step.criteria.filter(criterion => !criterion.held), message: step.message };
+    return { step, unmet: step.criteria.filter(criterion => !criterion.held), message: step.message,
+      attempts: this.attemptsOf(run, step).length };
+  }
+
+  /** The attempt a slot is of a step called several times, as a retry action says; null for a step called once. */
+  attemptOf(run: WorkflowResult, step: WorkflowStepResult): StepAttempt | null {
+    const attempts = this.attemptsOf(run, step);
+    if (attempts.length < 2) {
+      return null;
+    }
+    const attempt = attempts.indexOf(step) + 1;
+    return { attempt, attempts: attempts.length, retried: attempt < attempts.length };
+  }
+
+  /** The slots where a step ran: one per call, in execution order. */
+  private attemptsOf(run: WorkflowResult, step: WorkflowStepResult): WorkflowStepResult[] {
+    return run.steps.filter(slot => slot.stepId === step.stepId && slot.status !== 'NOT_RUN');
   }
 
   /** What the unmet criteria saw: "the response status was 400", or the value of each expression. */
@@ -111,8 +137,10 @@ export class WorkflowRunPageComponent implements OnInit {
       ? 'the response status was ' + value.value : value.expression + ' was ' + this.json(value.value)).join(', ');
   }
 
-  isExpanded(step: WorkflowStepResult): boolean {
-    return step.status !== 'NOT_RUN' && (step.status === 'FAILED') !== this.toggled.has(step.index);
+  /** The step the run failed at comes expanded, the attempts of a retried step before it do not. */
+  isExpanded(step: WorkflowStepResult, run: WorkflowResult): boolean {
+    const failedThere = step.status === 'FAILED' && !this.attemptOf(run, step)?.retried;
+    return step.status !== 'NOT_RUN' && failedThere !== this.toggled.has(step.index);
   }
 
   toggle(step: WorkflowStepResult): void {

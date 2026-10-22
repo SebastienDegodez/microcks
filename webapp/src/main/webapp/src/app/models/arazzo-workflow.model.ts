@@ -59,6 +59,17 @@ export type ArazzoStepCriterion = {
   type: string;
 };
 
+/** What a step does when it succeeds or fails: retry the step, or end the workflow, when its criteria hold. */
+export type ArazzoStepAction = {
+  name: string;
+  type: 'retry' | 'end';
+  /** How long a retry waits before calling the step again, in seconds; absent for an end. */
+  retryAfter?: number;
+  /** How many times a retry may call the step again; absent for an end. */
+  retryLimit?: number;
+  criteria: ArazzoStepCriterion[];
+};
+
 export type ArazzoStepDetail = {
   stepId: string;
   description?: string;
@@ -67,6 +78,10 @@ export type ArazzoStepDetail = {
   requestBody?: ArazzoStepRequestBody;
   successCriteria: ArazzoStepCriterion[];
   outputs: Record<string, string>;
+  /** What the step does when it succeeds, in the order of the document. */
+  onSuccess?: ArazzoStepAction[];
+  /** What the step does when it fails, in the order of the document. */
+  onFailure?: ArazzoStepAction[];
 };
 
 /** Where a step uses a runtime expression: place is path, query, header, body or criterion. */

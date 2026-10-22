@@ -35,6 +35,7 @@ import { openRunDialog } from '../workflow-run-dialog/workflow-run.dialog';
 import { TimeAgoPipe } from '../../../components/time-ago.pipe';
 import { ImportArazzoDialogComponent } from '../import-arazzo-dialog/import-arazzo-dialog.component';
 import { WorkflowDiagramComponent } from './workflow-diagram/workflow-diagram.component';
+import { StepActionLine, stepActionLines } from './step-actions';
 
 /** The steps as cards, or the workflow as a diagram; the URL keeps it as ?view=diagram so a link can be shared. */
 export type WorkflowView = 'steps' | 'diagram';
@@ -65,6 +66,7 @@ type WorkflowState = { workflow: ArazzoWorkflowDetail | null; view: WorkflowView
 export class WorkflowDetailPageComponent implements OnInit {
 
   state!: Observable<WorkflowState>;
+  private stepActions = new WeakMap<ArazzoStepDetail, StepActionLine[]>();
 
   /** Emits to read the workflow again, once the links of its sources changed. */
   private readonly reload = new BehaviorSubject<void>(undefined);
@@ -207,6 +209,14 @@ export class WorkflowDetailPageComponent implements OnInit {
   /** The import date as the time-ago pipe reads it, whether the API gives it as a timestamp or an ISO string. */
   importDateOf(workflow: ArazzoWorkflowDetail): string {
     return new Date(workflow.importDate).toISOString();
+  }
+
+  /** What a step does on success and on failure, read once per step. */
+  actionLines(step: ArazzoStepDetail): StepActionLine[] {
+    if (!this.stepActions.has(step)) {
+      this.stepActions.set(step, stepActionLines(step));
+    }
+    return this.stepActions.get(step)!;
   }
 
   entries(expressions: Record<string, string>): { name: string; expression: string }[] {
