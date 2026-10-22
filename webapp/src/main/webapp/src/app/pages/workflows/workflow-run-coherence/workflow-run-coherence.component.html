@@ -1,0 +1,16 @@
+<div class="workflow-run-coherence" role="note">
+  <span class="pficon pficon-info" aria-hidden="true"></span>
+  <div class="workflow-run-coherence-content">
+    <p class="workflow-run-coherence-text">
+      <strong>The mocks do not form a coherent scenario.</strong>&ngsp;<ng-container *ngIf="origins() as origins">{{ origins }}, but&ngsp;</ng-container>{{ missing.operationId }} has no example for<ng-container *ngFor="let parameter of missing.parameters; let index = index; let first = first">{{ first ? '' : (isLast(index) ? ' and' : ',') }}&ngsp;<code class="workflow-run-chip">{{ parameter.name }}</code> = {{ sent(parameter.value) }}</ng-container>.
+      Add that example to the OpenAPI document, or let the workflow send a value that has one.
+    </p>
+    <p class="workflow-run-coherence-actions">
+      <a [routerLink]="['/services', missing.serviceId]" [queryParams]="{ operation: missing.operationName }"
+         [title]="missing.operationName + ' on ' + apiOf()">Open {{ missing.operationId }}</a>
+      <button *ngIf="hasAICopilotEnabled()" type="button" class="btn btn-link workflow-run-coherence-copilot"
+              (click)="generateWithAICopilot()">Generate the example with the AI Copilot</button>
+    </p>
+    <p *ngIf="outcome" class="workflow-run-coherence-outcome" role="status">{{ outcome }}</p>
+  </div>
+</div>

@@ -27,6 +27,7 @@ import { RequestResponsePair } from '../../../models/service.model';
 import { ArazzoRunService } from '../../../services/arazzo-run.service';
 import { TimeAgoPipe } from '../../../components/time-ago.pipe';
 import { openRunDialog } from '../workflow-run-dialog/workflow-run.dialog';
+import { WorkflowRunCoherenceComponent } from '../workflow-run-coherence/workflow-run-coherence.component';
 
 /** How often a run in progress is read again, in milliseconds. */
 export const POLLING_INTERVAL = 2000;
@@ -49,7 +50,7 @@ export type StepExchange = { pair?: RequestResponsePair };
   selector: 'app-workflow-run-page',
   templateUrl: './workflow-run.page.html',
   styleUrls: ['./workflow-run.page.css'],
-  imports: [CommonModule, RouterLink, TimeAgoPipe, HighlightAuto]
+  imports: [CommonModule, RouterLink, TimeAgoPipe, HighlightAuto, WorkflowRunCoherenceComponent]
 })
 export class WorkflowRunPageComponent implements OnInit {
 

@@ -100,6 +100,8 @@ export type WorkflowResult = {
   secretRef?: { secretId: string; name: string };
   /** The number of the run in its document, from 1; absent for a run launched before runs were numbered. */
   number?: number;
+  /** The example the mocks lack for the run to go on; absent when the run did not fail for a missing example. */
+  missingExample?: WorkflowMissingExample;
 };
 
 /** The implementations a run calls instead of the mocks: one base URL per linked source, and an optional secret. */
@@ -133,4 +135,17 @@ export type WorkflowRunFilter = {
   workflow?: string;
   target?: WorkflowRunTarget;
   result?: WorkflowRunStatus;
+};
+
+/** The step of a run against the mocks that sent values for which the operation it called has no example. */
+export type WorkflowMissingExample = {
+  stepIndex: number;
+  stepId: string;
+  /** The id of the Microcks API whose mocks the step called. */
+  serviceId: string;
+  operationId: string;
+  /** The name of the operation in Microcks, such as GET /pastry/{name}. */
+  operationName: string;
+  /** The parameters the mocks dispatch on, as the step sent them. */
+  parameters: WorkflowParameterValue[];
 };
