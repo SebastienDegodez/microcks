@@ -1270,7 +1270,7 @@ paths:
               $ref: '#/components/schemas/WorkflowRunRequest'
         required: true
       tags:
-      - test
+      - workflow
       responses:
         "201":
           headers:
@@ -1323,7 +1323,7 @@ paths:
   /arazzo/runs/{runId}:
     get:
       tags:
-      - test
+      - workflow
       responses:
         "200":
           content:
@@ -2946,3 +2946,5 @@ tags:
   description: Operations related to metrics
 - name: webhook
   description: Operations related to Webhook registrations for Service Operations
+- name: workflow
+  description: Operations related to Arazzo workflow runs
