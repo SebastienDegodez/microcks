@@ -49,6 +49,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
@@ -83,7 +84,7 @@ class ArazzoMinionContractTest {
                               Map.of("GetPastries", new OperationTarget("GET", "/pastry"), "GetPastryByName",
                                     new OperationTarget("GET", "/pastry/{name}"), "PatchPastry",
                                     new OperationTarget("PATCH", "/pastry/{name}")),
-                              "openapi: 3.0.2", "http://microcks:8080/api/resources/")),
+                              "openapi: 3.0.2", "http://microcks:8080/api/resources/", true)),
                   Duration.ofSeconds(10), true),
             request.toSpecification("http://microcks:8080"));
    }
@@ -112,6 +113,7 @@ class ArazzoMinionContractTest {
             .toSpecification("http://microcks:8080");
 
       assertEquals(URI.create("http://pastry.example:8080"), specification.sources().get("pastryApi").baseUrl());
+      assertFalse(specification.sources().get("pastryApi").mocks());
    }
 
    @Test
@@ -138,7 +140,10 @@ class ArazzoMinionContractTest {
                         new ExpressionValue("$response.body#/status", "available")),
                   true)),
             outputs("name", "Eclair Cafe", "price", 2.5),
-            new HttpCall("GET", URI.create(MOCKS + "/pastry/Eclair%20Cafe"), Map.of("Accept", "application/json"),
+            new HttpCall("GET", URI.create(MOCKS + "/pastry/Eclair%20Cafe"),
+                  Map.of("Accept", "application/json", "baggage",
+                        "microcks-arazzo-run=6719f0c2a1b2c3d4e5f60718,microcks-arazzo-workflow=readThenReprice,"
+                              + "microcks-arazzo-step=readPastry,microcks-arazzo-attempt=1"),
                   null),
             new HttpOutcome(200, Map.of("Content-Type", List.of("application/json")),
                   "{\"name\":\"Eclair Cafe\",\"price\":2.5,\"status\":\"available\"}"),

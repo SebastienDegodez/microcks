@@ -15,13 +15,22 @@
  */
 import { Component, Input } from "@angular/core";
 import { CommonModule } from "@angular/common";
+import { RouterLink } from "@angular/router";
 import { Attributes, HrTime } from "@opentelemetry/api";
 import { ReadableSpan, TimedEvent } from "@opentelemetry/sdk-trace-base";
+
+/** The Arazzo run a trace comes from, as the mock recorded it from the W3C baggage of the call. */
+export interface ArazzoTraceOrigin {
+  runId: string;
+  workflowId?: string;
+  stepId?: string;
+  attempt?: number;
+}
 
 @Component({
   selector: "app-trace-group-list",
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, RouterLink],
   templateUrl: "./trace-group-list.component.html",
   styleUrls: ["./trace-group-list.component.css"],
 })
@@ -198,6 +207,26 @@ export class TraceGroupListComponent {
 
   getTraceId(trace: ReadableSpan[]): string {
     return trace[0].spanContext().traceId;
+  }
+
+  /** The Arazzo run a trace comes from, when a span of the mock invocation names one; null otherwise. */
+  arazzoOriginOf(trace: ReadableSpan[]): ArazzoTraceOrigin | null {
+    const attributes = trace.find((span) => span.attributes?.["arazzo.run.id"] != null)?.attributes;
+    if (!attributes) return null;
+    const text = (key: string) => (attributes[key] != null ? String(attributes[key]) : undefined);
+    const attempt = attributes["arazzo.attempt"];
+    return {
+      runId: String(attributes["arazzo.run.id"]),
+      workflowId: text("arazzo.workflow.id"),
+      stepId: text("arazzo.step.id"),
+      attempt: attempt != null ? Number(attempt) : undefined,
+    };
+  }
+
+  /** Which workflow, step and attempt of its run a trace comes from, as far as it tells. */
+  arazzoLabel(origin: ArazzoTraceOrigin): string {
+    const attempt = origin.attempt != null ? `attempt ${origin.attempt}` : undefined;
+    return [origin.workflowId, origin.stepId, attempt].filter((part) => !!part).join(" · ");
   }
 
   // Format value for display, handling JSON, strings with \n, etc.

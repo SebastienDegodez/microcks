@@ -26,10 +26,12 @@ import java.util.Map;
  *                               against; null when the responses are not validated
  * @param openApiContractBaseUrl The URL the relative references of the contract resolve against, such as
  *                               http://microcks:8080/api/resources/; null when it has none
+ * @param mocks                  Whether the base URL is that of the Microcks mocks of the API, whose calls carry the
+ *                               W3C baggage telling Live Traces which run, step and attempt they come from
  * @author SebastienDegodez
  */
 public record SourceTarget(URI baseUrl, Map<String, OperationTarget> operations, String openApiContract,
-      String openApiContractBaseUrl) {
+      String openApiContractBaseUrl, boolean mocks) {
 
    /** A source whose responses are not validated against a contract. */
    public SourceTarget(URI baseUrl, Map<String, OperationTarget> operations) {
@@ -39,5 +41,11 @@ public record SourceTarget(URI baseUrl, Map<String, OperationTarget> operations,
    /** A source whose contract has no relative reference to resolve. */
    public SourceTarget(URI baseUrl, Map<String, OperationTarget> operations, String openApiContract) {
       this(baseUrl, operations, openApiContract, null);
+   }
+
+   /** A source whose calls are not marked for Live Traces, such as an implementation of its API. */
+   public SourceTarget(URI baseUrl, Map<String, OperationTarget> operations, String openApiContract,
+         String openApiContractBaseUrl) {
+      this(baseUrl, operations, openApiContract, openApiContractBaseUrl, false);
    }
 }

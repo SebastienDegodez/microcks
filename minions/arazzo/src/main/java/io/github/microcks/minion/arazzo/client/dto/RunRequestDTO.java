@@ -50,9 +50,11 @@ public record RunRequestDTO(String runId, String workflowId, String arazzoDocume
          Map<String, OperationTarget> operations = new LinkedHashMap<>();
          source.operations().forEach((operationId, operation) -> operations.put(operationId,
                new OperationTarget(operation.method(), operation.path())));
-         String baseUrl = source.baseUrl().startsWith("/") ? microcksUrl + source.baseUrl() : source.baseUrl();
+         // A base URL relative to Microcks is that of its mocks.
+         boolean mocks = source.baseUrl().startsWith("/");
+         String baseUrl = mocks ? microcksUrl + source.baseUrl() : source.baseUrl();
          targets.put(name, new SourceTarget(URI.create(baseUrl), operations, source.openApiContract(),
-               source.openApiContractBaseUrl()));
+               source.openApiContractBaseUrl(), mocks));
       });
       return new RunSpecification(runId, workflowId, arazzoDocument, inputs, targets, Duration.ofMillis(timeoutMS),
             secret == null ? RunSecret.NONE

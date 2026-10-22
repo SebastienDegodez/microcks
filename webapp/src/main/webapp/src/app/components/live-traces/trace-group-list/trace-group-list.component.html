@@ -13,6 +13,13 @@
       </small>
       <span class="muted"> | {{ getEvents(trace).length }} event(s)</span>
       <span *ngIf="getTraceError(trace)" class="text-danger"> | {{ getTraceError(trace) }}</span>
+      <span *ngIf="arazzoOriginOf(trace) as origin" class="trace-arazzo">
+        <span class="trace-arazzo-chip">Arazzo</span>
+        <span *ngIf="arazzoLabel(origin) as label" class="trace-arazzo-origin">{{ label }}</span>
+        <a class="trace-arazzo-run" [routerLink]="['/workflows/runs', origin.runId]"
+           [title]="'Open run ' + origin.runId + (origin.workflowId ? ' of ' + origin.workflowId : '')"
+           (click)="$event.stopPropagation()">View run</a>
+      </span>
     </div>
     <div class="trace-body" *ngIf="isTraceOpen(trace)">
       <ul class="events">
