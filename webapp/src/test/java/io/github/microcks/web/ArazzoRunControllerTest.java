@@ -128,12 +128,15 @@ class ArazzoRunControllerTest {
    }
 
    @Test
-   void anUnknownWorkflowOrRunIsNotFound() throws Exception {
+   void anUnknownDocumentOrRunIsNotFoundAndAnUnknownWorkflowIsABadRequest() throws Exception {
       ArazzoRunController controller = new ArazzoRunController(arazzoRunService);
       ArazzoDocument document = pastryScenariosAreImported("pastry-scenarios.arazzo.yaml");
 
-      assertEquals(404, controller.launchRun(document.getId(), "unknown", new ArazzoRunLaunchDTO(Map.of(), null))
+      assertEquals(404, controller.launchRun("unknown", "readThenReprice", new ArazzoRunLaunchDTO(Map.of(), null))
             .getStatusCode().value());
+      ResponseEntity<Object> refused = controller.launchRun(document.getId(), "unknown",
+            new ArazzoRunLaunchDTO(Map.of(), null));
+      assertEquals("400 Unknown workflow: unknown", refused.getStatusCode().value() + " " + refused.getBody());
       assertEquals(404, controller.getRun("unknown").getStatusCode().value());
       assertEquals(404, controller.reportStep("unknown", contract("passedStep", ArazzoStepReportDTO.class))
             .getStatusCode().value());
