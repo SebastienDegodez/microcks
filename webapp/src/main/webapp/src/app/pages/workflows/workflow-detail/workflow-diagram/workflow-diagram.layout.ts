@@ -94,12 +94,14 @@ const LABEL_PADDING_Y = 3;
  *
  * When a step declares dependsOn (Arazzo 1.1) and comes after fewer steps, see {@link layoutDependencies}.
  *
- * Node heights are estimated from their text; the heights measured once rendered (by node id) replace them.
+ * Node heights are estimated from their text; the heights measured once rendered (by node id) replace them. The width
+ * of the panel of the diagram, once measured, lets the parallel steps of a workflow with dependsOn fit it.
  */
 export function layoutWorkflowDiagram(workflow: ArazzoWorkflowDetail,
-                                      measuredHeights: Record<string, number> = {}): WorkflowDiagram {
+                                      measuredHeights: Record<string, number> = {},
+                                      availableWidth?: number): WorkflowDiagram {
   if (dependsOnRelaxesTheOrder(workflow)) {
-    return layoutDependencies(workflow, measuredHeights);
+    return layoutDependencies(workflow, measuredHeights, availableWidth);
   }
   const nodes = placeNodes(workflow, measuredHeights);
   const flows = dataFlows(workflow, nodes);
@@ -122,12 +124,15 @@ export function layoutWorkflowDiagram(workflow: ArazzoWorkflowDetail,
   };
 }
 
-function placeNodes(workflow: ArazzoWorkflowDetail, measuredHeights: Record<string, number>): DiagramNode[] {
+/** The nodes one below the other, each as wide as given, its height estimated from its text unless measured. */
+function placeNodes(workflow: ArazzoWorkflowDetail, measuredHeights: Record<string, number>,
+                    width = NODE_WIDTH): DiagramNode[] {
+  const text = width - (NODE_WIDTH - NODE_TEXT_WIDTH);
   const nodes: DiagramNode[] = [
-    { id: 'inputs', kind: 'inputs', x: 0, y: 0, width: NODE_WIDTH, height: inputsHeight(workflow) },
+    { id: 'inputs', kind: 'inputs', x: 0, y: 0, width, height: inputsHeight(workflow, text) },
     ...workflow.steps.map((step, index) => ({ id: 'step:' + step.stepId, kind: 'step' as const, step, index,
-      x: 0, y: 0, width: NODE_WIDTH, height: stepHeight(step) })),
-    { id: 'outputs', kind: 'outputs', x: 0, y: 0, width: NODE_WIDTH, height: outputsHeight(workflow) }
+      x: 0, y: 0, width, height: stepHeight(step, text) })),
+    { id: 'outputs', kind: 'outputs', x: 0, y: 0, width, height: outputsHeight(workflow, text) }
   ];
   let y = MARGIN;
   nodes.forEach(node => {
@@ -138,33 +143,33 @@ function placeNodes(workflow: ArazzoWorkflowDetail, measuredHeights: Record<stri
   return nodes;
 }
 
-function linesOf(text: string, charWidth: number, width = NODE_TEXT_WIDTH): number {
+function linesOf(text: string, charWidth: number, width: number): number {
   return Math.max(1, Math.ceil(text.length * charWidth / width));
 }
 
-function inputsHeight(workflow: ArazzoWorkflowDetail): number {
+function inputsHeight(workflow: ArazzoWorkflowDetail, text: number): number {
   const chips = workflow.inputs.map(input => input.name + '   ').join('');
-  return NODE_PADDING + 22 + 22 * linesOf(chips || 'No input', MONO_12);
+  return NODE_PADDING + 22 + 22 * linesOf(chips || 'No input', MONO_12, text);
 }
 
-function outputsHeight(workflow: ArazzoWorkflowDetail): number {
+function outputsHeight(workflow: ArazzoWorkflowDetail, text: number): number {
   const outputs = Object.entries(workflow.outputs).map(([name, expression]) => name + ' ← ' + expression);
   return NODE_PADDING + 22 + (outputs.length ? outputs : ['No output'])
-    .reduce((height, output) => height + 4 + 18 * linesOf(output, MONO_12), 0);
+    .reduce((height, output) => height + 4 + 18 * linesOf(output, MONO_12, text), 0);
 }
 
-function stepHeight(step: ArazzoStepDetail): number {
+function stepHeight(step: ArazzoStepDetail, text: number): number {
   const operation = step.operation;
   const endpointText = step.messaging ? 'EVENT  ' + stepEndpoint(step) : 'REST  ' + operation.method + ' ' + operation.path;
-  const endpoint = operation.reason ? 0 : 20 * linesOf(endpointText, MONO_12);
+  const endpoint = operation.reason ? 0 : 20 * linesOf(endpointText, MONO_12, text);
   // A step on a channel found in its AsyncAPI contract names no operation.
   const operationText = (operation.operationId || operation.channel) + (operation.reason ? '  ' + operation.reason : '');
-  const operationId = operation.operationId || operation.reason ? 20 * linesOf(operationText, SANS_13) : 0;
+  const operationId = operation.operationId || operation.reason ? 20 * linesOf(operationText, SANS_13, text) : 0;
   const messaging = stepMessagingSummary(step);
   const criteria = step.successCriteria.map(criterion => criterion.condition).join(' · ');
-  const actions = stepActionLines(step).reduce((height, line) => height + 4 + 18 * linesOf('↻ ' + line.summary, SANS_13), 0);
-  return NODE_PADDING + 28 + endpoint + operationId + (messaging ? 4 + 16 * linesOf('✉ ' + messaging, MONO_11) : 0)
-    + (criteria ? 6 + 16 * linesOf('✓ ' + criteria, MONO_11) : 0) + actions;
+  const actions = stepActionLines(step).reduce((height, line) => height + 4 + 18 * linesOf('↻ ' + line.summary, SANS_13, text), 0);
+  return NODE_PADDING + 28 + endpoint + operationId + (messaging ? 4 + 16 * linesOf('✉ ' + messaging, MONO_11, text) : 0)
+    + (criteria ? 6 + 16 * linesOf('✓ ' + criteria, MONO_11, text) : 0) + actions;
 }
 
 function nodeRight(nodes: DiagramNode[]): number {
@@ -321,6 +326,8 @@ function separateLabels(labels: DiagramLabel[]): void {
 
 /** The room between two steps of a row, besides the room the actions of a step take on its right. */
 const COLUMN_GAP = 24;
+/** The narrowest a node gets for the steps of a level to fit side by side in the panel of the diagram. */
+const MIN_NODE_WIDTH = 220;
 
 /** The steps a step must come after: those the workflow page gives, or else every step listed before it. */
 function prerequisitesOf(workflow: ArazzoWorkflowDetail, index: number): string[] {
@@ -336,37 +343,58 @@ function dependsOnRelaxesTheOrder(workflow: ArazzoWorkflowDetail): boolean {
 }
 
 /**
- * Lays out a workflow whose steps declare dependsOn: each step stands one row below the lowest step it must come after,
- * the steps of a row side by side in the order of the list, each row centred under the inputs. A sequence edge comes to
- * a step from each step it must come after that no other of them already comes after, from the inputs to a step that
- * comes after none, and goes to the outputs from each step no step comes after. The actions of a step sit next to it,
- * as in one column, with room for them before the next step of its row. The values given to the steps are not drawn:
- * the Steps view and the Inputs panel tell where each one goes.
+ * Lays out a workflow whose steps declare dependsOn: each step stands one level below the lowest step it must come
+ * after, the steps of a level side by side in the order of the list, each row centred under the inputs. A sequence edge
+ * comes to a step from each step it must come after that no other of them already comes after, from the inputs to a
+ * step that comes after none, and goes to the outputs from each step no step comes after. The actions of a step sit
+ * next to it, as in one column, with room for them before the next step of its row. The values given to the steps are
+ * not drawn: the Steps view and the Inputs panel tell where each one goes.
+ *
+ * Given the width of its panel, the diagram fits it: every node narrows, down to {@link MIN_NODE_WIDTH}, so that the
+ * widest level fits; a level that does not fit even then wraps onto as many rows as needed. Only a panel narrower than
+ * one narrowest node leaves the diagram wider than the panel.
  */
-function layoutDependencies(workflow: ArazzoWorkflowDetail, measuredHeights: Record<string, number>): WorkflowDiagram {
-  const nodes = placeNodes(workflow, measuredHeights);
-  const steps = nodes.filter(node => node.step);
-  const prerequisites = new Map(steps.map(node =>
-    [node.id, prerequisitesOf(workflow, node.index!).map(stepId => 'step:' + stepId)]));
+function layoutDependencies(workflow: ArazzoWorkflowDetail, measuredHeights: Record<string, number>,
+                            availableWidth?: number): WorkflowDiagram {
+  const prerequisites = new Map(workflow.steps.map((step, index) =>
+    ['step:' + step.stepId, prerequisitesOf(workflow, index).map(stepId => 'step:' + stepId)]));
+  const levelOf = new Map<string, number>();
+  const levels: string[][] = [];
+  prerequisites.forEach((before, id) => {
+    const level = Math.max(-1, ...before.map(other => levelOf.get(other) ?? -1)) + 1;
+    levelOf.set(id, level);
+    levels[level] = [...(levels[level] ?? []), id];
+  });
+
+  const unplaced = placeNodes(workflow, measuredHeights).filter(node => node.step);
+  const actionsReach = Math.max(0, ...actionEdges(unplaced).map(edge => edge.label!.x + edge.label!.width - NODE_WIDTH));
+  const gap = COLUMN_GAP + actionsReach;
+  const widest = Math.max(...levels.map(level => level.length));
+  let perRow = widest;
+  let nodeWidth = NODE_WIDTH;
+  if (availableWidth) {
+    const room = availableWidth - 2 * MARGIN - actionsReach;
+    perRow = Math.max(1, Math.min(widest, Math.floor((room + gap) / (MIN_NODE_WIDTH + gap))));
+    nodeWidth = Math.max(MIN_NODE_WIDTH, Math.min(NODE_WIDTH, Math.floor((room - (perRow - 1) * gap) / perRow)));
+  }
+
+  const nodes = placeNodes(workflow, measuredHeights, nodeWidth);
+  const byId = new Map(nodes.map(node => [node.id, node]));
   const rows: DiagramNode[][] = [[nodes[0]]];
-  const rowOf = new Map<string, number>();
-  steps.forEach(node => {
-    const row = 1 + Math.max(0, ...prerequisites.get(node.id)!.map(id => rowOf.get(id) ?? 0));
-    rowOf.set(node.id, row);
-    rows[row] = [...(rows[row] ?? []), node];
+  levels.forEach(level => {
+    for (let start = 0; start < level.length; start += perRow) {
+      rows.push(level.slice(start, start + perRow).map(id => byId.get(id)!));
+    }
   });
   rows.push([nodes[nodes.length - 1]]);
 
-  steps.forEach(node => node.x = 0);
-  const actionsReach = Math.max(0, ...actionEdges(steps).map(edge => edge.label!.x + edge.label!.width - NODE_WIDTH));
-  const gap = COLUMN_GAP + actionsReach;
-  const rowWidth = (row: DiagramNode[]) => row.length * NODE_WIDTH + (row.length - 1) * gap;
+  const rowWidth = (row: DiagramNode[]) => row.length * nodeWidth + (row.length - 1) * gap;
   const width = Math.max(...rows.map(rowWidth));
   let y = MARGIN;
   rows.forEach(row => {
     const left = MARGIN + (width - rowWidth(row)) / 2;
     row.forEach((node, column) => {
-      node.x = left + column * (NODE_WIDTH + gap);
+      node.x = left + column * (nodeWidth + gap);
       node.y = y;
     });
     y += Math.max(...row.map(node => node.height)) + NODE_GAP;

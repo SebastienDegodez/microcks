@@ -25,6 +25,7 @@ import {
   OnDestroy,
   Output,
   QueryList,
+  ViewChild,
   ViewChildren
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -41,7 +42,8 @@ import { stepEndpoint, stepMessagingSummary } from '../step-messaging';
  * edges, the values given to each step drawn as labelled data edges, and the actions of the steps drawn next to them:
  * a loop for a retry, an exit for an end. The layout comes from
  * {@link layoutWorkflowDiagram}; once the nodes are rendered, their measured heights are given back to it so the
- * edges meet nodes whose text wrapped on more lines than estimated.
+ * edges meet nodes whose text wrapped on more lines than estimated, with the width of its panel so that the parallel
+ * steps of a workflow with dependsOn fit it.
  */
 @Component({
   selector: 'app-workflow-diagram',
@@ -57,19 +59,22 @@ export class WorkflowDiagramComponent implements AfterViewInit, OnDestroy {
 
   @ViewChildren('nodeElement') nodeElements!: QueryList<ElementRef<HTMLElement>>;
 
+  @ViewChild('frame') frame!: ElementRef<HTMLElement>;
+
   diagram!: WorkflowDiagram;
 
   private current!: ArazzoWorkflowDetail;
   private observer?: ResizeObserver;
   private stepActions = new WeakMap<ArazzoStepDetail, StepActionLine[]>();
   private nodesChanges?: Subscription;
+  private panelWidth?: number;
 
   constructor(private cdr: ChangeDetectorRef, private zone: NgZone) {
   }
 
   @Input({ required: true }) set workflow(workflow: ArazzoWorkflowDetail) {
     this.current = workflow;
-    this.diagram = layoutWorkflowDiagram(workflow);
+    this.diagram = layoutWorkflowDiagram(workflow, {}, this.panelWidth);
   }
 
   get workflow(): ArazzoWorkflowDetail {
@@ -83,6 +88,7 @@ export class WorkflowDiagramComponent implements AfterViewInit, OnDestroy {
     this.observer = new ResizeObserver(() => this.zone.run(() => this.relayout()));
     this.nodesChanges = this.nodeElements.changes.pipe(startWith(null)).subscribe(() => {
       this.observer!.disconnect();
+      this.observer!.observe(this.frame.nativeElement);
       this.nodeElements.forEach(element => this.observer!.observe(element.nativeElement));
     });
   }
@@ -133,13 +139,19 @@ export class WorkflowDiagramComponent implements AfterViewInit, OnDestroy {
     return edge.kind + edge.from + edge.to + (edge.label?.lines[0] ?? '');
   }
 
-  /** Lays the diagram out again with the heights the nodes have once rendered, when they differ from the layout. */
+  /**
+   * Lays the diagram out again with the heights the nodes have once rendered, when they differ from the layout, and
+   * with the width of its panel, when it changed.
+   */
   private relayout(): void {
     const heights: Record<string, number> = {};
     this.nodeElements.forEach(element => heights[element.nativeElement.dataset['nodeId']!] = element.nativeElement.offsetHeight);
     const rendered = this.diagram.nodes.every(node => heights[node.id] > 0);
-    if (rendered && this.diagram.nodes.some(node => heights[node.id] !== node.height)) {
-      this.diagram = layoutWorkflowDiagram(this.current, heights);
+    const panelWidth = this.frame.nativeElement.clientWidth || undefined;
+    const resized = panelWidth !== this.panelWidth;
+    this.panelWidth = panelWidth;
+    if (resized || (rendered && this.diagram.nodes.some(node => heights[node.id] !== node.height))) {
+      this.diagram = layoutWorkflowDiagram(this.current, rendered ? heights : {}, this.panelWidth);
       this.cdr.markForCheck();
     }
   }

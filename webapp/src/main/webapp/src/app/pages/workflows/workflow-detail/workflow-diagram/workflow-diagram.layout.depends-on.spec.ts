@@ -160,6 +160,69 @@ describe('layoutWorkflowDiagram of steps declaring dependsOn', () => {
     diagram.nodes.forEach(each => expect(inside(each, diagram)).withContext(each.id).toBeTrue());
   });
 
+  it('fits 3 parallel steps within the width it is given, narrowing every node', () => {
+    const diagram = layoutWorkflowDiagram(tasteThenReprice(), {}, 860);
+    const tastes = ['step:tasteEclair', 'step:tasteMillefeuille', 'step:tasteEclairXml'].map(id => node(diagram, id));
+
+    expect(diagram.width).toBeLessThanOrEqual(860);
+    diagram.nodes.forEach(each => {
+      expect(each.width).withContext(each.id).toBeLessThan(300);
+      expect(each.width).withContext(each.id).toBeGreaterThanOrEqual(220);
+      expect(inside(each, diagram)).withContext(each.id).toBeTrue();
+    });
+    tastes.forEach(taste => expect(taste.y).withContext(taste.id).toEqual(tastes[0].y));
+    expect(tastes[0].x + tastes[0].width).toBeLessThan(tastes[1].x);
+    expect(tastes[1].x + tastes[1].width).toBeLessThan(tastes[2].x);
+  });
+
+  it('keeps nodes their full width when the widest row fits the width it is given', () => {
+    const wide = layoutWorkflowDiagram(tasteThenReprice(), {}, 2000);
+
+    expect(wide).toEqual(layoutWorkflowDiagram(tasteThenReprice()));
+    expect(wide.nodes.map(each => each.width)).toEqual(wide.nodes.map(() => 300));
+  });
+
+  it('gives a narrowed step room for the lines its text wraps on', () => {
+    const narrow = node(layoutWorkflowDiagram(tasteThenReprice(), {}, 760), 'step:reprice');
+    const wide = node(layoutWorkflowDiagram(tasteThenReprice()), 'step:reprice');
+
+    expect(narrow.width).toBeLessThan(wide.width);
+    expect(narrow.height).toBeGreaterThanOrEqual(wide.height);
+  });
+
+  it('wraps the steps of a level onto several rows when even the narrowest nodes do not fit side by side', () => {
+    const workflow = tasteThenReprice();
+    workflow.steps.splice(4, 0, step('tasteBaba', ['readMenu'], ['readMenu']));
+    workflow.steps[5].prerequisites = ['readMenu', 'tasteEclair', 'tasteMillefeuille', 'tasteEclairXml', 'tasteBaba'];
+
+    const diagram = layoutWorkflowDiagram(workflow, {}, 600);
+    const [eclair, millefeuille, xml, baba] = ['step:tasteEclair', 'step:tasteMillefeuille', 'step:tasteEclairXml',
+      'step:tasteBaba'].map(id => node(diagram, id));
+
+    expect(diagram.width).toBeLessThanOrEqual(600);
+    expect(millefeuille.y).toEqual(eclair.y);
+    expect(xml.y).toBeGreaterThan(eclair.y + eclair.height);
+    expect(baba.y).toEqual(xml.y);
+    expect(node(diagram, 'step:reprice').y).toBeGreaterThan(xml.y + xml.height);
+    expect(edges(diagram).filter(edge => edge.startsWith('step:readMenu'))).toEqual(['step:readMenu -> step:tasteEclair',
+      'step:readMenu -> step:tasteMillefeuille', 'step:readMenu -> step:tasteEclairXml', 'step:readMenu -> step:tasteBaba']);
+    diagram.nodes.forEach(each => diagram.nodes.filter(other => other !== each)
+      .forEach(other => expect(overlap(each, other)).withContext(each.id + ' / ' + other.id).toBeFalse()));
+  });
+
+  it('keeps one node per row, at the narrowest, in a width too small even for one: the panel then scrolls', () => {
+    const diagram = layoutWorkflowDiagram(tasteThenReprice(), {}, 200);
+
+    expect(new Set(diagram.nodes.map(each => each.y)).size).toEqual(diagram.nodes.length);
+    expect(diagram.nodes.map(each => each.width)).toEqual(diagram.nodes.map(() => 220));
+  });
+
+  it('leaves the one-column layout as it is, whatever the width it is given', () => {
+    const sequential = workflowOf([step('a', undefined, []), step('b', undefined, ['a'])]);
+
+    expect(layoutWorkflowDiagram(sequential, {}, 400)).toEqual(layoutWorkflowDiagram(sequential));
+  });
+
   it('draws no data edge: the Steps view and the Inputs panel tell where each value goes', () => {
     const diagram = layoutWorkflowDiagram(tasteThenReprice());
 
