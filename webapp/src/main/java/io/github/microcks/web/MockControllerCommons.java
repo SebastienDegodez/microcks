@@ -27,6 +27,9 @@ import io.github.microcks.util.dispatcher.ProxyFallbackSpecification;
 import io.github.microcks.util.el.EvaluableRequest;
 import io.github.microcks.util.el.TemplateEngine;
 import io.github.microcks.util.el.TemplateEngineFactory;
+import io.github.microcks.util.tracing.ArazzoTraceAttributes;
+
+import io.opentelemetry.api.common.Attributes;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,6 +44,7 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.Date;
+import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -389,5 +393,18 @@ public class MockControllerCommons {
          resourcePath = resourcePath.replace("+", "%20");
       }
       return resourcePath;
+   }
+
+   /**
+    * The span and event attributes telling Live Traces that a mock invocation comes from an Arazzo workflow, as the W3C
+    * baggage of its request names it. Read here, as the mock controllers record an invocation, so that other ways an
+    * Arazzo workflow reaches the mocks can be told the same way.
+    * @param request The request of the mock invocation
+    * @return The attributes, empty when the invocation does not come from an Arazzo workflow
+    */
+   public static Attributes getArazzoAttributes(HttpServletRequest request) {
+      Enumeration<String> baggage = request.getHeaders(ArazzoTraceAttributes.BAGGAGE_HEADER);
+      return ArazzoTraceAttributes.fromBaggage(baggage == null ? List.of() : Collections.list(baggage))
+            .orElse(Attributes.empty());
    }
 }
