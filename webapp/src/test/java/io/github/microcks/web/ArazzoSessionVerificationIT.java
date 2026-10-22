@@ -1,0 +1,164 @@
+/*
+ * Copyright The Microcks Authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *  http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package io.github.microcks.web;
+
+import io.github.microcks.repository.ArazzoDocumentRepository;
+import io.github.microcks.repository.ArazzoSessionCallRepository;
+import io.github.microcks.repository.ArazzoSessionRepository;
+import io.github.microcks.repository.ArazzoSourcesRepository;
+import io.github.microcks.repository.WorkflowResultRepository;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+/**
+ * An integration test of an order saga service opens a verification session on placeOrderSaga of Order saga 1.0.0
+ * through the Microcks API, the service calls the mocks of Order, Stock and Payment API 1.0.0 naming the session, then
+ * the test asks Microcks to verify the session. Every request and response of the Microcks API is checked against the
+ * description Microcks publishes of it.
+ * @author SebastienDegodez
+ */
+class ArazzoSessionVerificationIT extends AbstractBaseIT {
+
+   private static final String FIXTURES = "target/test-classes/io/github/microcks/service/arazzo/";
+   private static final String SESSIONS = "/arazzo/sessions";
+   private static final String VERIFICATION = "/arazzo/sessions/{sessionId}/verification";
+   private static final String SESSION_HEADER = "x-microcks-session";
+   private static final MicrocksApiDescription MICROCKS_API = MicrocksApiDescription.version("1.16");
+   private static final ObjectMapper JSON = new ObjectMapper();
+
+   @Autowired
+   private ArazzoDocumentRepository arazzoDocumentRepository;
+
+   @Autowired
+   private ArazzoSourcesRepository arazzoSourcesRepository;
+
+   @Autowired
+   private WorkflowResultRepository workflowResultRepository;
+
+   @Autowired
+   private ArazzoSessionRepository arazzoSessionRepository;
+
+   @Autowired
+   private ArazzoSessionCallRepository arazzoSessionCallRepository;
+
+   @TempDir
+   private Path uploads;
+
+   @BeforeEach
+   void orderSagaIsUploadedAndLinked() throws IOException {
+      for (String api : List.of("order-api", "stock-api", "payment-api")) {
+         uploadArtifactFile(example("order-saga.contracts.yaml", api), true);
+      }
+      uploadArtifactFile(example("order-saga.arazzo.yaml", "order-saga"), true);
+      uploadArtifactFile(example("order-saga.arazzo.yaml", "order-saga-sources"), false);
+   }
+
+   @AfterEach
+   void deleteDocumentsSessionsAndVerifications() {
+      arazzoDocumentRepository.deleteAll();
+      arazzoSourcesRepository.deleteAll();
+      workflowResultRepository.deleteAll();
+      arazzoSessionRepository.deleteAll();
+      arazzoSessionCallRepository.deleteAll();
+   }
+
+   /** Walking skeleton: a call naming the session on the mocks is matched to its step by the verification. */
+   @Test
+   void aMockCallNamingTheSessionIsMatchedToItsStep() throws Exception {
+      String sessionId = openSession();
+
+      ResponseEntity<String> placed = callMocks(sessionId, "Order+API", "/orders",
+            "{\"customerId\": \"c-7\", \"items\": [{\"sku\": \"ABC-1\", \"quantity\": 2}], \"amount\": 25.0}");
+
+      assertEquals(201, placed.getStatusCode().value(), placed.getBody());
+      JsonNode verification = verify(sessionId);
+      assertEquals("SESSION", verification.get("origin").asText(), verification.toPrettyString());
+      JsonNode createOrder = verification.get("steps").get(0);
+      assertEquals("createOrder PASSED 201", createOrder.get("stepId").asText() + " "
+            + createOrder.get("status").asText() + " " + createOrder.get("statusCode").asInt());
+      JsonNode call = verification.get("session").get("calls").get(0);
+      assertEquals("0 Order API POST /orders createOrder",
+            call.get("index").asInt() + " " + call.get("apiName").asText() + " " + call.get("method").asText() + " "
+                  + call.get("path").asText() + " " + call.get("stepId").asText());
+   }
+
+   /** Open a session on placeOrderSaga as a test does, checking the exchange against the published API. */
+   private String openSession() throws Exception {
+      String body = "{\"documentId\": \"Order saga:1.0.0\", \"workflowId\": \"placeOrderSaga\"}";
+      MICROCKS_API.assertRequestConforms("POST", SESSIONS, body);
+      ResponseEntity<String> opened = restTemplate.exchange("/api" + SESSIONS, HttpMethod.POST,
+            new HttpEntity<>(body, jsonHeaders()), String.class);
+      MICROCKS_API.assertResponseConforms("POST", SESSIONS, opened);
+      assertEquals(201, opened.getStatusCode().value(), opened.getBody());
+      String sessionId = JSON.readTree(opened.getBody()).get("id").asText();
+      assertEquals("/api/arazzo/sessions/" + sessionId, opened.getHeaders().getLocation().toString());
+      return sessionId;
+   }
+
+   /** Verify a session as a test does, checking the response against the published API. */
+   private JsonNode verify(String sessionId) throws Exception {
+      ResponseEntity<String> verified = restTemplate.exchange("/api" + VERIFICATION, HttpMethod.POST,
+            new HttpEntity<>(jsonHeaders()), String.class, sessionId);
+      MICROCKS_API.assertResponseConforms("POST", VERIFICATION, verified);
+      assertEquals(200, verified.getStatusCode().value(), verified.getBody());
+      return JSON.readTree(verified.getBody());
+   }
+
+   /** The saga service calls the mocks of an API 1.0.0, naming its session. */
+   private ResponseEntity<String> callMocks(String sessionId, String api, String path, String body) {
+      HttpHeaders headers = jsonHeaders();
+      headers.add(SESSION_HEADER, sessionId);
+      return restTemplate.exchange("/rest/" + api + "/1.0.0" + path, HttpMethod.POST, new HttpEntity<>(body, headers),
+            String.class);
+   }
+
+   private static HttpHeaders jsonHeaders() {
+      HttpHeaders headers = new HttpHeaders();
+      headers.setContentType(MediaType.APPLICATION_JSON);
+      headers.setAccept(List.of(MediaType.APPLICATION_JSON));
+      return headers;
+   }
+
+   /** Writes the example of a multi-document fixture to its own file, as the API developer would upload it. */
+   private String example(String fixture, String example) throws IOException {
+      String marker = "# example: " + example + " ";
+      String document = Arrays.stream(Files.readString(Path.of(FIXTURES + fixture)).split("\n---\n"))
+            .filter(candidate -> candidate.contains(marker)).findFirst().orElseThrow();
+      Path file = uploads.resolve(example + (fixture.contains("arazzo") ? ".arazzo.yaml" : ".yaml"));
+      Files.writeString(file, document, StandardCharsets.UTF_8);
+      return file.toString();
+   }
+}

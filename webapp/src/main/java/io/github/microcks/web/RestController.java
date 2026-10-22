@@ -70,6 +70,7 @@ public class RestController {
    private final ServiceRepository serviceRepository;
    private final ResourceRepository resourceRepository;
    private final RestInvocationProcessor invocationProcessor;
+   private final ArazzoSessionRecorder arazzoSessionRecorder;
 
    @Value("${mocks.rest.enable-cors-policy}")
    private Boolean enableCorsPolicy;
@@ -83,15 +84,17 @@ public class RestController {
 
    /**
     * Build a RestController with required dependencies.
-    * @param serviceRepository   The repository to access services definitions
-    * @param resourceRepository  The repository to access resources definitions
-    * @param invocationProcessor The invocation processor to apply REST mocks dispatching logic
+    * @param serviceRepository     The repository to access services definitions
+    * @param resourceRepository    The repository to access resources definitions
+    * @param invocationProcessor   The invocation processor to apply REST mocks dispatching logic
+    * @param arazzoSessionRecorder The recorder of the invocations naming an Arazzo verification session
     */
    public RestController(ServiceRepository serviceRepository, ResourceRepository resourceRepository,
-         RestInvocationProcessor invocationProcessor) {
+         RestInvocationProcessor invocationProcessor, ArazzoSessionRecorder arazzoSessionRecorder) {
       this.serviceRepository = serviceRepository;
       this.resourceRepository = resourceRepository;
       this.invocationProcessor = invocationProcessor;
+      this.arazzoSessionRecorder = arazzoSessionRecorder;
    }
 
    @SuppressWarnings("java:S3752")
@@ -291,6 +294,8 @@ public class RestController {
 
       ResponseResult response = invocationProcessor.processInvocation(ic, startTime, delay, body,
             headers.asMultiValueMap(), request);
+      // Record the invocation in the Arazzo verification session it names, if any.
+      arazzoSessionRecorder.recordRest(ic, request, body, response);
       return new ResponseEntity<>(response.content(), response.headers(), response.status());
    }
 

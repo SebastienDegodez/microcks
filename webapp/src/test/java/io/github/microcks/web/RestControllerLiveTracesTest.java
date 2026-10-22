@@ -79,7 +79,7 @@ class RestControllerLiveTracesTest {
       }
    }).build();
    private final RestController controller = new RestController(mock(ServiceRepository.class),
-         mock(ResourceRepository.class), mock(RestInvocationProcessor.class));
+         mock(ResourceRepository.class), mock(RestInvocationProcessor.class), mock(ArazzoSessionRecorder.class));
 
    @AfterEach
    void closeTracerProvider() {

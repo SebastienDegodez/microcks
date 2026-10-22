@@ -1,0 +1,127 @@
+/*
+ * Copyright The Microcks Authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *  http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package io.github.microcks.web;
+
+import io.github.microcks.domain.ArazzoSessionCall;
+import io.github.microcks.domain.Header;
+import io.github.microcks.domain.Operation;
+import io.github.microcks.domain.Service;
+import io.github.microcks.service.ArazzoSessionService;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.mockito.ArgumentCaptor;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.mock.web.MockHttpServletRequest;
+
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Set;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+
+/**
+ * Tests of the recording of the mock invocations naming a verification session, as the mocks received and answered
+ * them.
+ * @author SebastienDegodez
+ */
+class ArazzoSessionRecorderTest {
+
+   private final ArazzoSessionService arazzoSessionService = mock(ArazzoSessionService.class);
+   private final ArazzoSessionRecorder recorder = new ArazzoSessionRecorder(arazzoSessionService);
+
+   @Test
+   void aRestInvocationNamingASessionIsRecordedAsReceivedAndAnswered() {
+      MockHttpServletRequest request = new MockHttpServletRequest("POST", "/rest/Order+API/1.0.0/orders");
+      request.setQueryString("dryRun=false");
+      request.addHeader("x-microcks-session", "s-1");
+      request.addHeader("Accept", "application/json");
+      HttpHeaders responseHeaders = new HttpHeaders();
+      responseHeaders.add("Content-Type", "application/json");
+
+      recorder.recordRest(placeOrder(), request, "{\"customerId\": \"c-7\"}", new ResponseResult(HttpStatus.CREATED,
+            responseHeaders, "{\"id\": \"o-42\"}".getBytes(StandardCharsets.UTF_8)));
+
+      ArazzoSessionCall call = recorded("s-1");
+      assertEquals(
+            List.of("Order API", "1.0.0", "POST /orders", "POST", "/orders",
+                  "http://localhost/rest/Order+API/1.0.0/orders?dryRun=false", "{\"customerId\": \"c-7\"}", "201",
+                  "{\"id\": \"o-42\"}"),
+            List.of(call.getServiceName(), call.getServiceVersion(), call.getOperationName(), call.getMethod(),
+                  call.getPath(), call.getRequestUrl(), call.getRequestBody(), String.valueOf(call.getResponseStatus()),
+                  call.getResponseBody()));
+      assertEquals(List.of("Accept=[application/json]", "x-microcks-session=[s-1]"),
+            described(call.getRequestHeaders()));
+      assertEquals(List.of("Content-Type=[application/json]"), described(call.getResponseHeaders()));
+   }
+
+   @Test
+   void aRestInvocationWithoutQueryNorResponseContentIsRecordedWithoutThem() {
+      MockHttpServletRequest request = new MockHttpServletRequest("POST", "/rest/Order+API/1.0.0/orders");
+      request.addHeader("x-microcks-session", "s-1");
+
+      recorder.recordRest(placeOrder(), request, null, new ResponseResult(HttpStatus.NO_CONTENT, null, null));
+
+      ArazzoSessionCall call = recorded("s-1");
+      assertEquals("http://localhost/rest/Order+API/1.0.0/orders 204",
+            call.getRequestUrl() + " " + call.getResponseStatus());
+      assertNull(call.getResponseBody());
+      assertEquals(List.of(), described(call.getResponseHeaders()));
+   }
+
+   @ParameterizedTest
+   @CsvSource(nullValues = "null", value = { "null", "''", "'  '" })
+   void aRestInvocationNamingNoSessionIsNotRecorded(String sessionId) {
+      MockHttpServletRequest request = new MockHttpServletRequest("POST", "/rest/Order+API/1.0.0/orders");
+      if (sessionId != null) {
+         request.addHeader("x-microcks-session", sessionId);
+      }
+
+      recorder.recordRest(placeOrder(), request, null, new ResponseResult(HttpStatus.CREATED, null, null));
+
+      verify(arazzoSessionService, never()).recordCall(anyString(), any());
+   }
+
+   /** Headers have no equality of their own: each is described by its name and values, sorted. */
+   private static List<String> described(Set<Header> headers) {
+      return headers.stream().map(header -> header.getName() + "=" + header.getValues().stream().sorted().toList())
+            .sorted().toList();
+   }
+
+   private ArazzoSessionCall recorded(String sessionId) {
+      ArgumentCaptor<ArazzoSessionCall> call = ArgumentCaptor.forClass(ArazzoSessionCall.class);
+      verify(arazzoSessionService).recordCall(eq(sessionId), call.capture());
+      return call.getValue();
+   }
+
+   private static MockInvocationContext placeOrder() {
+      Service service = new Service();
+      service.setName("Order API");
+      service.setVersion("1.0.0");
+      Operation operation = new Operation();
+      operation.setName("POST /orders");
+      return new MockInvocationContext(service, operation, "/orders");
+   }
+}
