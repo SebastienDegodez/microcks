@@ -16,7 +16,8 @@
           "GetPastryByName": { "method": "GET", "path": "/pastry/{name}" },
           "PatchPastry": { "method": "PATCH", "path": "/pastry/{name}" }
         },
-        "openApiContract": "openapi: 3.0.2"
+        "openApiContract": "openapi: 3.0.2",
+        "openApiContractBaseUrl": "http://microcks:8080/api/resources/"
       }
     },
     "timeoutMS": 10000,
@@ -126,7 +127,8 @@
           "GetPastryByName": { "method": "GET", "path": "/pastry/{name}" },
           "PatchPastry": { "method": "PATCH", "path": "/pastry/{name}" }
         },
-        "openApiContract": null
+        "openApiContract": null,
+        "openApiContractBaseUrl": null
       }
     },
     "timeoutMS": 10000,

@@ -79,7 +79,7 @@ class ArazzoMinionContractTest {
                         Map.of("GetPastries", new ArazzoRunRequest.Operation("GET", "/pastry"), "GetPastryByName",
                               new ArazzoRunRequest.Operation("GET", "/pastry/{name}"), "PatchPastry",
                               new ArazzoRunRequest.Operation("PATCH", "/pastry/{name}")),
-                        "openapi: 3.0.2")),
+                        "openapi: 3.0.2", "http://microcks:8080/api/resources/")),
             10000, true));
 
       assertEquals(List.of(contract().get("runRequest")),

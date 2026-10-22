@@ -75,28 +75,32 @@ class ArazzoMinionContractTest {
    void theRunRequestOfMicrocksIsReadWithTheMocksRelativeToMicrocks() throws IOException {
       RunRequestDTO request = JSON.treeToValue(contract().get("runRequest"), RunRequestDTO.class);
 
-      assertEquals(new RunSpecification("6719f0c2a1b2c3d4e5f60718", "readThenReprice", "arazzo: 1.0.1",
-            Map.of("pastry", "Eclair Cafe", "newPrice", 2.6),
-            Map.of("pastryApi",
-                  new SourceTarget(URI.create(MOCKS),
-                        Map.of("GetPastries", new OperationTarget("GET", "/pastry"), "GetPastryByName",
-                              new OperationTarget("GET", "/pastry/{name}"), "PatchPastry",
-                              new OperationTarget("PATCH", "/pastry/{name}")),
-                        "openapi: 3.0.2")),
-            Duration.ofSeconds(10), true), request.toSpecification("http://microcks:8080"));
+      assertEquals(
+            new RunSpecification("6719f0c2a1b2c3d4e5f60718", "readThenReprice", "arazzo: 1.0.1",
+                  Map.of("pastry", "Eclair Cafe", "newPrice", 2.6),
+                  Map.of("pastryApi",
+                        new SourceTarget(URI.create(MOCKS),
+                              Map.of("GetPastries", new OperationTarget("GET", "/pastry"), "GetPastryByName",
+                                    new OperationTarget("GET", "/pastry/{name}"), "PatchPastry",
+                                    new OperationTarget("PATCH", "/pastry/{name}")),
+                              "openapi: 3.0.2", "http://microcks:8080/api/resources/")),
+                  Duration.ofSeconds(10), true),
+            request.toSpecification("http://microcks:8080"));
    }
 
    @Test
    void aRunRequestWithoutSchemaValidationHasNoContractToValidateAgainst() throws IOException {
       ObjectNode runRequest = (ObjectNode) contract().get("runRequest");
       runRequest.remove("validateSchema");
-      ((ObjectNode) runRequest.get("sources").get("pastryApi")).remove("openApiContract");
+      ((ObjectNode) runRequest.get("sources").get("pastryApi"))
+            .remove(List.of("openApiContract", "openApiContractBaseUrl"));
 
       RunSpecification specification = JSON.treeToValue(runRequest, RunRequestDTO.class)
             .toSpecification("http://microcks:8080");
 
       assertEquals(false, specification.validateSchema());
       assertNull(specification.sources().get("pastryApi").openApiContract());
+      assertNull(specification.sources().get("pastryApi").openApiContractBaseUrl());
    }
 
    @Test

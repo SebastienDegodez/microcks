@@ -94,16 +94,24 @@ public record ArazzoRunRequest(String runId, String workflowId, String arazzoDoc
 
    /**
     * Where to call the operations of a source description.
-    * @param baseUrl         The base URL of the operations: relative to Microcks for its mocks
-    * @param operations      The method and path of each operation of the linked API, by operationId
-    * @param openApiContract The OpenAPI contract of the linked API, when the responses are validated against it; null
-    *                        otherwise
+    * @param baseUrl                The base URL of the operations: relative to Microcks for its mocks
+    * @param operations             The method and path of each operation of the linked API, by operationId
+    * @param openApiContract        The OpenAPI contract of the linked API, when the responses are validated against it;
+    *                               null otherwise
+    * @param openApiContractBaseUrl The URL the relative references of the contract resolve against, sent with the
+    *                               contract; null otherwise
     */
-   public record Source(String baseUrl, Map<String, Operation> operations, String openApiContract) {
+   public record Source(String baseUrl, Map<String, Operation> operations, String openApiContract,
+         String openApiContractBaseUrl) {
 
       /** A source whose responses are not validated against a contract. */
       public Source(String baseUrl, Map<String, Operation> operations) {
          this(baseUrl, operations, null);
+      }
+
+      /** A source whose contract has no base URL to resolve its relative references against. */
+      public Source(String baseUrl, Map<String, Operation> operations, String openApiContract) {
+         this(baseUrl, operations, openApiContract, null);
       }
    }
 
