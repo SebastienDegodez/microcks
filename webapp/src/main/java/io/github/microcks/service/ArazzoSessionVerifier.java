@@ -202,7 +202,7 @@ final class ArazzoSessionVerifier {
       return values;
    }
 
-   private static ArazzoReceivedRequest requestOf(ExpectedStep step, ArazzoSessionCall call) {
+   static ArazzoReceivedRequest requestOf(ExpectedStep step, ArazzoSessionCall call) {
       return new ArazzoReceivedRequest(step.operation().path(), call.getPath(), call.getQueryString(),
             headersOf(call.getRequestHeaders()), call.getRequestBody());
    }
@@ -280,7 +280,7 @@ final class ArazzoSessionVerifier {
    }
 
    /** Microcks names an operation of an OpenAPI contract by its method and path template. */
-   private static boolean calls(ArazzoSessionCall call, ExpectedStep step) {
+   static boolean calls(ArazzoSessionCall call, ExpectedStep step) {
       return step.apiName().equals(call.getServiceName()) && step.apiVersion().equals(call.getServiceVersion())
             && (step.operation().method() + " " + step.operation().path()).equals(call.getOperationName());
    }

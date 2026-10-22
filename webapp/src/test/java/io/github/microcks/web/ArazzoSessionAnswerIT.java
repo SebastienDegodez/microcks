@@ -1,0 +1,140 @@
+/*
+ * Copyright The Microcks Authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *  http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package io.github.microcks.web;
+
+import io.github.microcks.repository.ArazzoDocumentRepository;
+import io.github.microcks.repository.ArazzoSessionCallRepository;
+import io.github.microcks.repository.ArazzoSessionRepository;
+import io.github.microcks.repository.ArazzoSourcesRepository;
+import io.github.microcks.repository.WorkflowResultRepository;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+/**
+ * An integration test of an order saga service opens a session on placeOrderSaga of Order saga 1.0.0 through the
+ * Microcks API, then the service calls the mocks of Order, Stock and Payment API 1.0.0 naming the session. The examples
+ * of these APIs were written for order o-1, but the mocks placed order o-42: in the session, they answer each step with
+ * o-42.
+ * @author SebastienDegodez
+ */
+class ArazzoSessionAnswerIT extends AbstractBaseIT {
+
+   private static final String FIXTURES = "target/test-classes/io/github/microcks/service/arazzo/";
+   private static final String SESSION_HEADER = "x-microcks-session";
+   private static final ObjectMapper JSON = new ObjectMapper();
+
+   @Autowired
+   private ArazzoDocumentRepository arazzoDocumentRepository;
+
+   @Autowired
+   private ArazzoSourcesRepository arazzoSourcesRepository;
+
+   @Autowired
+   private WorkflowResultRepository workflowResultRepository;
+
+   @Autowired
+   private ArazzoSessionRepository arazzoSessionRepository;
+
+   @Autowired
+   private ArazzoSessionCallRepository arazzoSessionCallRepository;
+
+   @TempDir
+   private Path uploads;
+
+   @BeforeEach
+   void orderSagaIsUploadedAndLinked() throws IOException {
+      for (String api : List.of("order-api", "stock-api", "payment-api")) {
+         uploadArtifactFile(example("stateful-saga.contracts.yaml", api), true);
+      }
+      uploadArtifactFile(example("order-saga.arazzo.yaml", "order-saga"), true);
+      uploadArtifactFile(example("order-saga.arazzo.yaml", "order-saga-sources"), false);
+   }
+
+   @AfterEach
+   void deleteDocumentsAndSessions() {
+      arazzoDocumentRepository.deleteAll();
+      arazzoSourcesRepository.deleteAll();
+      workflowResultRepository.deleteAll();
+      arazzoSessionRepository.deleteAll();
+      arazzoSessionCallRepository.deleteAll();
+   }
+
+   /** Walking skeleton, AC-02: the order reserveStock receives flows into the reservation the mock answers. */
+   @Test
+   void theOrderAReservationReceivesFlowsIntoTheReservation() throws Exception {
+      String sessionId = openSession();
+
+      ResponseEntity<String> reserved = callMocks(sessionId, "Stock+API", "/reservations",
+            "{\"orderId\": \"o-42\", \"items\": [{\"sku\": \"ABC-1\", \"quantity\": 2}]}");
+
+      assertEquals(201, reserved.getStatusCode().value(), reserved.getBody());
+      assertEquals(JSON.readTree("{\"id\": \"r-9\", \"orderId\": \"o-42\"}"), JSON.readTree(reserved.getBody()));
+   }
+
+   private String openSession() throws Exception {
+      ResponseEntity<String> opened = restTemplate.exchange("/api/arazzo/sessions", HttpMethod.POST, new HttpEntity<>(
+            "{\"documentId\": \"Order saga:1.0.0\", \"workflowId\": \"placeOrderSaga\"}", jsonHeaders()), String.class);
+      assertEquals(201, opened.getStatusCode().value(), opened.getBody());
+      return JSON.readTree(opened.getBody()).get("id").asText();
+   }
+
+   /** The saga service calls the mocks of an API 1.0.0, naming its session when it has one. */
+   private ResponseEntity<String> callMocks(String session, String api, String path, String body) {
+      HttpHeaders headers = jsonHeaders();
+      if (session != null) {
+         headers.add(SESSION_HEADER, session);
+      }
+      return restTemplate.exchange("/rest/" + api + "/1.0.0" + path, HttpMethod.POST, new HttpEntity<>(body, headers),
+            String.class);
+   }
+
+   private static HttpHeaders jsonHeaders() {
+      HttpHeaders headers = new HttpHeaders();
+      headers.setContentType(MediaType.APPLICATION_JSON);
+      headers.setAccept(List.of(MediaType.APPLICATION_JSON));
+      return headers;
+   }
+
+   /** Writes the example of a multi-document fixture to its own file, as the API developer would upload it. */
+   private String example(String fixture, String example) throws IOException {
+      String marker = "# example: " + example + " ";
+      String document = Arrays.stream(Files.readString(Path.of(FIXTURES + fixture)).split("\n---\n"))
+            .filter(candidate -> candidate.contains(marker)).findFirst().orElseThrow();
+      Path file = uploads.resolve(example + (fixture.contains("arazzo") ? ".arazzo.yaml" : ".yaml"));
+      Files.writeString(file, document, StandardCharsets.UTF_8);
+      return file.toString();
+   }
+}
