@@ -18,6 +18,8 @@ package io.github.microcks.service;
 import io.github.microcks.domain.ArazzoDocument;
 import io.github.microcks.domain.ArazzoSession;
 import io.github.microcks.domain.ArazzoSessionCall;
+import io.github.microcks.domain.WorkflowResult;
+import io.github.microcks.domain.WorkflowRunStatus;
 import io.github.microcks.repository.ArazzoDocumentRepository;
 import io.github.microcks.repository.ArazzoSessionCallRepository;
 import io.github.microcks.repository.ArazzoSessionRepository;
@@ -25,6 +27,8 @@ import io.github.microcks.repository.RepositoryTestsConfiguration;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.TestPropertySource;
@@ -73,6 +77,16 @@ class ArazzoSessionStorageTest {
       saga.setWorkflowIds(List.of("placeOrderSaga"));
       saga.setSourceNames(List.of());
       saga.setWorkflowCalls(Map.of("placeOrderSaga", List.of()));
+      saga.setContent("""
+            arazzo: 1.0.1
+            info:
+              title: Order saga
+              version: 1.0.0
+            sourceDescriptions: []
+            workflows:
+              - workflowId: placeOrderSaga
+                steps: []
+            """);
       saga = arazzoDocumentRepository.save(saga);
    }
 
@@ -128,6 +142,24 @@ class ArazzoSessionStorageTest {
 
       assertEquals(List.of(0L, 1L), arazzoSessionCallRepository.findBySessionIdOrderByIndexAsc(session.getId()).stream()
             .map(ArazzoSessionCall::getIndex).toList());
+   }
+
+   /** A session that reached its maximum of calls fails its verification, telling how many calls it did not record. */
+   @ParameterizedTest
+   @CsvSource(delimiter = '|', nullValues = "null", value = { "2 | 0 | SUCCESS | null",
+         "3 | 1 | FAILURE | session reached 2 calls, 1 call was not recorded",
+         "5 | 3 | FAILURE | session reached 2 calls, 3 calls were not recorded" })
+   void aSessionThatReachedItsMaximumFailsItsVerification(int calls, long dropped, WorkflowRunStatus status,
+         String message) throws Exception {
+      ArazzoSession session = arazzoSessionService.openSession(saga.getId(), "placeOrderSaga").orElseThrow();
+
+      for (int call = 0; call < calls; call++) {
+         arazzoSessionService.recordCall(session.getId(), new ArazzoSessionCall());
+      }
+
+      assertEquals(dropped, arazzoSessionRepository.findById(session.getId()).orElseThrow().getDroppedCallCount());
+      WorkflowResult verification = arazzoSessionService.verify(session.getId()).orElseThrow();
+      assertEquals(status + " " + message, verification.getStatus() + " " + verification.getMessage());
    }
 
    private List<Date> expiriesOfTheCallsOf(ArazzoSession session) {

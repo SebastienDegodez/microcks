@@ -30,6 +30,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.net.URI;
+import java.util.Map;
 
 /**
  * Endpoints of the verification sessions of Arazzo workflows: a test opens a session on a workflow, the application it
@@ -54,14 +55,15 @@ public class ArazzoSessionController {
     * The workflow a session is opened on.
     * @param documentId The id of the Arazzo document, or its title and version as {@code <title>:<version>}
     * @param workflowId The id of the workflow in that document
+    * @param inputs     The inputs of the workflow whose values the calls must carry, by name; null to check none
     */
-   public record ArazzoSessionRequest(String documentId, String workflowId) {
+   public record ArazzoSessionRequest(String documentId, String workflowId, Map<String, Object> inputs) {
    }
 
    @PostMapping(value = "/sessions")
    public ResponseEntity<Object> openSession(@RequestBody ArazzoSessionRequest request) {
       try {
-         return arazzoSessionService.openSession(request.documentId(), request.workflowId())
+         return arazzoSessionService.openSession(request.documentId(), request.workflowId(), request.inputs())
                .<ResponseEntity<Object>>map(session -> ResponseEntity
                      .created(URI.create("/api/arazzo/sessions/" + session.getId())).body(session))
                .orElseGet(() -> ResponseEntity.notFound().build());

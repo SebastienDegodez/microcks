@@ -138,6 +138,26 @@ describe('WorkflowRunPageComponent verification of a session', () => {
     ]);
   }));
 
+  it('tells why a session fails apart from its steps, such as calls it did not record', fakeAsync(() => {
+    const run = outOfOrderVerification();
+    run.message = 'session reached 1000 calls, 3 calls were not recorded';
+    const page = open(run);
+
+    expect(Array.from(page.querySelectorAll('.workflow-run-failure li')).map(text)).toEqual([
+      'session reached 1000 calls, 3 calls were not recorded',
+      'Step 3, chargePayment: ' + OUT_OF_ORDER,
+      'Step 4, confirmOrder: step `confirmOrder` missing'
+    ]);
+  }));
+
+  it('shows the inputs a session was opened with, whose values it checked', fakeAsync(() => {
+    const run = outOfOrderVerification();
+    run.inputs = { customerId: 'c-7' };
+    const page = open(run);
+
+    expect(text(page.querySelector('.workflow-run-inputs dd'))).toEqual('customerId = "c-7"');
+  }));
+
   it('keeps the inputs and the schema validation of a run', fakeAsync(() => {
     const run = outOfOrderVerification();
     delete run.origin;

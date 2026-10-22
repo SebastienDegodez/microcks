@@ -36,6 +36,14 @@ public interface CustomArazzoSessionRepository {
    ArazzoSession countCall(String sessionId, long maxCalls, Date now);
 
    /**
+    * Count a call an open session does not record, as it recorded its maximum of calls; atomically.
+    * @param sessionId The id of a session
+    * @param maxCalls  How many calls a session records at most
+    * @param now       When the call is received
+    */
+   void countDroppedCall(String sessionId, long maxCalls, Date now);
+
+   /**
     * Close a session: it records no more calls, and it and its calls expire at the given date. A session already closed
     * is left as it is.
     * @param sessionId  The id of a session

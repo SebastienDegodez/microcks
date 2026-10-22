@@ -60,7 +60,7 @@ class ArazzoSessionVerifierTest {
       call.setResponseBody("Receipt of order o-42");
 
       List<ArazzoSessionVerifier.StepVerdict> verdicts = ArazzoSessionVerifier.verify(List.of(expected), List.of(call),
-            null);
+            Map.of(), null);
 
       assertEquals(Map.of("status", 202, "location", "/receipts/rc-1", "receipt", "Receipt of order o-42"),
             verdicts.get(0).outputs());

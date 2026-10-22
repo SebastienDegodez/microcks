@@ -52,6 +52,12 @@ public class ArazzoSessionRepositoryImpl implements CustomArazzoSessionRepositor
    }
 
    @Override
+   public void countDroppedCall(String sessionId, long maxCalls, Date now) {
+      template.updateFirst(new Query(Criteria.where(ID).is(sessionId).and(CLOSED_DATE).isNull().and(EXPIRE_AT).gt(now)
+            .and("callCount").gte(maxCalls)), new Update().inc("droppedCallCount", 1), ArazzoSession.class);
+   }
+
+   @Override
    public boolean close(String sessionId, Date closedDate, Date expireAt) {
       ArazzoSession closed = template.findAndModify(
             new Query(Criteria.where(ID).is(sessionId).and(CLOSED_DATE).isNull()),

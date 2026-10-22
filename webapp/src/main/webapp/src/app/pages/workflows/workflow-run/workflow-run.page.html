@@ -37,6 +37,7 @@
       <div>
         <p><strong>The calls of the session do not follow the workflow</strong></p>
         <ul class="workflow-run-unmet">
+          <li *ngIf="run.message">{{ run.message }}</li>
           <li *ngFor="let step of failedSteps(run)">Step {{ step.index + 1 }}, {{ step.stepId }}: {{ step.message }}</li>
         </ul>
       </div>
@@ -97,7 +98,7 @@
           <span *ngIf="!session.calls.length" class="workflow-run-muted">None</span>
         </dd>
       </div>
-      <div *ngIf="!isSession(run)" class="workflow-run-property workflow-run-inputs">
+      <div *ngIf="!isSession(run) || entries(run.inputs).length" class="workflow-run-property workflow-run-inputs">
         <dt>Inputs</dt>&ngsp;<dd>
           <span *ngFor="let input of entries(run.inputs)" class="workflow-run-value"><code class="workflow-run-chip">{{ input.name }}</code> = <code class="workflow-run-chip">{{ input.value }}</code>&ngsp;</span>
           <span *ngIf="!entries(run.inputs).length" class="workflow-run-muted">None declared</span>

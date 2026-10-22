@@ -28,11 +28,14 @@ import io.github.microcks.domain.WorkflowRunStatus;
 import io.github.microcks.domain.WorkflowRunSummary;
 import io.github.microcks.domain.WorkflowSessionCall;
 import io.github.microcks.domain.WorkflowStepResult;
+import io.github.microcks.repository.ArazzoSessionRepository;
 import io.github.microcks.repository.RepositoryTestsConfiguration;
 import io.github.microcks.repository.RequestRepository;
 import io.github.microcks.repository.ResponseRepository;
 import io.github.microcks.repository.WorkflowRunFilter;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -88,6 +91,9 @@ class ArazzoSessionVerificationTest {
 
    @Autowired
    private RequestRepository requestRepository;
+
+   @Autowired
+   private ArazzoSessionRepository arazzoSessionRepository;
 
    @Autowired
    private ResponseRepository responseRepository;
@@ -244,6 +250,45 @@ class ArazzoSessionVerificationTest {
       record(session, createOrder(), reserveStock("o-42"), charge, confirmOrder("o-42"));
 
       assertEquals(verdict, described(arazzoSessionService.verify(session.getId()).orElseThrow()).get(2));
+   }
+
+   /**
+    * A session opened with the inputs of the workflow checks the values coming from them like the others; without
+    * inputs, nothing coming from them is checked.
+    */
+   @ParameterizedTest
+   @CsvSource(delimiter = '|', nullValues = "null", value = { "c-7 | c-7 | 0 createOrder PASSED",
+         "c-7 | c-9 | 0 createOrder FAILED `createOrder` body `/customerId` should come from `$inputs.customerId` "
+               + "(c-7), got c-9",
+         "null | c-9 | 0 createOrder PASSED" })
+   void theValuesComingFromTheInputsAreCheckedWhenTheSessionHasThem(String given, String sent, String verdict)
+         throws Exception {
+      ArazzoDocument saga = orderSagaIsImportedAndLinked();
+      Map<String, Object> inputs = given == null ? null : Map.of("customerId", given);
+      ArazzoSession session = arazzoSessionService.openSession(saga.getId(), SAGA, inputs).orElseThrow();
+      ArazzoSessionCall placeOrder = createOrder();
+      placeOrder.setRequestBody(placeOrder.getRequestBody().replace("c-7", sent));
+
+      record(session, placeOrder, reserveStock("o-42"), chargePayment("o-42"), confirmOrder("o-42"));
+
+      WorkflowResult verification = arazzoSessionService.verify(session.getId()).orElseThrow();
+      assertEquals(verdict, described(verification).get(0));
+      assertEquals(inputs == null ? Map.of() : inputs, verification.getInputs());
+   }
+
+   /** Inputs given to a session are checked against the workflow: an unknown, invalid or missing one is refused. */
+   @ParameterizedTest
+   @CsvSource(delimiter = '|', value = { "'{\"customerId\": \"c-7\", \"coupon\": \"WELCOME\"}' | Unknown input: coupon",
+         "'{\"customerId\": 7}' | Invalid input customerId: a string is expected, got 7",
+         "'{}' | Missing input: customerId" })
+   void aSessionWithUnknownInvalidOrMissingInputsIsRefused(String inputs, String reason) throws Exception {
+      ArazzoDocument saga = orderSagaIsImportedAndLinked();
+      Map<String, Object> given = new ObjectMapper().readValue(inputs, new TypeReference<Map<String, Object>>() {
+      });
+
+      assertEquals(reason, assertThrows(ArazzoRunRefusedException.class,
+            () -> arazzoSessionService.openSession(saga.getId(), SAGA, given)).getMessage());
+      assertEquals(0, arazzoSessionRepository.count());
    }
 
    /** AC-04: a step the service never calls fails the verification as missing. */
