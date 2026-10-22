@@ -17,7 +17,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
-import { ArazzoDocumentSummary } from '../models/arazzo-document.model';
+import { ArazzoDocumentSummary, ArazzoImportAnalysis, ArazzoSourceLinks } from '../models/arazzo-document.model';
 
 @Injectable({ providedIn: 'root' })
 export class ArazzoDocumentsService {
@@ -35,5 +35,24 @@ export class ArazzoDocumentsService {
       params = params.set('api', api);
     }
     return this.http.get<ArazzoDocumentSummary[]>(this.rootUrl + '/documents', { params });
+  }
+
+  /**
+   * Analyse an Arazzo document before importing it; nothing is stored.
+   * @param content The document, in YAML or JSON
+   * @param links The API each source description is linked to; absent to link each one to the API it is matched to
+   */
+  public analyseDocument(content: string, links?: ArazzoSourceLinks): Observable<ArazzoImportAnalysis> {
+    return this.http.post<ArazzoImportAnalysis>(this.rootUrl + '/documents/analysis', { content, links });
+  }
+
+  /**
+   * Import an Arazzo document with the links of its source descriptions, all or nothing.
+   * @param content The document, in YAML or JSON
+   * @param fileName The name of the file the document was dropped from
+   * @param links The API each source description is linked to
+   */
+  public importDocument(content: string, fileName: string, links: ArazzoSourceLinks): Observable<ArazzoDocumentSummary> {
+    return this.http.post<ArazzoDocumentSummary>(this.rootUrl + '/documents', { content, fileName, links });
   }
 }

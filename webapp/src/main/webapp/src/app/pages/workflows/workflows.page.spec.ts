@@ -15,15 +15,15 @@
  */
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import { of } from 'rxjs';
-
-import { BsModalService } from 'ngx-bootstrap/modal';
+import { BsModalRef, BsModalService } from 'ngx-bootstrap/modal';
+import { of, Subject } from 'rxjs';
 
 import { routes } from '../../app.routes';
 import { ArazzoDocumentSummary } from '../../models/arazzo-document.model';
 import { ServiceType } from '../../models/service.model';
 import { ArazzoDocumentsService } from '../../services/arazzo-documents.service';
 import { UploaderDialogService } from '../../services/uploader-dialog.service';
+import { ImportArazzoDialogComponent } from './import-arazzo-dialog/import-arazzo-dialog.component';
 import { WorkflowsPageComponent } from './workflows.page';
 import { WorkflowRunDialogComponent } from './workflow-run-dialog/workflow-run.dialog';
 
@@ -94,7 +94,7 @@ const ORDER_FULFILMENT: ArazzoDocumentSummary = {
 
 /** Answers like the endpoint: every document, or only the documents using the API filtered on. */
 class FakeArazzoDocumentsService {
-  constructor(private documents: ArazzoDocumentSummary[]) {}
+  constructor(public documents: ArazzoDocumentSummary[]) {}
 
   getDocuments(api?: string) {
     return of(
@@ -105,7 +105,9 @@ class FakeArazzoDocumentsService {
 
 describe('WorkflowsPageComponent', () => {
   let uploaderDialog: jasmine.SpyObj<UploaderDialogService>;
-  let modals: jasmine.SpyObj<BsModalService>;
+  let modalService: jasmine.SpyObj<BsModalService>;
+  let importDialogHidden: Subject<unknown>;
+  let documentsService: FakeArazzoDocumentsService;
 
   function openPage(documents: ArazzoDocumentSummary[]): ComponentFixture<WorkflowsPageComponent> {
     uploaderDialog = jasmine.createSpyObj<UploaderDialogService>('UploaderDialogService', [
@@ -113,14 +115,17 @@ describe('WorkflowsPageComponent', () => {
       'registerPageRefreshCallback',
       'unregisterPageRefreshCallback',
     ]);
-    modals = jasmine.createSpyObj<BsModalService>('BsModalService', ['show']);
+    importDialogHidden = new Subject<unknown>();
+    modalService = jasmine.createSpyObj<BsModalService>('BsModalService', ['show']);
+    modalService.show.and.returnValue({ onHidden: importDialogHidden } as unknown as BsModalRef);
+    documentsService = new FakeArazzoDocumentsService(documents);
     TestBed.configureTestingModule({
       imports: [WorkflowsPageComponent],
       providers: [
         provideRouter([]),
-        { provide: BsModalService, useValue: modals },
-        { provide: ArazzoDocumentsService, useValue: new FakeArazzoDocumentsService(documents) },
+        { provide: ArazzoDocumentsService, useValue: documentsService },
         { provide: UploaderDialogService, useValue: uploaderDialog },
+        { provide: BsModalService, useValue: modalService },
       ],
     });
     const fixture = TestBed.createComponent(WorkflowsPageComponent);
@@ -209,15 +214,28 @@ describe('WorkflowsPageComponent', () => {
     expect(emptyState.textContent).toContain('Multi-step API journeys described with Arazzo');
     expect(element(fixture).querySelectorAll('.workflows-document').length).toBe(0);
     (emptyState.querySelector('button') as HTMLButtonElement).click();
-    expect(uploaderDialog.openArtifactUploader).toHaveBeenCalled();
+    expect(modalService.show).toHaveBeenCalledWith(ImportArazzoDialogComponent, jasmine.anything());
+    expect(uploaderDialog.openArtifactUploader).not.toHaveBeenCalled();
   });
 
-  it('opens the import dialog from the page header', () => {
+  it('opens the Arazzo import dialog from the page header', () => {
     const fixture = openPage([PASTRY_SCENARIOS]);
 
     (element(fixture).querySelector('.workflows-import') as HTMLButtonElement).click();
 
-    expect(uploaderDialog.openArtifactUploader).toHaveBeenCalled();
+    expect(modalService.show).toHaveBeenCalledWith(ImportArazzoDialogComponent, jasmine.anything());
+    expect(uploaderDialog.openArtifactUploader).not.toHaveBeenCalled();
+  });
+
+  it('lists the documents again once the Arazzo import dialog is closed', () => {
+    const fixture = openPage([]);
+    (element(fixture).querySelector('.blank-slate-pf button') as HTMLButtonElement).click();
+    documentsService.documents.push(PASTRY_SCENARIOS);
+
+    importDialogHidden.next(undefined);
+    fixture.detectChanges();
+
+    expect(texts(fixture, '.workflows-document-title')).toEqual(['API Pastry scenarios']);
   });
 
   it('lists only the documents using the API filtered on', async () => {
@@ -259,7 +277,7 @@ describe('WorkflowsPageComponent', () => {
     expect(runButtons.map((button) => button.disabled)).toEqual([false, false]);
     runButtons[1].click();
 
-    expect(modals.show).toHaveBeenCalledWith(WorkflowRunDialogComponent, jasmine.objectContaining({
+    expect(modalService.show).toHaveBeenCalledWith(WorkflowRunDialogComponent, jasmine.objectContaining({
       initialState: { documentId: 'pastry-doc', workflowIds: ['readThenReprice', 'listThenReadFirst'],
         workflowId: 'listThenReadFirst' }
     }));

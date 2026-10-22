@@ -31,6 +31,7 @@ import { ServiceType } from '../../models/service.model';
 import { TimeAgoPipe } from '../../components/time-ago.pipe';
 import { ArazzoDocumentsService } from '../../services/arazzo-documents.service';
 import { UploaderDialogService } from '../../services/uploader-dialog.service';
+import { ImportArazzoDialogComponent } from './import-arazzo-dialog/import-arazzo-dialog.component';
 import { openRunDialog } from './workflow-run-dialog/workflow-run.dialog';
 
 /** The protocol chip of each type of API, in the colors of its protocol. */
@@ -189,7 +190,10 @@ export class WorkflowsPageComponent implements OnInit, OnDestroy {
     );
   }
 
-  openArtifactUploader(): void {
-    this.uploaderDialogService.openArtifactUploader();
+  /** Open the dialog that imports an Arazzo document with the links of its sources, then list the documents again. */
+  openImportDialog(): void {
+    this.modalService
+      .show(ImportArazzoDialogComponent, { class: 'arazzo-import-modal', ariaLabelledBy: 'arazzo-import-title' })
+      .onHidden?.subscribe(() => this.getDocuments());
   }
 }

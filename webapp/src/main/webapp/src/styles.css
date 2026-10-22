@@ -25,6 +25,8 @@
   --status-success: #3f9c35; /* status-success: good health/grade */
   --status-success-bright: #92d400; /* status-success-bright: positive accent */
   --status-warning: #efaa00; /* status-warning: caution/amber */
+  --warning-tint: #fcf6e4; /* warning-tint: background of a row that needs attention */
+  --warning-text: #7d5a00; /* warning-text: readable caution text */
   --status-danger: #cc0000; /* status-danger: critical/severe */
   --primary-tint: #def3ff; /* primary-tint: info/brand background */
   --primary-deep: #004368; /* primary-deep: brand gradient end */
@@ -108,6 +110,8 @@
   --tooltip-background: #292e34;
   --tooltip-text: rgb(200, 200, 200);
   --card-box-shadow: 0 1px 1px rgba(3, 3, 3, .825);
+  --warning-tint: #3a3322; /* warning-tint: background of a row that needs attention */
+  --warning-text: #f2c75c; /* warning-text: readable caution text */
 
   /* Dark mode: Live traces graph colors */
   --operation-accent: #ff9800; /* operation-accent: brighter orange for dark mode */
@@ -395,6 +399,13 @@ pre.hljs {
 }
 .modal.show .modal-dialog {
   transform: translate(0, 0);
+}
+
+/* The Arazzo import dialog: wider than a default dialog for its table of sources. */
+@media (min-width: 768px) {
+  .modal-dialog.arazzo-import-modal {
+    width: min(820px, calc(100vw - 40px));
+  }
 }
 
 /** Missing from patterfly-ng.css that is no longer imported */

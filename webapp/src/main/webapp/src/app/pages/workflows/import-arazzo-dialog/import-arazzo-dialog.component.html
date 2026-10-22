@@ -1,0 +1,150 @@
+<div class="arazzo-import">
+  <div class="modal-header arazzo-import-header">
+    <h4 class="modal-title" id="arazzo-import-title">Import Arazzo document</h4>
+    <button type="button" class="close" aria-label="Close" (click)="bsModalRef.hide()">
+      <span class="pficon pficon-close" aria-hidden="true"></span>
+    </button>
+  </div>
+
+  <div class="modal-body arazzo-import-body">
+    <section class="arazzo-import-section" aria-labelledby="arazzo-import-document-title">
+      <h5 id="arazzo-import-document-title" class="arazzo-import-section-title">1. Document</h5>
+      <div class="arazzo-import-drop arazzo-import-document" [class.arazzo-import-dragging]="dragging"
+        (dragover)="onDragOver($event)" (dragleave)="onDragLeave()" (drop)="onDrop($event)">
+        <span class="fa fa-file-o arazzo-import-file-icon" aria-hidden="true"></span>
+        <div class="arazzo-import-file">
+          <ng-container *ngIf="fileName; else noFile">
+            <div class="arazzo-import-file-name">{{ fileName }}</div>
+            <div *ngIf="analysis" class="arazzo-import-validation" [class.arazzo-import-refused]="!valid" role="status">
+              <ng-container *ngIf="valid; else refused">
+                <span class="fa fa-check-circle-o arazzo-import-ok" aria-hidden="true"></span>
+                Valid Arazzo {{ analysis.arazzoVersion }} · title “{{ analysis.title }}” {{ analysis.version }} ·
+                {{ analysis.workflowIds.length }} {{ analysis.workflowIds.length === 1 ? 'workflow' : 'workflows' }} ·
+                {{ analysis.sources.length }}
+                {{ analysis.sources.length === 1 ? 'source description' : 'source descriptions' }}
+              </ng-container>
+              <ng-template #refused>
+                <span class="pficon pficon-error-circle-o" aria-hidden="true"></span>
+                {{ analysis.refusal }}
+              </ng-template>
+            </div>
+          </ng-container>
+          <ng-template #noFile>
+            <div class="arazzo-import-drop-text">Drop a <code>.arazzo.yaml</code> or <code>.arazzo.json</code> file here</div>
+          </ng-template>
+        </div>
+        <label class="btn btn-default arazzo-import-choose">
+          {{ fileName ? 'Choose another file' : 'Choose a file' }}
+          <input type="file" class="sr-only" accept=".yaml,.yml,.json" (change)="onFileChosen($event)" />
+        </label>
+      </div>
+      <p class="arazzo-import-help">
+        Drop a <code>.arazzo.yaml</code> or <code>.arazzo.json</code> file, or import it from a URL in Importers.
+        Re-importing the same title and version updates the existing document.
+      </p>
+    </section>
+
+    <ng-container *ngIf="valid && analysis">
+      <section class="arazzo-import-section" aria-labelledby="arazzo-import-sources-title">
+        <h5 id="arazzo-import-sources-title" class="arazzo-import-section-title">
+          2. Link source descriptions to Microcks APIs
+        </h5>
+        <p class="arazzo-import-intro">
+          Each step calls an operation of a source description. Link each one to an API already imported in Microcks:
+          its operations are checked now, and its mocks become a run target.
+        </p>
+        <div class="arazzo-import-table-wrapper">
+          <table class="arazzo-import-sources">
+            <thead>
+              <tr>
+                <th scope="col">Source description</th>
+                <th scope="col">Declared URL</th>
+                <th scope="col">Microcks API</th>
+                <th scope="col">Step operations</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let source of analysis.sources" [class.arazzo-import-source-unlinked]="isWarning(source)">
+                <td><code class="arazzo-import-source-name">{{ source.sourceName }}</code></td>
+                <td class="arazzo-import-declared-url">{{ source.declaredUrl }}</td>
+                <td class="arazzo-import-api-cell">
+                  <label class="sr-only" [attr.for]="'arazzo-import-api-' + source.sourceName">
+                    Microcks API of {{ source.sourceName }}
+                  </label>
+                  <select class="form-control arazzo-import-api" [id]="'arazzo-import-api-' + source.sourceName"
+                    [ngModel]="choices[source.sourceName]" (ngModelChange)="pick(source.sourceName, $event)">
+                    <option value="">Not linked</option>
+                    <option *ngFor="let api of analysis.apis" [value]="apiKey(api)">{{ api.name }} · {{ api.version }}</option>
+                  </select>
+                  <div *ngIf="hint(source) as sourceHint" class="arazzo-import-hint"
+                    [ngClass]="'arazzo-import-hint-' + sourceHint.kind">{{ sourceHint.text }}</div>
+                </td>
+                <td class="arazzo-import-operations" [class.arazzo-import-unresolved]="!allFound(source)">
+                  <ng-container *ngIf="source.link.linked; else unresolved">
+                    <span class="fa" [class.fa-check-circle-o]="allFound(source)"
+                      [class.pficon]="!allFound(source)" [class.pficon-warning-triangle-o]="!allFound(source)"
+                      aria-hidden="true"></span>
+                    {{ source.foundOperationCount }} of {{ source.operationCount }} found
+                  </ng-container>
+                  <ng-template #unresolved>
+                    <span class="pficon pficon-warning-triangle-o" aria-hidden="true"></span>
+                    {{ source.unresolvedStepCount }} {{ source.unresolvedStepCount === 1 ? 'step' : 'steps' }} unresolved
+                  </ng-template>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p *ngFor="let source of missingSources(analysis)" class="arazzo-import-missing">
+          {{ source.match.contractTitle }} is not in Microcks yet:
+          <a role="button" tabindex="0" (click)="importMissingApi(source)"
+            (keydown.enter)="importMissingApi(source)">import {{ fileNameOf(source.declaredUrl) }}</a>
+          first, or import now and link it later from the workflow page.
+        </p>
+      </section>
+
+      <section class="arazzo-import-section" aria-labelledby="arazzo-import-checks-title">
+        <h5 id="arazzo-import-checks-title" class="arazzo-import-section-title">3. Checks</h5>
+        <ul class="arazzo-import-checks">
+          <li>
+            <span class="fa fa-check-circle-o arazzo-import-ok" aria-hidden="true"></span>
+            Runtime expressions and success criteria use the supported subset.
+          </li>
+          <ng-container *ngFor="let check of analysis.checks">
+            <li *ngIf="check.runnable">
+              <span class="fa fa-check-circle-o arazzo-import-ok" aria-hidden="true"></span>
+              <code>{{ check.workflowId }}</code> is ready to run: all its operations are in
+              {{ joined(check.apiNames) }}.
+            </li>
+            <li *ngIf="check.unlinkedSources.length > 0">
+              <span class="pficon pficon-warning-triangle-o arazzo-import-warning" aria-hidden="true"></span>
+              <code>{{ check.workflowId }}</code> cannot run until
+              <ng-container *ngFor="let sourceName of check.unlinkedSources; let last = last; let index = index">
+                <ng-container *ngIf="index > 0">{{ last ? ' and ' : ', ' }}</ng-container><code>{{ sourceName }}</code>
+              </ng-container>
+              {{ check.unlinkedSources.length === 1 ? 'is' : 'are' }} linked.
+            </li>
+            <li *ngIf="check.reasons.length > 0">
+              <span class="pficon pficon-warning-triangle-o arazzo-import-warning" aria-hidden="true"></span>
+              <code>{{ check.workflowId }}</code> cannot run: {{ check.reasons.join('; ') }}.
+            </li>
+          </ng-container>
+        </ul>
+      </section>
+    </ng-container>
+  </div>
+
+  <div class="modal-footer arazzo-import-footer">
+    <span *ngIf="valid && analysis" class="arazzo-import-linked-count">
+      {{ linkedCount(analysis) }} of {{ analysis.sources.length }}
+      {{ analysis.sources.length === 1 ? 'source' : 'sources' }} linked
+    </span>
+    <span *ngIf="importError" class="arazzo-import-error" role="alert">
+      <span class="pficon pficon-error-circle-o" aria-hidden="true"></span> {{ importError }}
+    </span>
+    <button type="button" class="btn btn-default arazzo-import-cancel" (click)="bsModalRef.hide()">Cancel</button>
+    <button type="button" class="btn btn-primary arazzo-import-submit" [disabled]="!canImport" (click)="importDocument()">
+      Import
+    </button>
+  </div>
+</div>

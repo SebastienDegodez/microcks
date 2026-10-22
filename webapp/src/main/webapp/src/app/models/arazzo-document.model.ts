@@ -60,3 +60,61 @@ export interface ArazzoDocumentSummary {
   sources: ArazzoSourceSummary[];
   workflows: ArazzoWorkflowSummary[];
 }
+
+/** Whether the contract a source description declares names an API of Microcks. */
+export type ArazzoSourceMatchStatus = 'MATCHED' | 'NO_API' | 'UNREADABLE';
+
+export interface ArazzoSourceMatch {
+  status: ArazzoSourceMatchStatus;
+  /** The title of the declared contract; null when it cannot be read. */
+  contractTitle: string | null;
+  /** The version of the declared contract; null when it cannot be read. */
+  contractVersion: string | null;
+}
+
+export interface ArazzoSourceAnalysis {
+  sourceName: string;
+  declaredUrl: string;
+  match: ArazzoSourceMatch;
+  /** The link chosen, or else the one matched. */
+  link: ArazzoSourceLink;
+  /** How many distinct operations the steps call on this source. */
+  operationCount: number;
+  /** How many of these operations the linked API defines. */
+  foundOperationCount: number;
+  /** How many steps call an operation of this source that is not found. */
+  unresolvedStepCount: number;
+}
+
+export interface ArazzoWorkflowCheck {
+  workflowId: string;
+  runnable: boolean;
+  /** The linked APIs its steps call. */
+  apiNames: string[];
+  /** The source descriptions its steps call that are not linked. */
+  unlinkedSources: string[];
+  /** Why a step calling a linked API is not resolved. */
+  reasons: string[];
+}
+
+/** An API of Microcks a source description can be linked to. */
+export interface ArazzoApiRef {
+  name: string;
+  version: string;
+}
+
+/** What an Arazzo document would become if it were imported with the links of its sources. */
+export interface ArazzoImportAnalysis {
+  /** Why the document cannot be imported; null when it can. */
+  refusal: string | null;
+  arazzoVersion: string | null;
+  title: string | null;
+  version: string | null;
+  workflowIds: string[];
+  sources: ArazzoSourceAnalysis[];
+  checks: ArazzoWorkflowCheck[];
+  apis: ArazzoApiRef[];
+}
+
+/** The API each source description is linked to, by name; null when it is not linked. */
+export type ArazzoSourceLinks = Record<string, ArazzoApiRef | null>;

@@ -16,14 +16,22 @@
 package io.github.microcks.web;
 
 import io.github.microcks.domain.ArazzoDocumentSummary;
+import io.github.microcks.domain.ArazzoImportAnalysis;
 import io.github.microcks.service.ArazzoDocumentService;
+import io.github.microcks.service.ArazzoImportService;
+import io.github.microcks.util.MockRepositoryImportException;
 
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * A Rest controller for the Arazzo documents imported into Microcks.
@@ -34,13 +42,43 @@ import java.util.List;
 public class ArazzoDocumentController {
 
    private final ArazzoDocumentService arazzoDocumentService;
+   private final ArazzoImportService arazzoImportService;
 
    /**
     * Build a new ArazzoDocumentController with its dependencies.
     * @param arazzoDocumentService to summarise the imported Arazzo documents
+    * @param arazzoImportService   to analyse and import the Arazzo documents dropped in the import dialog
     */
-   public ArazzoDocumentController(ArazzoDocumentService arazzoDocumentService) {
+   public ArazzoDocumentController(ArazzoDocumentService arazzoDocumentService,
+         ArazzoImportService arazzoImportService) {
       this.arazzoDocumentService = arazzoDocumentService;
+      this.arazzoImportService = arazzoImportService;
+   }
+
+   /**
+    * Analyse an Arazzo document before importing it. Nothing is stored.
+    * @param request The document, with the links chosen for its source descriptions, if any
+    * @return Whether the document can be imported, the API each source is linked to, and whether each workflow is ready
+    *         to run
+    */
+   @PostMapping(value = "/documents/analysis")
+   public ArazzoImportAnalysis analyseDocument(@RequestBody ArazzoImportRequest request) {
+      return arazzoImportService.analyseArazzoDocument(request.content(), request.links());
+   }
+
+   /**
+    * Import an Arazzo document with the links chosen for its source descriptions, all or nothing.
+    * @param request The document, with the links chosen for its source descriptions
+    * @return The summary of the imported document, or why it is refused
+    */
+   @PostMapping(value = "/documents")
+   public ResponseEntity<Object> importDocument(@RequestBody ArazzoImportRequest request) {
+      try {
+         return new ResponseEntity<>(arazzoImportService.importArazzoDocument(request.content(), request.fileName(),
+               request.links() == null ? Map.of() : request.links()), HttpStatus.CREATED);
+      } catch (MockRepositoryImportException mrie) {
+         return new ResponseEntity<>(mrie.getMessage(), HttpStatus.BAD_REQUEST);
+      }
    }
 
    /**
