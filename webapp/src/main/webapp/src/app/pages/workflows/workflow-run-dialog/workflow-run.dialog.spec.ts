@@ -23,6 +23,7 @@ import { ArazzoWorkflowDetail } from '../../../models/arazzo-workflow.model';
 import { WorkflowResult } from '../../../models/arazzo-run.model';
 import { ArazzoRunService } from '../../../services/arazzo-run.service';
 import { ArazzoWorkflowService } from '../../../services/arazzo-workflow.service';
+import { SecretsService } from '../../../services/secrets.service';
 import { WorkflowRunDialogComponent } from './workflow-run.dialog';
 
 /** A workflow of API Pastry scenarios, as GET /api/arazzo/documents/doc-1/workflows/{workflowId} answers it. */
@@ -78,6 +79,7 @@ describe('WorkflowRunDialogComponent', () => {
         provideRouter([]),
         { provide: BsModalRef, useValue: modalRef },
         { provide: ArazzoRunService, useValue: runs },
+        { provide: SecretsService, useValue: { getSecrets: () => of([]) } },
         { provide: ArazzoWorkflowService, useValue: {
           getWorkflow: (documentId: string, id: string) => of(WORKFLOWS[id]) } }
       ]
@@ -127,15 +129,16 @@ describe('WorkflowRunDialogComponent', () => {
     expect((dialog().querySelector('#workflow-run-workflow') as HTMLSelectElement).value).toEqual('readThenReprice');
   });
 
-  it('runs against the Microcks mocks, running against implementations being available soon', () => {
+  it('runs against the Microcks mocks by default, or against implementations', async () => {
     open();
+    await fixture.whenStable();
 
     const targets = Array.from(dialog().querySelectorAll('.workflow-run-target input')) as HTMLInputElement[];
     expect(targets.map(target => target.checked)).toEqual([true, false]);
-    expect(targets.map(target => target.disabled)).toEqual([false, true]);
+    expect(targets.map(target => target.disabled)).toEqual([false, false]);
     expect(texts('.workflow-run-target-title')).toEqual(['Microcks mocks', 'Implementations']);
     expect(texts('.workflow-run-target code')).toEqual(['/rest/API+Pastry+-+2.0/2.0.0']);
-    expect(dialog().querySelectorAll('.workflow-run-target')[1].getAttribute('title')).toEqual('Available soon');
+    expect(dialog().querySelectorAll('.workflow-run-target')[1].getAttribute('title')).toBeNull();
   });
 
   it('asks for each input with its type and where the workflow uses it', () => {

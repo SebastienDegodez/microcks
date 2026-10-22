@@ -22,6 +22,6 @@ package io.github.microcks.domain;
 public enum WorkflowRunTarget {
    /** The Microcks mocks of the API linked to the source description of each step. */
    MOCKS,
-   /** The implementations of the APIs, at the endpoints the run is given. */
+   /** The implementations of the APIs, at the base URL set per source description for the run. */
    IMPLEMENTATIONS
 }

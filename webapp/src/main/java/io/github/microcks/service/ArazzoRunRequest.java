@@ -15,6 +15,8 @@
  */
 package io.github.microcks.service;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+
 import java.util.Map;
 
 /**
@@ -26,10 +28,37 @@ import java.util.Map;
  * @param inputs         The inputs of the workflow, by name
  * @param sources        Where to call the operations of each linked source description, by source name
  * @param timeoutMS      How long a step waits for its response, in milliseconds
+ * @param secret         The secret whose authorization every call carries; null for none
  * @author SebastienDegodez
  */
 public record ArazzoRunRequest(String runId, String workflowId, String arazzoDocument, Map<String, Object> inputs,
-      Map<String, Source> sources, long timeoutMS) {
+      Map<String, Source> sources, long timeoutMS, @JsonInclude(JsonInclude.Include.NON_NULL) Secret secret) {
+
+   /**
+    * A run whose calls carry no secret.
+    * @param runId          The id of the run, to report its steps and its end to
+    * @param workflowId     The workflow to run
+    * @param arazzoDocument The Arazzo document, as imported
+    * @param inputs         The inputs of the workflow, by name
+    * @param sources        Where to call the operations of each linked source description, by source name
+    * @param timeoutMS      How long a step waits for its response, in milliseconds
+    */
+   public ArazzoRunRequest(String runId, String workflowId, String arazzoDocument, Map<String, Object> inputs,
+         Map<String, Source> sources, long timeoutMS) {
+      this(runId, workflowId, arazzoDocument, inputs, sources, timeoutMS, null);
+   }
+
+   /**
+    * The authorization a secret of Microcks defines, as contract tests apply it: Basic with a username and a password,
+    * the token in its own header when the secret names one, Bearer otherwise.
+    * @param name        The name of the secret in Microcks
+    * @param username    The username of Basic authentication; null for none
+    * @param password    The password of Basic authentication; null for none
+    * @param token       The token; null for none
+    * @param tokenHeader The header carrying the token; null for Authorization: Bearer
+    */
+   public record Secret(String name, String username, String password, String token, String tokenHeader) {
+   }
 
    /**
     * Where to call the operations of a source description.

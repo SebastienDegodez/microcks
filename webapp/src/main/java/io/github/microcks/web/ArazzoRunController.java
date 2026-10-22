@@ -16,6 +16,7 @@
 package io.github.microcks.web;
 
 import io.github.microcks.domain.WorkflowResult;
+import io.github.microcks.service.ArazzoRunImplementations;
 import io.github.microcks.service.ArazzoRunRefusedException;
 import io.github.microcks.service.ArazzoRunService;
 import io.github.microcks.web.dto.ArazzoRunLaunchDTO;
@@ -57,7 +58,8 @@ public class ArazzoRunController {
          @PathVariable("workflowId") String workflowId, @RequestBody ArazzoRunLaunchDTO launch) {
       try {
          Optional<WorkflowResult> run = arazzoRunService.launchRun(documentId, workflowId, launch.inputs(),
-               launch.timeout());
+               launch.timeout(), launch.implementations() == null ? null
+                     : new ArazzoRunImplementations(launch.implementations(), launch.secretName()));
          return run.<ResponseEntity<Object>>map(
                launched -> ResponseEntity.created(URI.create("/api/arazzo/runs/" + launched.getId())).body(launched))
                .orElseGet(() -> ResponseEntity.notFound().build());

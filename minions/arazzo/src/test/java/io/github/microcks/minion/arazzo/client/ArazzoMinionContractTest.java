@@ -25,6 +25,7 @@ import io.github.microcks.minion.arazzo.runner.HttpOutcome;
 import io.github.microcks.minion.arazzo.runner.OperationTarget;
 import io.github.microcks.minion.arazzo.runner.ParameterValue;
 import io.github.microcks.minion.arazzo.runner.RunOutcome;
+import io.github.microcks.minion.arazzo.runner.RunSecret;
 import io.github.microcks.minion.arazzo.runner.RunSpecification;
 import io.github.microcks.minion.arazzo.runner.RunStatus;
 import io.github.microcks.minion.arazzo.runner.SourceTarget;
@@ -94,6 +95,21 @@ class ArazzoMinionContractTest {
             .toSpecification("http://microcks:8080");
 
       assertEquals(URI.create("http://pastry.example:8080"), specification.sources().get("pastryApi").baseUrl());
+   }
+
+   @Test
+   void aRunAgainstAnImplementationIsReadWithItsBaseUrlAndTheAuthorizationOfItsSecret() throws IOException {
+      RunRequestDTO request = JSON.treeToValue(contract().get("implementationRunRequest"), RunRequestDTO.class);
+
+      assertEquals(
+            new RunSpecification("6719f0c2a1b2c3d4e5f60719", "readThenReprice", "arazzo: 1.0.1",
+                  Map.of("pastry", "Eclair Cafe", "newPrice", 2.6),
+                  Map.of("pastryApi",
+                        new SourceTarget(URI.create("http://localhost:8080"),
+                              Map.of("GetPastryByName", new OperationTarget("GET", "/pastry/{name}"), "PatchPastry",
+                                    new OperationTarget("PATCH", "/pastry/{name}")))),
+                  Duration.ofSeconds(10), new RunSecret(null, null, "s3cr3t-t0k3n", "X-Pastry-Token")),
+            request.toSpecification("http://microcks:8080"));
    }
 
    @Test

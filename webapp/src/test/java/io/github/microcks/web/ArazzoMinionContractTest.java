@@ -171,6 +171,20 @@ class ArazzoMinionContractTest {
       assertNull(outcome.message());
    }
 
+   @Test
+   void aRunAgainstAnImplementationIsPostedWithItsBaseUrlAndSecret() throws Exception {
+      new HttpArazzoMinionClient(minion.url()).launch(new ArazzoRunRequest("6719f0c2a1b2c3d4e5f60719",
+            "readThenReprice", "arazzo: 1.0.1", Map.of("pastry", "Eclair Cafe", "newPrice", 2.6),
+            Map.of("pastryApi",
+                  new ArazzoRunRequest.Source("http://localhost:8080",
+                        Map.of("GetPastryByName", new ArazzoRunRequest.Operation("GET", "/pastry/{name}"),
+                              "PatchPastry", new ArazzoRunRequest.Operation("PATCH", "/pastry/{name}")))),
+            10000, new ArazzoRunRequest.Secret("pastry-staging-token", null, null, "s3cr3t-t0k3n", "X-Pastry-Token")));
+
+      assertEquals(List.of(contract().get("implementationRunRequest")),
+            minion.runRequests().stream().map(ArazzoMinionContractTest::read).toList());
+   }
+
    private static String headers(java.util.Set<Header> headers) {
       return headers.stream().map(header -> header.getName() + "=" + header.getValues()).sorted()
             .collect(Collectors.joining(", "));

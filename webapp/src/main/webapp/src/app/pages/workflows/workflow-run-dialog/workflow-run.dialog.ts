@@ -21,9 +21,12 @@ import { forkJoin } from 'rxjs';
 
 import { BsModalRef, BsModalService } from 'ngx-bootstrap/modal';
 
-import { ArazzoWorkflowDetail, ArazzoWorkflowInput } from '../../../models/arazzo-workflow.model';
+import { ArazzoSourceDescription, ArazzoWorkflowDetail, ArazzoWorkflowInput } from '../../../models/arazzo-workflow.model';
+import { WorkflowRunImplementations } from '../../../models/arazzo-run.model';
+import { Secret } from '../../../models/secret.model';
 import { ArazzoRunService } from '../../../services/arazzo-run.service';
 import { ArazzoWorkflowService } from '../../../services/arazzo-workflow.service';
+import { SecretsService } from '../../../services/secrets.service';
 
 /** A piece of the sentence telling where an input is used: some text, or an identifier shown as code. */
 export type UsePart = { text: string; code?: string };
@@ -49,7 +52,13 @@ export function openRunDialog(modals: BsModalService, documentId: string, workfl
   });
 }
 
-/** The dialog running a workflow of an Arazzo document against the Microcks mocks of its linked APIs. */
+/** What the steps of a run call. */
+export type RunTarget = 'MOCKS' | 'IMPLEMENTATIONS';
+
+/**
+ * The dialog running a workflow of an Arazzo document against the Microcks mocks of its linked APIs, or against their
+ * implementations.
+ */
 @Component({
   selector: 'app-workflow-run-dialog',
   templateUrl: './workflow-run.dialog.html',
@@ -69,11 +78,17 @@ export class WorkflowRunDialogComponent implements OnInit {
   timeout = 10000;
   error?: string;
   running = false;
+  target: RunTarget = 'MOCKS';
+  /** The base URL of the implementation of each linked source, by source name. */
+  baseUrls: Record<string, string> = {};
+  /** The secrets the user may read, as contract tests offer them; read once implementations are chosen. */
+  secrets?: Secret[];
+  secretName: string | null = null;
   /** Once a run is refused, the inputs it needs that are still empty are marked. */
   refused = false;
 
   constructor(public bsModalRef: BsModalRef, private workflowSvc: ArazzoWorkflowService,
-              private runSvc: ArazzoRunService, private router: Router) {
+              private runSvc: ArazzoRunService, private router: Router, private secretsSvc: SecretsService) {
   }
 
   ngOnInit(): void {
@@ -95,6 +110,28 @@ export class WorkflowRunDialogComponent implements OnInit {
   /** Whether an input a run needs is still empty after a run was refused. */
   isMissing(input: ArazzoWorkflowInput): boolean {
     return this.refused && !!input.required && isEmpty(this.values[input.name]);
+  }
+
+  selectTarget(target: RunTarget): void {
+    this.target = target;
+    if (target === 'IMPLEMENTATIONS' && !this.secrets) {
+      this.secretsSvc.getSecrets().subscribe(secrets => this.secrets = secrets);
+    }
+  }
+
+  /** The sources linked to an API: each one is called at the base URL of its implementation. */
+  linkedSources(workflow: ArazzoWorkflowDetail): ArazzoSourceDescription[] {
+    return workflow.sources.filter(source => source.link.linked);
+  }
+
+  /** A runnable workflow runs against the mocks, or against implementations once each linked source has its URL. */
+  canRun(): boolean {
+    const workflow = this.selected;
+    if (!workflow?.status.runnable) {
+      return false;
+    }
+    return this.target === 'MOCKS'
+      || this.linkedSources(workflow).every(source => (this.baseUrls[source.link.sourceName] ?? '').trim() !== '');
   }
 
   /** Where the mocks of the first linked API are, as Microcks serves them. */
@@ -143,7 +180,10 @@ export class WorkflowRunDialogComponent implements OnInit {
     });
     this.running = true;
     this.error = undefined;
-    this.runSvc.launchRun(this.documentId, workflow.workflowId, inputs, this.timeout).subscribe({
+    const launched = this.target === 'IMPLEMENTATIONS'
+      ? this.runSvc.launchRun(this.documentId, workflow.workflowId, inputs, this.timeout, this.implementations(workflow))
+      : this.runSvc.launchRun(this.documentId, workflow.workflowId, inputs, this.timeout);
+    launched.subscribe({
       next: run => {
         this.bsModalRef.hide();
         this.router.navigate(['/workflows/runs', run.id]);
@@ -154,6 +194,13 @@ export class WorkflowRunDialogComponent implements OnInit {
         this.error = typeof refusal.error === 'string' ? refusal.error : 'Microcks could not run the workflow.';
       }
     });
+  }
+
+  private implementations(workflow: ArazzoWorkflowDetail): WorkflowRunImplementations {
+    const baseUrls: Record<string, string> = {};
+    this.linkedSources(workflow).forEach(source =>
+      baseUrls[source.link.sourceName] = this.baseUrls[source.link.sourceName].trim());
+    return this.secretName ? { baseUrls, secretName: this.secretName } : { baseUrls };
   }
 }
 

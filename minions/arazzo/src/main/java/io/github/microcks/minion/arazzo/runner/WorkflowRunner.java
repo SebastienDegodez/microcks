@@ -117,8 +117,10 @@ public class WorkflowRunner {
       try {
          requireCallable(operation);
          parameters = resolve(step.parameters(), context);
-         call = call(step, operation, parameters, specification, context);
-         response = transport.send(call, specification.timeout());
+         HttpCall built = call(step, operation, parameters, specification, context);
+         // The values of the secret are sent, never reported.
+         call = specification.secret().trace(built);
+         response = transport.send(specification.secret().authorize(built), specification.timeout());
          EvaluationContext answered = context.with(response);
          List<CriterionResult> criteria = step.successCriteria().stream()
                .map(criterion -> conditions.evaluate(criterion, answered)).toList();
