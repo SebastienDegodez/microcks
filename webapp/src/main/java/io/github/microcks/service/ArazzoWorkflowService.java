@@ -146,7 +146,8 @@ public class ArazzoWorkflowService {
                         expressionUse(passing.use())))
                   .toList(),
             ArazzoDocumentService.status(workflow.workflowId(), document.getWorkflowCalls().get(workflow.workflowId()),
-                  sources));
+                  sources),
+            arazzoDocumentService.getExamples(document, workflow.workflowId()));
    }
 
    /** The inputs steps use or the workflow declares, then those only its outputs use or its schema requires. */

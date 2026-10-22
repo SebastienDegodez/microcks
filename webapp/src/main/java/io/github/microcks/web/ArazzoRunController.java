@@ -15,6 +15,7 @@
  */
 package io.github.microcks.web;
 
+import io.github.microcks.domain.ArazzoExampleLaunch;
 import io.github.microcks.domain.WorkflowResult;
 import io.github.microcks.service.ArazzoRunImplementations;
 import io.github.microcks.service.ArazzoRunRefusedException;
@@ -33,6 +34,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.net.URI;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -58,11 +60,11 @@ public class ArazzoRunController {
    public ResponseEntity<Object> launchRun(@PathVariable("documentId") String documentId,
          @PathVariable("workflowId") String workflowId, @RequestBody ArazzoRunLaunchDTO launch) {
       try {
-         Optional<WorkflowResult> run = arazzoRunService.launchRun(documentId, workflowId, launch.inputs(),
-               launch.timeout(),
-               launch.implementations() == null ? null
-                     : new ArazzoRunImplementations(launch.implementations(), launch.secretName()),
-               Boolean.TRUE.equals(launch.validateSchema()));
+         Optional<WorkflowResult> run = launch.example() == null
+               ? arazzoRunService.launchRun(documentId, workflowId, launch.inputs(), launch.timeout(),
+                     implementationsOf(launch), Boolean.TRUE.equals(launch.validateSchema()))
+               : arazzoRunService.launchExampleRun(documentId, workflowId, launch.example(), launch.timeout(),
+                     implementationsOf(launch), Boolean.TRUE.equals(launch.validateSchema()));
          return run.<ResponseEntity<Object>>map(
                launched -> ResponseEntity.created(URI.create("/api/arazzo/runs/" + launched.getId())).body(launched))
                .orElseGet(() -> ResponseEntity.notFound().build());
@@ -70,6 +72,33 @@ public class ArazzoRunController {
          // The reason is plain text, whatever the client accepts, as the Microcks API describes it.
          return ResponseEntity.badRequest().contentType(MediaType.TEXT_PLAIN).body(arre.getMessage());
       }
+   }
+
+   /**
+    * Play every recorded example of a workflow, one run per example, as a CI does in one call.
+    * @param documentId The id of the Arazzo document
+    * @param workflowId The id of the workflow in that document
+    * @param launch     What the runs target and how; its inputs and example are not used
+    * @return How the run of each example was launched, in the order of the examples; the reason in plain text when the
+    *         workflow is unknown
+    */
+   @PostMapping(value = "/documents/{documentId}/workflows/{workflowId}/examples/runs")
+   public ResponseEntity<Object> launchExampleRuns(@PathVariable("documentId") String documentId,
+         @PathVariable("workflowId") String workflowId, @RequestBody ArazzoRunLaunchDTO launch) {
+      try {
+         Optional<List<ArazzoExampleLaunch>> launches = arazzoRunService.launchExampleRuns(documentId, workflowId,
+               launch.timeout(), implementationsOf(launch), Boolean.TRUE.equals(launch.validateSchema()));
+         return launches.<ResponseEntity<Object>>map(ResponseEntity::ok)
+               .orElseGet(() -> ResponseEntity.notFound().build());
+      } catch (ArazzoRunRefusedException arre) {
+         return ResponseEntity.badRequest().contentType(MediaType.TEXT_PLAIN).body(arre.getMessage());
+      }
+   }
+
+   /** The implementations a launch targets; null for the mocks. */
+   private static ArazzoRunImplementations implementationsOf(ArazzoRunLaunchDTO launch) {
+      return launch.implementations() == null ? null
+            : new ArazzoRunImplementations(launch.implementations(), launch.secretName());
    }
 
    @GetMapping(value = "/runs/{runId}")

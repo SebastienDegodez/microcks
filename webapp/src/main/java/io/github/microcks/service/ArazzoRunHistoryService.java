@@ -119,6 +119,8 @@ public class ArazzoRunHistoryService {
             : run.getSteps().stream().filter(step -> step.status() == WorkflowStepStatus.FAILED)
                   .map(WorkflowStepResult::stepId).reduce((first, last) -> last).orElse(null);
       return new WorkflowRunSummary(run.getId(), run.getNumber(), run.getWorkflowId(), run.getTarget(), run.getStatus(),
-            failedStepId, run.getStartedDate(), run.getElapsedTime());
+            failedStepId, run.getStartedDate(), run.getElapsedTime(),
+            run.getExample() == null ? null : run.getExample().name(),
+            run.getExample() == null ? null : run.getExample().verdict());
    }
 }

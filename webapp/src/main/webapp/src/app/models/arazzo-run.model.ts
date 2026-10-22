@@ -104,6 +104,38 @@ export type WorkflowResult = {
   missingExample?: WorkflowMissingExample;
   /** Whether each step response was validated against the OpenAPI schema of its operation. */
   validateSchema?: boolean;
+  /** The recorded example the run played, with its verdict once the run ended; absent when it played none. */
+  example?: WorkflowExampleCheck;
+};
+
+/** Whether a run matches the recorded example it played, apart from its own result. */
+export type WorkflowExampleVerdict = 'MATCHES' | 'DOES_NOT_MATCH';
+
+/** What a recorded example expects of a step: its exact status, and the outputs it lists. */
+export type ArazzoStepExpectation = {
+  stepId: string;
+  status?: number;
+  outputs: Record<string, unknown>;
+};
+
+/** The recorded example a run played: what it expects and, once the run ended, its verdict. */
+export type WorkflowExampleCheck = {
+  name: string;
+  outputs: Record<string, unknown>;
+  steps: ArazzoStepExpectation[];
+  /** The step the workflow is expected to stop at; absent when it is expected to run to its end. */
+  stopsAt?: string;
+  /** Absent while the run is in progress. */
+  verdict?: WorkflowExampleVerdict;
+  unmetExpectations: string[];
+};
+
+/** How the run of a recorded example was launched by Run all examples: its run, or why it was refused. */
+export type ArazzoExampleLaunch = {
+  example: string;
+  runId?: string;
+  number?: number;
+  refusal?: string;
 };
 
 /** The implementations a run calls instead of the mocks: one base URL per linked source, and an optional secret. */
@@ -123,6 +155,10 @@ export type WorkflowRunSummary = {
   failedStepId?: string;
   startedDate: number | string;
   elapsedTime: number;
+  /** The recorded example the run played; absent when it played none. */
+  example?: string;
+  /** Whether the run matches its example; absent when it played none or is in progress. */
+  exampleVerdict?: WorkflowExampleVerdict;
 };
 
 /** How many runs a runs history lists, and how many of them passed and failed. */

@@ -169,4 +169,22 @@ describe('WorkflowRunsPageComponent', () => {
 
     expect(rows().map(row => row.split(' | ')[0])).toEqual(['#5', '#4', '#3', '#2', '#1']);
   });
+
+  it('shows the recorded example each run played and whether it matches it', async () => {
+    const runs = pastryRuns();
+    runs[0] = { ...runs[0], example: 'unknown-first-pastry', exampleVerdict: 'MATCHES' };
+    runs[2] = { ...runs[2], example: 'eclair-repriced', exampleVerdict: 'DOES_NOT_MATCH' };
+    runs.unshift({ ...runs[2], id: 'run-4', number: 4, status: 'IN_PROGRESS', example: 'millefeuille-repriced',
+      exampleVerdict: undefined, startedDate: Date.now() - HOUR });
+    await open('/workflows/documents/pastry-doc/runs', runs);
+
+    expect(rows().map(row => row.split(' | ').slice(0, 2).join(' | '))).toEqual([
+      '#4 | readThenReprice example millefeuille-repriced',
+      '#3 | listThenReadFirst example unknown-first-pastry · Matches',
+      '#2 | readThenReprice',
+      '#1 | readThenReprice example eclair-repriced · Does not match'
+    ]);
+    expect(page.querySelectorAll('.workflow-runs-example-matches').length).toEqual(1);
+    expect(page.querySelectorAll('.workflow-runs-example-not-matching').length).toEqual(1);
+  });
 });

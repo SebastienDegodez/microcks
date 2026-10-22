@@ -84,6 +84,52 @@
   margin: 0;
 }
 
+/* The verdict of the recorded example the run played, apart from the result of the run. */
+.workflow-run-example-verdict {
+  display: flex;
+  gap: 12px;
+  margin: 12px 0 8px;
+  padding: 14px 18px;
+  border: 1px solid var(--divider-light);
+  color: var(--text-strong);
+}
+
+.workflow-run-example-matches {
+  border-color: color-mix(in srgb, var(--status-success) 35%, var(--background));
+  background: color-mix(in srgb, var(--status-success) 7%, var(--background));
+}
+
+.workflow-run-example-not-matching {
+  border-color: color-mix(in srgb, var(--danger) 35%, var(--background));
+  background: color-mix(in srgb, var(--danger) 7%, var(--background));
+}
+
+.workflow-run-example-verdict .pficon {
+  margin-top: 3px;
+}
+
+.workflow-run-example-verdict .pficon-ok {
+  color: var(--status-success);
+}
+
+.workflow-run-example-verdict .pficon-error-circle-o {
+  color: var(--run-failed);
+}
+
+.workflow-run-example-verdict p {
+  margin: 0;
+}
+
+.workflow-run-unmet {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+/* An expected output the run did not produce as the example expects. */
+.workflow-run-expected-unmet code.workflow-run-chip:last-child {
+  outline: 1px solid var(--run-failed);
+}
+
 .workflow-run-section-title {
   margin: 28px 0 0;
   padding-bottom: 8px;

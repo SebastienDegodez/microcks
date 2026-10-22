@@ -96,6 +96,29 @@
   color: var(--text-secondary);
 }
 
+/* The recorded example a run played, below its workflow, with whether the run matches it. */
+.workflow-runs-example {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.workflow-runs-example-matches .pficon-ok {
+  color: var(--status-success);
+}
+
+.workflow-runs-example-not-matching {
+  color: var(--text-strong);
+}
+
+.workflow-runs-example-not-matching .pficon-error-circle-o {
+  color: var(--status-danger);
+}
+
+:host-context(.dark) .workflow-runs-example-not-matching .pficon-error-circle-o {
+  color: var(--danger-accent);
+}
+
 .workflow-runs-table .workflow-runs-duration {
   text-align: right;
   white-space: nowrap;
