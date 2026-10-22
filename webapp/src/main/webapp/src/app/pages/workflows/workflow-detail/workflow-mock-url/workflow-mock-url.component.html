@@ -1,0 +1,29 @@
+<pfng-toast-notification-list [notifications]="(notifications | async) ?? []"
+  (onCloseSelect)="handleCloseNotification($event)" [showClose]="true">
+</pfng-toast-notification-list>
+
+<div class="workflow-mock-url">
+  <label class="workflow-mock-url-label" [attr.for]="'workflow-mock-url-' + workflow.workflowId">Mock URL</label>
+  <div class="workflow-mock-url-field">
+    <div class="input-group">
+      <input type="text" class="form-control" [id]="'workflow-mock-url-' + workflow.workflowId" [value]="mockUrl" readonly />
+      <span class="input-group-btn">
+        <button type="button" class="btn btn-default workflow-mock-url-copy" title="Copy to Clipboard"
+                [attr.aria-label]="'Copy the Mock URL of ' + workflow.workflowId"
+                (click)="copyToClipboard(mockUrl, 'Mock URL')">
+          <span class="fa fa-paste" aria-hidden="true"></span>
+        </button>
+      </span>
+    </div>
+    <p class="workflow-mock-url-help">
+      POST the inputs as JSON: Microcks plays the workflow on its mocks and answers with its outputs.
+    </p>
+    <div class="workflow-mock-url-curl-block">
+      <pre class="workflow-mock-url-curl">{{ curl }}</pre>
+      <button type="button" class="btn btn-default workflow-mock-url-copy" title="Copy to Clipboard"
+              [attr.aria-label]="'Copy the curl of ' + workflow.workflowId" (click)="copyToClipboard(curl, 'curl')">
+        <span class="fa fa-paste" aria-hidden="true"></span>
+      </button>
+    </div>
+  </div>
+</div>

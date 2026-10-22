@@ -61,7 +61,7 @@ public class SecurityConfiguration {
       // Disable CORS as we already have a filter in WebConfiguration that does the job
       http.cors(cors -> cors.disable());
 
-      http.securityMatcher("/rest/**", "/rest-valid/**", "/graphql/**", "/soap/**")
+      http.securityMatcher("/rest/**", "/rest-valid/**", "/graphql/**", "/soap/**", "/arazzo/**")
             .authorizeHttpRequests(authorize -> authorize.anyRequest().permitAll());
 
       // Disable the publication of X-Frame-Options to allow embedding the UI.

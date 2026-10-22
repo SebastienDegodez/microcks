@@ -28,6 +28,7 @@ import io.github.microcks.domain.Secret;
 import io.github.microcks.domain.SecretRef;
 import io.github.microcks.domain.WorkflowExampleCheck;
 import io.github.microcks.domain.WorkflowResult;
+import io.github.microcks.domain.WorkflowRunOrigin;
 import io.github.microcks.domain.WorkflowRunStatus;
 import io.github.microcks.domain.WorkflowRunTarget;
 import io.github.microcks.domain.WorkflowSourceTarget;
@@ -178,6 +179,24 @@ public class ArazzoRunService {
    }
 
    /**
+    * Run a workflow against the Microcks mocks for an application that posted its inputs to the Mock URL of the
+    * workflow; the run keeps the Mock URL as its origin.
+    * @param documentId The id of the Arazzo document
+    * @param workflowId The id of the workflow in that document
+    * @param inputs     The inputs of the workflow, by name
+    * @return The run, in progress; empty if the document does not exist
+    * @throws ArazzoRunRefusedException if the workflow is unknown or cannot run, or if an input it needs is missing
+    */
+   public Optional<WorkflowResult> launchMockUrlRun(String documentId, String workflowId, Map<String, Object> inputs)
+         throws ArazzoRunRefusedException {
+      Optional<ArazzoDocument> found = documentWith(documentId, workflowId);
+      if (found.isEmpty()) {
+         return Optional.empty();
+      }
+      return Optional.of(launch(found.get(), workflowId, inputs, null, null, false, null, WorkflowRunOrigin.MOCK_URL));
+   }
+
+   /**
     * Play a recorded example of a workflow: run the workflow with the inputs of the example, then judge whether the run
     * matches what the example expects.
     * @param documentId      The id of the Arazzo document, or its title and version as {@code <title>:<version>}
@@ -248,6 +267,12 @@ public class ArazzoRunService {
    private WorkflowResult launch(ArazzoDocument document, String workflowId, Map<String, Object> inputs, Long timeout,
          ArazzoRunImplementations implementations, boolean validateSchema, WorkflowExampleCheck example)
          throws ArazzoRunRefusedException {
+      return launch(document, workflowId, inputs, timeout, implementations, validateSchema, example, null);
+   }
+
+   private WorkflowResult launch(ArazzoDocument document, String workflowId, Map<String, Object> inputs, Long timeout,
+         ArazzoRunImplementations implementations, boolean validateSchema, WorkflowExampleCheck example,
+         WorkflowRunOrigin origin) throws ArazzoRunRefusedException {
       List<String> asyncStepIds = workflowOf(document, workflowId).map(ArazzoDocumentService::asyncStepIds)
             .orElse(List.of());
       if (!asyncStepIds.isEmpty()) {
@@ -287,6 +312,7 @@ public class ArazzoRunService {
       run.setNumber(nextNumber(document.getId()));
       run.setValidateSchema(validateSchema);
       run.setExample(example);
+      run.setOrigin(origin);
       WorkflowResult launched = workflowResultRepository.save(run);
       try {
          arazzoMinionClient.launch(new ArazzoRunRequest(launched.getId(), workflowId, document.getContent(),

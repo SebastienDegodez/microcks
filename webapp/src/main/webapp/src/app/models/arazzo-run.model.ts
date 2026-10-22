@@ -106,7 +106,12 @@ export type WorkflowResult = {
   validateSchema?: boolean;
   /** The recorded example the run played, with its verdict once the run ended; absent when it played none. */
   example?: WorkflowExampleCheck;
+  /** Where the run was launched from; absent when it was launched from the Microcks UI or API. */
+  origin?: WorkflowRunOrigin;
 };
+
+/** Where a run was launched from, when not from the Microcks UI or API: MOCK_URL, the Mock URL of its workflow. */
+export type WorkflowRunOrigin = 'MOCK_URL';
 
 /** Whether a run matches the recorded example it played, apart from its own result. */
 export type WorkflowExampleVerdict = 'MATCHES' | 'DOES_NOT_MATCH';
@@ -159,6 +164,8 @@ export type WorkflowRunSummary = {
   example?: string;
   /** Whether the run matches its example; absent when it played none or is in progress. */
   exampleVerdict?: WorkflowExampleVerdict;
+  /** Where the run was launched from; absent when it was launched from the Microcks UI or API. */
+  origin?: WorkflowRunOrigin;
 };
 
 /** How many runs a runs history lists, and how many of them passed and failed. */
