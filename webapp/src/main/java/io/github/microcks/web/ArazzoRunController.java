@@ -23,6 +23,7 @@ import io.github.microcks.web.dto.ArazzoRunLaunchDTO;
 import io.github.microcks.web.dto.ArazzoRunOutcomeDTO;
 import io.github.microcks.web.dto.ArazzoStepReportDTO;
 
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -66,7 +67,8 @@ public class ArazzoRunController {
                launched -> ResponseEntity.created(URI.create("/api/arazzo/runs/" + launched.getId())).body(launched))
                .orElseGet(() -> ResponseEntity.notFound().build());
       } catch (ArazzoRunRefusedException arre) {
-         return ResponseEntity.badRequest().body(arre.getMessage());
+         // The reason is plain text, whatever the client accepts, as the Microcks API describes it.
+         return ResponseEntity.badRequest().contentType(MediaType.TEXT_PLAIN).body(arre.getMessage());
       }
    }
 

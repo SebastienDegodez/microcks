@@ -54,6 +54,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -193,6 +194,21 @@ public class ArazzoDocumentService {
          }
       }
       return summaries;
+   }
+
+   /**
+    * Find an imported Arazzo document by its id, or by its title and version, as the id of a Microcks API can be given.
+    * @param documentId The id of the document, or its title and version as {@code <title>:<version>}, a + standing for
+    *                   a space in the title
+    * @return The document, empty if none
+    */
+   public Optional<ArazzoDocument> getDocument(String documentId) {
+      if (documentId.contains(":")) {
+         String title = documentId.substring(0, documentId.indexOf(':')).replace('+', ' ');
+         String version = documentId.substring(documentId.indexOf(':') + 1);
+         return Optional.ofNullable(arazzoDocumentRepository.findByTitleAndVersion(title, version));
+      }
+      return arazzoDocumentRepository.findById(documentId);
    }
 
    /** A document stored before workflow descriptions were kept has none. */

@@ -36,6 +36,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -208,8 +209,9 @@ public class WorkflowRunner {
          call = specification.secret().trace(built);
          response = transport.send(specification.secret().authorize(built), specification.timeout());
          EvaluationContext answered = context.with(response);
+         List<String> unevaluable = new ArrayList<>();
          List<CriterionResult> criteria = step.successCriteria().stream()
-               .map(criterion -> conditions.evaluate(criterion, answered)).toList();
+               .map(criterion -> evaluate(criterion, answered, unevaluable)).toList();
          // A response that does not conform to its schema fails the step, even when its criteria hold.
          Optional<String> nonConformance = specification.validateSchema()
                ? schemas.nonConformance(operation, specification.sources().get(operation.sourceName()), response)
@@ -217,12 +219,26 @@ public class WorkflowRunner {
          boolean passed = criteria.stream().allMatch(CriterionResult::held) && nonConformance.isEmpty();
          return new StepResult(index, step.stepId(), operation, passed ? StepStatus.PASSED : StepStatus.FAILED,
                response.status(), elapsedSince(start), criteria,
-               passed ? evaluateAll(step.outputs(), answered) : Map.of(), call, response, nonConformance.orElse(null),
-               parameters, passed ? step.outputs() : Map.of());
+               passed ? evaluateAll(step.outputs(), answered) : Map.of(), call, response,
+               unevaluable.stream().findFirst().orElse(nonConformance.orElse(null)), parameters,
+               passed ? step.outputs() : Map.of());
       } catch (IOException ioe) {
          return failed(index, step, operation, start, new Exchange(parameters, call, null), "No response: " + ioe);
       } catch (ArazzoRunException are) {
          return failed(index, step, operation, start, new Exchange(parameters, call, response), are.getMessage());
+      }
+   }
+
+   /**
+    * A criterion whose expressions have no value in the response, such as a member a server error does not have, does
+    * not hold; why is kept, so that every criterion of the step is reported with the reason of the first such one.
+    */
+   private CriterionResult evaluate(ArazzoCriterion criterion, EvaluationContext context, List<String> unevaluable) {
+      try {
+         return conditions.evaluate(criterion, context);
+      } catch (ArazzoRunException are) {
+         unevaluable.add(are.getMessage());
+         return new CriterionResult(criterion.condition(), List.of(), false);
       }
    }
 

@@ -29,7 +29,6 @@ import io.github.microcks.domain.WorkflowRunStatus;
 import io.github.microcks.domain.WorkflowRunTarget;
 import io.github.microcks.domain.WorkflowSourceTarget;
 import io.github.microcks.domain.WorkflowStepResult;
-import io.github.microcks.repository.ArazzoDocumentRepository;
 import io.github.microcks.repository.RequestRepository;
 import io.github.microcks.repository.ResourceRepository;
 import io.github.microcks.repository.ResponseRepository;
@@ -66,7 +65,6 @@ public class ArazzoRunService {
    /** An absolute http or https URL: a scheme, then a host. */
    private static final Pattern ABSOLUTE_HTTP_URL = Pattern.compile("(?i)https?://[^/?#\\s]+\\S*");
 
-   private final ArazzoDocumentRepository arazzoDocumentRepository;
    private final ArazzoDocumentService arazzoDocumentService;
    private final WorkflowResultRepository workflowResultRepository;
    private final RequestRepository requestRepository;
@@ -82,8 +80,8 @@ public class ArazzoRunService {
 
    /**
     * Build a new ArazzoRunService with its required dependencies.
-    * @param arazzoDocumentRepository The repository of imported Arazzo documents
-    * @param arazzoDocumentService    The service linking the source descriptions of a document to Microcks APIs
+    * @param arazzoDocumentService    The service finding the Arazzo documents and linking their source descriptions to
+    *                                 Microcks APIs
     * @param workflowResultRepository The repository of the runs
     * @param requestRepository        The repository the requests of the steps are stored in
     * @param responseRepository       The repository the responses of the steps are stored in
@@ -92,12 +90,11 @@ public class ArazzoRunService {
     * @param arazzoMockCoherence      The service telling which example the mocks lack when a step fails
     * @param resourceRepository       The repository of the OpenAPI contracts the responses are validated against
     */
-   public ArazzoRunService(ArazzoDocumentRepository arazzoDocumentRepository,
-         ArazzoDocumentService arazzoDocumentService, WorkflowResultRepository workflowResultRepository,
-         RequestRepository requestRepository, ResponseRepository responseRepository,
-         ArazzoMinionClient arazzoMinionClient, SecretRepository secretRepository,
-         ArazzoMockCoherenceService arazzoMockCoherence, ResourceRepository resourceRepository) {
-      this.arazzoDocumentRepository = arazzoDocumentRepository;
+   public ArazzoRunService(ArazzoDocumentService arazzoDocumentService,
+         WorkflowResultRepository workflowResultRepository, RequestRepository requestRepository,
+         ResponseRepository responseRepository, ArazzoMinionClient arazzoMinionClient,
+         SecretRepository secretRepository, ArazzoMockCoherenceService arazzoMockCoherence,
+         ResourceRepository resourceRepository) {
       this.arazzoDocumentService = arazzoDocumentService;
       this.workflowResultRepository = workflowResultRepository;
       this.requestRepository = requestRepository;
@@ -110,12 +107,12 @@ public class ArazzoRunService {
 
    /**
     * Run a workflow against the Microcks mocks of the APIs its source descriptions are linked to.
-    * @param documentId The id of the Arazzo document
+    * @param documentId The id of the Arazzo document, or its title and version as {@code <title>:<version>}
     * @param workflowId The id of the workflow in that document
     * @param inputs     The inputs of the workflow, by name; null for none
     * @param timeout    How long a step waits for its response, in milliseconds; null for 10 seconds
-    * @return The run, in progress; empty if the document or the workflow does not exist
-    * @throws ArazzoRunRefusedException if the workflow cannot run, or if an input it needs is missing
+    * @return The run, in progress; empty if the document does not exist
+    * @throws ArazzoRunRefusedException if the workflow is unknown or cannot run, or if an input it needs is missing
     */
    public Optional<WorkflowResult> launchRun(String documentId, String workflowId, Map<String, Object> inputs,
          Long timeout) throws ArazzoRunRefusedException {
@@ -125,13 +122,13 @@ public class ArazzoRunService {
    /**
     * Run a workflow against the implementations of the APIs its source descriptions are linked to, or against their
     * Microcks mocks.
-    * @param documentId      The id of the Arazzo document
+    * @param documentId      The id of the Arazzo document, or its title and version as {@code <title>:<version>}
     * @param workflowId      The id of the workflow in that document
     * @param inputs          The inputs of the workflow, by name
     * @param timeout         How long a step waits for its response, in milliseconds; null for 10 seconds
     * @param implementations The base URL of each linked source and the secret of the calls; null for the mocks
-    * @return The run, in progress; empty if the document or the workflow does not exist
-    * @throws ArazzoRunRefusedException if the workflow cannot run, or cannot reach the implementations
+    * @return The run, in progress; empty if the document does not exist
+    * @throws ArazzoRunRefusedException if the workflow is unknown or cannot run, or cannot reach the implementations
     */
    public Optional<WorkflowResult> launchRun(String documentId, String workflowId, Map<String, Object> inputs,
          Long timeout, ArazzoRunImplementations implementations) throws ArazzoRunRefusedException {
@@ -140,13 +137,13 @@ public class ArazzoRunService {
 
    /**
     * Run a workflow against the Microcks mocks of the APIs its source descriptions are linked to.
-    * @param documentId     The id of the Arazzo document
+    * @param documentId     The id of the Arazzo document, or its title and version as {@code <title>:<version>}
     * @param workflowId     The id of the workflow in that document
     * @param inputs         The inputs of the workflow, by name
     * @param timeout        How long a step waits for its response, in milliseconds; null for 10 seconds
     * @param validateSchema Whether each response is validated against the OpenAPI schema of its operation
-    * @return The run, in progress; empty if the document or the workflow does not exist
-    * @throws ArazzoRunRefusedException if the workflow cannot run
+    * @return The run, in progress; empty if the document does not exist
+    * @throws ArazzoRunRefusedException if the workflow is unknown or cannot run
     */
    public Optional<WorkflowResult> launchRun(String documentId, String workflowId, Map<String, Object> inputs,
          Long timeout, boolean validateSchema) throws ArazzoRunRefusedException {
@@ -156,25 +153,27 @@ public class ArazzoRunService {
    /**
     * Run a workflow against the implementations of the APIs its source descriptions are linked to, or against their
     * Microcks mocks.
-    * @param documentId      The id of the Arazzo document
+    * @param documentId      The id of the Arazzo document, or its title and version as {@code <title>:<version>}
     * @param workflowId      The id of the workflow in that document
     * @param inputs          The inputs of the workflow, by name; null for none
     * @param timeout         How long a step waits for its response, in milliseconds; null for 10 seconds
     * @param implementations The base URL of each linked source and the secret of the calls; null for the mocks
     * @param validateSchema  Whether each response is validated against the OpenAPI schema of its operation
-    * @return The run, in progress; empty if the document or the workflow does not exist
-    * @throws ArazzoRunRefusedException if the workflow cannot run, if an input it needs is missing, or if it cannot
-    *                                   reach the implementations
+    * @return The run, in progress; empty if the document does not exist
+    * @throws ArazzoRunRefusedException if the workflow is unknown or cannot run, if an input it needs is missing, or if
+    *                                   it cannot reach the implementations
     */
    public Optional<WorkflowResult> launchRun(String documentId, String workflowId, Map<String, Object> inputs,
          Long timeout, ArazzoRunImplementations implementations, boolean validateSchema)
          throws ArazzoRunRefusedException {
-      Optional<ArazzoDocument> found = arazzoDocumentRepository.findById(documentId)
-            .filter(document -> document.getWorkflowIds().contains(workflowId));
+      Optional<ArazzoDocument> found = arazzoDocumentService.getDocument(documentId);
       if (found.isEmpty()) {
          return Optional.empty();
       }
       ArazzoDocument document = found.get();
+      if (!document.getWorkflowIds().contains(workflowId)) {
+         throw new ArazzoRunRefusedException("Unknown workflow: " + workflowId);
+      }
       Map<String, ResolvedSource> sources = arazzoDocumentService.resolveSources(document);
       ArazzoWorkflowStatus status = ArazzoDocumentService.status(workflowId,
             document.getWorkflowCalls().get(workflowId), sources);
