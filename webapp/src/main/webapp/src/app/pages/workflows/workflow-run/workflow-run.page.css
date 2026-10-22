@@ -382,6 +382,13 @@
   margin: 4px 0 0;
 }
 
+/* S17: a call no remaining step of the workflow expects fails the verification. */
+.workflow-run-session-call-unexpected-label {
+  color: var(--run-failed);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 /* S27: a run played by an application through the Mock URL of its workflow. */
 .arazzo-run-origin {
   display: inline-block;
