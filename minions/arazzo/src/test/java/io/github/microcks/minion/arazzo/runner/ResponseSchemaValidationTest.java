@@ -120,12 +120,35 @@ class ResponseSchemaValidationTest {
 
    @Test
    void aSchemaWithoutNameIsTheResponseSchema() throws IOException {
-      implementation.answer("GET /pastry", 200, JSON, "[" + ECLAIR_CAFE + ",{\"price\":\"2.6\"}]");
+      implementation.answer("GET /pastry", 200, "application/json;charset=UTF-8",
+            "[" + ECLAIR_CAFE + ",{\"price\":\"2.6\"}]");
 
       runner.run(run("listOnly", Map.of(), contract(), VALIDATION_ON), reporter);
 
       assertEquals("/1/price does not match the response schema: string found, number expected",
             reporter.step("list").message());
+   }
+
+   @ParameterizedTest
+   @CsvSource(delimiter = '|', quoteCharacter = '`', value = {
+         "200 | application/json | {\"name\":\"Eclair Cafe\",\"price\":2.5} | PASSED | ",
+         "200 | application/json | {\"name\":\"Eclair Cafe\",\"price\":\"2.5\"} | FAILED | "
+               + "/price does not match the Pastry schema: string found, number expected",
+         "404 | application/problem+json | {} | FAILED | "
+               + "`The response body does not match the Error schema: required property 'message' not found`",
+         "500 | application/json | {} | FAILED | "
+               + "Status 500 of GetPastryByName is not described in the OpenAPI contract of pastryApi",
+         "200 | text/plain | price is 2.5 | PASSED | " })
+   void aSwaggerContractIsCheckedLikeSwaggerContractTestsCheckIt(int status, String contentType, String body,
+         StepStatus stepStatus, String message) throws IOException {
+      implementation.answer("GET /pastry/Eclair%20Cafe", status, contentType, body);
+
+      runner.run(
+            run("readOnly", Map.of("pastry", "Eclair Cafe"), exampleOf("api-pastry-swagger-contract"), VALIDATION_ON),
+            reporter);
+
+      assertEquals(stepStatus, reporter.step("readPastry").status());
+      assertEquals(message, reporter.step("readPastry").message());
    }
 
    @ParameterizedTest

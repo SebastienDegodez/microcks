@@ -16,34 +16,29 @@
 package io.github.microcks.minion.arazzo.runner;
 
 import io.github.microcks.util.JsonSchemaViolation;
+import io.github.microcks.util.openapi.OpenAPIResponseValidator;
 import io.github.microcks.util.openapi.OpenAPISchemaValidator;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.MissingNode;
 
 import java.io.IOException;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
- * Validates the responses of the steps of a run against the OpenAPI contract of their source, as the OpenAPI contract
- * tests of Microcks do: a JSON response with content is validated against the schema its contract gives for the
- * operation, the status and the content type; any other response is not validated. One validator per run, as it keeps
- * the contracts it has read.
+ * Validates the responses of the steps of a run against the OpenAPI or Swagger contract of their source, with the
+ * {@link OpenAPIResponseValidator} OpenAPI contract tests of Microcks use: a JSON response with content is validated
+ * against the schema its contract gives for the operation, the status and the content type; any other response is not
+ * validated. One validator per run, as it keeps the contracts it has read.
  * @author SebastienDegodez
  */
 final class ResponseSchemaValidator {
 
-   /** The content types OpenAPI contract tests validate, as in the OpenAPI test runner of Microcks. */
-   private static final Pattern JSON_TYPES = Pattern.compile("application/(.+\\+)?json");
-
-   private final Map<String, JsonNode> contracts = new HashMap<>();
+   private final Map<String, Optional<OpenAPIResponseValidator>> contracts = new HashMap<>();
 
    /**
     * @param operation The operation a step called
@@ -53,46 +48,51 @@ final class ResponseSchemaValidator {
     */
    Optional<String> nonConformance(StepOperation operation, SourceTarget source, HttpOutcome response) {
       String contentType = contentTypeOf(response);
-      if (response.status() == 204 || contentType == null || !JSON_TYPES.matcher(mediaTypeOf(contentType)).matches()) {
+      if (!OpenAPIResponseValidator.isValidated(response.status(), contentType)) {
          return Optional.empty();
       }
       String sourceName = operation.sourceName();
       if (source.openApiContract() == null) {
          return Optional.of("No OpenAPI contract of source " + sourceName + " to validate the response against");
       }
-      JsonNode contract = contracts.computeIfAbsent(sourceName, name -> read(source.openApiContract()));
-      if (contract.isMissingNode()) {
+      Optional<OpenAPIResponseValidator> contract = contracts.computeIfAbsent(sourceName,
+            name -> read(source.openApiContract()));
+      if (contract.isEmpty()) {
          return Optional.of("The OpenAPI contract of source " + sourceName + " cannot be read");
       }
-      String responsePointer = "/paths/" + escaped(operation.path()) + "/" + operation.method().toLowerCase(Locale.ROOT)
-            + "/responses/" + response.status();
-      JsonNode described = dereferenced(contract, contract.at(responsePointer));
-      String notDescribed = " is not described in the OpenAPI contract of " + sourceName;
-      if (described.isMissingNode()) {
-         return Optional.of("Status " + response.status() + " of " + operation.operationId() + notDescribed);
-      }
-      Optional<Map.Entry<String, JsonNode>> content = contentOf(described, contentType);
-      if (content.isEmpty()) {
-         return Optional.of("Content type " + contentType + " of status " + response.status() + " of "
-               + operation.operationId() + notDescribed);
-      }
-      // A content without schema accepts any body.
-      if (!content.get().getValue().has("schema")) {
-         return Optional.empty();
-      }
-      JsonNode body = jsonOf(response.body());
-      if (body.isMissingNode()) {
+      List<JsonSchemaViolation> violations;
+      try {
+         violations = contract.get().validate(operation.method(), operation.path(), response.status(), contentType,
+               response.body());
+      } catch (IOException notJson) {
          return Optional.of("The response body is not JSON");
       }
-      String schema = schemaNameOf(content.get().getValue());
-      // Validated against the content type as the contract writes it, so that the validator finds the same content.
-      List<JsonSchemaViolation> violations = OpenAPISchemaValidator.validateJsonMessageWithPointers(contract, body,
-            responsePointer, content.get().getKey());
+      Optional<JsonSchemaViolation> undescribed = violations.stream().filter(violation -> violation.pointer() == null)
+            .findFirst();
+      if (undescribed.isPresent()) {
+         return undescribed(undescribed.get(), operation, response.status(), contentType);
+      }
       if (violations.isEmpty()) {
          return Optional.empty();
       }
+      String schema = schemaNameOf(
+            contract.get().schemaOf(operation.method(), operation.path(), response.status(), contentType));
       return Optional.of(violations.stream().sorted(Comparator.comparing(JsonSchemaViolation::pointer))
             .map(violation -> described(violation, schema)).distinct().collect(Collectors.joining("; ")));
+   }
+
+   /** Why a response the contract does not describe, or describes without schema, does not conform. */
+   private static Optional<String> undescribed(JsonSchemaViolation violation, StepOperation operation, int status,
+         String contentType) {
+      String notDescribed = " is not described in the OpenAPI contract of " + operation.sourceName();
+      return switch (violation.message()) {
+         case OpenAPISchemaValidator.MESSAGE_NOT_FOUND ->
+            Optional.of("Status " + status + " of " + operation.operationId() + notDescribed);
+         case OpenAPISchemaValidator.CONTENT_NOT_FOUND -> Optional.of("Content type " + contentType + " of status "
+               + status + " of " + operation.operationId() + notDescribed);
+         // A response described without schema accepts any body.
+         default -> Optional.empty();
+      };
    }
 
    private static String described(JsonSchemaViolation violation, String schema) {
@@ -100,27 +100,10 @@ final class ResponseSchemaValidator {
       return where + " does not match the " + schema + " schema: " + violation.message();
    }
 
-   /** The name of the schema of a content, such as Pastry for #/components/schemas/Pastry. */
-   private static String schemaNameOf(JsonNode content) {
-      String reference = content.path("schema").path("$ref").asText("");
+   /** The name of a schema, such as Pastry for #/components/schemas/Pastry. */
+   private static String schemaNameOf(JsonNode schema) {
+      String reference = schema.path("$ref").asText("");
       return reference.isEmpty() ? "response" : reference.substring(reference.lastIndexOf('/') + 1);
-   }
-
-   /** The content of a response for a content type, its parameters such as the charset aside. */
-   private static Optional<Map.Entry<String, JsonNode>> contentOf(JsonNode response, String contentType) {
-      String mediaType = mediaTypeOf(contentType);
-      return response.path("content").properties().stream()
-            .filter(content -> mediaTypeOf(content.getKey()).equals(mediaType)).findFirst();
-   }
-
-   private static String mediaTypeOf(String contentType) {
-      return contentType.split(";")[0].trim().toLowerCase(Locale.ROOT);
-   }
-
-   /** A response of the contract, or the one it refers to. */
-   private static JsonNode dereferenced(JsonNode contract, JsonNode response) {
-      String reference = response.path("$ref").asText("");
-      return reference.startsWith("#") ? contract.at(reference.substring(1)) : response;
    }
 
    private static String contentTypeOf(HttpOutcome response) {
@@ -128,24 +111,11 @@ final class ResponseSchemaValidator {
             .flatMap(header -> header.getValue().stream()).findFirst().orElse(null);
    }
 
-   /** A path as a JSON pointer token: /pastry/{name} is ~1pastry~1{name}. */
-   private static String escaped(String path) {
-      return path.replace("~", "~0").replace("/", "~1");
-   }
-
-   private static JsonNode jsonOf(String body) {
+   private static Optional<OpenAPIResponseValidator> read(String contract) {
       try {
-         return body == null || body.isBlank() ? MissingNode.getInstance() : OpenAPISchemaValidator.getJsonNode(body);
-      } catch (IOException notJson) {
-         return MissingNode.getInstance();
-      }
-   }
-
-   private static JsonNode read(String contract) {
-      try {
-         return OpenAPISchemaValidator.getJsonNodeForSchema(contract);
+         return Optional.of(OpenAPIResponseValidator.of(OpenAPISchemaValidator.getJsonNodeForSchema(contract), null));
       } catch (IOException unreadable) {
-         return MissingNode.getInstance();
+         return Optional.empty();
       }
    }
 }

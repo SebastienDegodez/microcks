@@ -163,6 +163,55 @@ components:
         message:
           type: string
 ---
+# example: api-pastry-swagger-contract - the Swagger 2 contract of API Pastry - 1.0, where the price of a Pastry is a number
+swagger: "2.0"
+info:
+  title: API Pastry - 1.0
+  version: 1.0.0
+paths:
+  /pastry/{name}:
+    get:
+      operationId: GetPastryByName
+      produces:
+        - application/json
+      parameters:
+        - name: name
+          in: path
+          required: true
+          type: string
+      responses:
+        "200":
+          description: Pastry with specified name
+          schema:
+            $ref: '#/definitions/Pastry'
+        "404":
+          $ref: '#/responses/NotFound'
+responses:
+  NotFound:
+    description: No pastry with this name
+    schema:
+      $ref: '#/definitions/Error'
+definitions:
+  Pastry:
+    type: object
+    properties:
+      name:
+        type: string
+      size:
+        type: string
+      price:
+        format: double
+        type: number
+      status:
+        type: string
+  Error:
+    type: object
+    required:
+      - message
+    properties:
+      message:
+        type: string
+---
 # example: unreadable-contract - a contract that is not YAML
 openapi: [3.0.2
 ---
