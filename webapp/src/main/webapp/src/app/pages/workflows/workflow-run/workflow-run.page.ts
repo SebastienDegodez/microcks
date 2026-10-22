@@ -176,6 +176,13 @@ export class WorkflowRunPageComponent implements OnInit {
     return this.exchanges.get(testCaseId)!;
   }
 
+  /** The W3C baggage a step sent, which marks its call to the mocks in Live Traces; null when it sent none. */
+  baggageOf(exchange: StepExchange): string | null {
+    const headers = exchange.pair?.request?.headers ?? [];
+    const baggage = headers.filter(header => header.name.toLowerCase() === 'baggage').flatMap(header => header.values);
+    return baggage.length ? baggage.join(',') : null;
+  }
+
   /** Where a step sent its request, relative to Microcks whose mocks the run targets. */
   requestTarget(step: WorkflowStepResult): string {
     const url = new URL(step.requestUrl!);

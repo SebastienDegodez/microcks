@@ -159,6 +159,11 @@
                 </tbody>
               </table>
               <ng-container *ngIf="exchange(run, step) | async as exchange">
+                <dl *ngIf="baggageOf(exchange) as baggage" class="workflow-run-properties workflow-run-exchange-properties">
+                  <div class="workflow-run-property workflow-run-exchange-property workflow-run-baggage">
+                    <dt>Baggage</dt>&ngsp;<dd><code class="workflow-run-chip" title="Marks this call in the Live Traces of the API">{{ baggage }}</code></dd>
+                  </div>
+                </dl>
                 <pre *ngIf="exchange.pair?.request?.content as content" class="workflow-run-body"><code [highlightAuto]="content" [languages]="hlLang"></code></pre>
               </ng-container>
             </div>
