@@ -153,6 +153,25 @@ class ArazzoSessionAnswerIT extends AbstractBaseIT {
    }
 
    /**
+    * The mocks reflect what the service sends: it reserves the items of o-7 although the mocks placed o-42, the
+    * reservation is for o-7, and the verification of the session reports that o-7 is not o-42.
+    */
+   @Test
+   void theOrderTheServiceSendsIsReflectedAndTheVerificationReportsIt() throws Exception {
+      String sessionId = openSession();
+      callMocks(sessionId, "Order+API", "/orders", PLACE_ORDER);
+
+      ResponseEntity<String> reserved = callMocks(sessionId, "Stock+API", "/reservations",
+            "{\"orderId\": \"o-7\", \"items\": [{\"sku\": \"ABC-1\", \"quantity\": 2}]}");
+
+      assertEquals(JSON.readTree("{\"id\": \"r-9\", \"orderId\": \"o-7\"}"), JSON.readTree(reserved.getBody()));
+      ResponseEntity<String> verified = restTemplate.exchange("/api/arazzo/sessions/{sessionId}/verification",
+            HttpMethod.POST, new HttpEntity<>(jsonHeaders()), String.class, sessionId);
+      assertEquals("`reserveStock` body `/orderId` should come from `$steps.createOrder.outputs.id` (o-42), got o-7",
+            JSON.readTree(verified.getBody()).get("steps").get(1).get("message").asText());
+   }
+
+   /**
     * AC-03: outside a session, the mocks keep answering with their examples: they have none for o-42, and the
     * reservation they answer is the one of the example, for o-1. A session placing o-42 at the same time changes
     * nothing.

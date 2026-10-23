@@ -66,20 +66,24 @@ class ArazzoSessionAnswerFillerTest {
 
    @ParameterizedTest(name = "{0}")
    @CsvSource(delimiter = '|', value = {
-         "a path parameter takes the output of an earlier step | path | orderId | $steps.createOrder.outputs.id "
-               + "| o-1=o-42",
+         "a path parameter the request carries is reflected | path | orderId | $steps.createOrder.outputs.id "
+               + "| o-1=o-7",
          "a header parameter, whatever the case of its name | header | X-Order | $steps.createOrder.outputs.id "
-               + "| o-1=o-42",
-         "a constant takes the value the request carries | query | status | PENDING | PAID=CONFIRMED",
-         "an input of the workflow takes the value the request carries | query | status | $inputs.status "
-               + "| PAID=CONFIRMED",
-         "an output without value takes the value the request carries | query | status "
-               + "| $steps.createOrder.outputs.status | PAID=CONFIRMED",
+               + "| o-1=o-7",
+         "a query parameter the request carries is reflected | query | status | PENDING | PAID=CONFIRMED",
+         "a parameter the request does not carry takes the output of an earlier step | query | ref "
+               + "| $steps.createOrder.outputs.id | R-1=o-42",
+         "a parameter the request does not carry takes an input of the session | query | ref | $inputs.ref "
+               + "| R-1=r-5",
+         "a constant the request does not carry is not a value of the session | query | ref | o-5 | ''",
+         "an output without value leaves the example as it is | query | ref | $steps.createOrder.outputs.status "
+               + "| ''",
          "a parameter the example request does not hold | query | page | $steps.createOrder.outputs.id | ''" })
    void eachParameterOfTheStepTellsWhereItsValueGoes(String what, String in, String name, String value,
          String replacements) {
       Request example = new Request();
-      example.setQueryParameters(List.of(parameter("orderId", "o-1"), parameter("status", "PAID")));
+      example.setQueryParameters(
+            List.of(parameter("orderId", "o-1"), parameter("status", "PAID"), parameter("ref", "R-1")));
       example.setHeaders(new LinkedHashSet<>(
             List.of(new Header("Accept", Set.of("application/json")), new Header("x-order", Set.of("o-1")))));
       ArazzoReceivedRequest received = new ArazzoReceivedRequest("/orders/{orderId}", "/orders/o-7", "status=CONFIRMED",
@@ -87,7 +91,7 @@ class ArazzoSessionAnswerFillerTest {
 
       assertEquals(replacements,
             text(ArazzoSessionAnswerFiller.replacements(step(List.of(new ArazzoParameter(name, in, value)), null),
-                  example, received, session(ORDER_O_42))));
+                  example, received, new ReceivedCall(Map.of("ref", "r-5"), ORDER_O_42, null))));
    }
 
    @Test
@@ -95,25 +99,25 @@ class ArazzoSessionAnswerFillerTest {
       Request example = new Request();
       example.setContent("{\"orderId\": \"o-1\", \"amount\": 10.0}");
       ArazzoReceivedRequest received = new ArazzoReceivedRequest("/payments", "/payments", null, Map.of(),
-            "{\"orderId\": \"o-7\", \"amount\": 25.0, \"currency\": \"EUR\"}");
+            "{\"orderId\": \"o-7\", \"currency\": \"EUR\"}");
       Map<String, String> targets = new HashMap<>(Map.of("/orderId", "$steps.createOrder.outputs.id", "/amount",
             "$steps.createOrder.outputs.amount", "/currency", "EUR"));
 
-      assertEquals("10.0=25.0, o-1=o-42",
+      // The request carries the order, which is reflected; it carries no amount, which the session gives.
+      assertEquals("10.0=25.0, o-1=o-7",
             text(ArazzoSessionAnswerFiller.replacements(step(List.of(), new ArazzoRequestBody("", "", targets)),
                   example, received, session(ORDER_O_42))));
    }
 
    @Test
-   void anOutputWithoutValueTakesTheValueTheRequestCarries() {
+   void anOutputWhoseValueIsNullLeavesTheExampleAsItIs() {
       Request example = new Request();
       example.setContent("{\"orderId\": \"o-1\"}");
-      ArazzoReceivedRequest received = new ArazzoReceivedRequest("/payments", "/payments", null, Map.of(),
-            "{\"orderId\": \"o-7\"}");
+      ArazzoReceivedRequest received = new ArazzoReceivedRequest("/payments", "/payments", null, Map.of(), "{}");
       Map<String, Object> noId = new HashMap<>();
       noId.put("id", null);
 
-      assertEquals("o-1=o-7",
+      assertEquals("",
             text(ArazzoSessionAnswerFiller.replacements(
                   step(List.of(), new ArazzoRequestBody("", "", Map.of("/orderId", "$steps.createOrder.outputs.id"))),
                   example, received, session(Map.of("createOrder", noId)))));

@@ -40,9 +40,9 @@ import java.util.Set;
  * Fills the example a step of a workflow answers with, in a session, with the values of the session. The example pairs
  * a request with its response. The step is read in reverse: each parameter and each request body replacement of the
  * step tells where a value goes in the request; the example request holds a value there; the places of the example
- * response holding that same value receive the value of the session. The value of the session is the value of the
- * runtime expression of the step, from the outputs of the earlier steps of the session, else the value the request
- * carries there.
+ * response holding that same value receive the value of the session. The value of the session is the value the request
+ * carries there, as the mocks reflect what the application sent; when it carries none, the value of the runtime
+ * expression of the step, from the inputs of the session and the outputs of its earlier steps.
  * @author SebastienDegodez
  */
 final class ArazzoSessionAnswerFiller {
@@ -79,16 +79,22 @@ final class ArazzoSessionAnswerFiller {
       return replacements;
    }
 
-   /** The value of a runtime expression of the step in the session, else the value the request carries. */
+   /**
+    * The value the request carries, as the mocks reflect what the application sent; else the value of the runtime
+    * expression of the step in the session.
+    */
    private static Optional<Object> valueOf(String value, Optional<Object> received, ArazzoExpressionContext session) {
-      if (ArazzoExpressionEvaluator.isExpression(value)) {
-         try {
-            return Optional.ofNullable(EXPRESSIONS.evaluate(value, session)).or(() -> received);
-         } catch (ArazzoExpressionException noValue) {
-            // An input of the workflow, or the output of a step the session has not answered yet.
-         }
+      return received.or(() -> Optional.of(value).filter(ArazzoExpressionEvaluator::isExpression)
+            .flatMap(expression -> evaluated(expression, session)));
+   }
+
+   private static Optional<Object> evaluated(String expression, ArazzoExpressionContext session) {
+      try {
+         return Optional.ofNullable(EXPRESSIONS.evaluate(expression, session));
+      } catch (ArazzoExpressionException noValue) {
+         // An input the session was not opened with, or the output of a step the session has not answered yet.
+         return Optional.empty();
       }
-      return received;
    }
 
    /**

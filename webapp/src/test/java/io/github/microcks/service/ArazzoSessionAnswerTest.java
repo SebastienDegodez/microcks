@@ -148,7 +148,7 @@ class ArazzoSessionAnswerTest {
 
    /**
     * The inputs a session was opened with are values of the session too: createOrder takes its customer from
-    * $inputs.customerId, and the order the mock places is for that customer.
+    * $inputs.customerId; the service sends none, and the order the mock places is for the customer of the session.
     */
    @Test
    void theInputsOfTheSessionFlowIntoTheAnswers() throws Exception {
@@ -156,25 +156,28 @@ class ArazzoSessionAnswerTest {
       ArazzoSession session = arazzoSessionService.openSession(saga.getId(), SAGA, Map.of("customerId", "c-9"))
             .orElseThrow();
 
-      Response placed = mocksAnswer(session, createOrder(), dispatched("Order API", "POST /orders"));
+      Response placed = mocksAnswer(session,
+            received("Order API", "POST /orders", "/orders",
+                  "{\"items\": [{\"sku\": \"ABC-1\", \"quantity\": 2}], \"amount\": 25.0, \"currency\": \"EUR\"}"),
+            dispatched("Order API", "POST /orders"));
 
       assertJson("{\"id\": \"o-42\", \"customerId\": \"c-9\", \"amount\": 25.0, \"status\": \"PENDING\"}",
             placed.getContent());
    }
 
    /**
-    * The mocks play the workflow: the value an earlier step of the session gave wins over the value the service sends,
-    * which the verification of the session reports.
+    * The mocks reflect what the service sends: it reserves the items of o-7 although createOrder placed o-42, and the
+    * reservation is for o-7. The verification of the session is the one that reports o-7 is not o-42.
     */
    @Test
-   void theValuesOfTheSessionWinOverThoseTheServiceSends() throws Exception {
+   void theValuesTheServiceSendsAreReflectedInTheAnswer() throws Exception {
       ArazzoSession session = sessionOnTheSaga();
       mocksAnswer(session, createOrder(), dispatched("Order API", "POST /orders"));
 
       Response answer = arazzoSessionAnswerService
             .answer(session.getId(), reserveStock("o-7"), dispatched("Stock API", "POST /reservations")).orElseThrow();
 
-      assertJson("{\"id\": \"r-9\", \"orderId\": \"o-42\"}", answer.getContent());
+      assertJson("{\"id\": \"r-9\", \"orderId\": \"o-7\"}", answer.getContent());
    }
 
    /** AC-03: a call naming no open session, or matching no step of its workflow, is answered as it is today. */
