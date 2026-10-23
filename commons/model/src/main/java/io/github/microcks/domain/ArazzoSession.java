@@ -15,11 +15,15 @@
  */
 package io.github.microcks.domain;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -45,6 +49,8 @@ public class ArazzoSession {
    private Map<String, Object> inputs;
    @Indexed(expireAfterSeconds = 0)
    private Date expireAt;
+   private Map<String, String> failures = new LinkedHashMap<>();
+   private List<ArazzoInjectedFailure> injectedFailures = new ArrayList<>();
 
    public String getId() {
       return id;
@@ -136,5 +142,24 @@ public class ArazzoSession {
 
    public void setInputs(Map<String, Object> inputs) {
       this.inputs = inputs;
+   }
+
+   /** The steps set to fail in this session, by step id, with the name of the example each one answers with. */
+   public Map<String, String> getFailures() {
+      return failures;
+   }
+
+   public void setFailures(Map<String, String> failures) {
+      this.failures = failures;
+   }
+
+   /** The failures of this session, each with the operation of the mocks that answers it; not shown to clients. */
+   @JsonIgnore
+   public List<ArazzoInjectedFailure> getInjectedFailures() {
+      return injectedFailures;
+   }
+
+   public void setInjectedFailures(List<ArazzoInjectedFailure> injectedFailures) {
+      this.injectedFailures = injectedFailures;
    }
 }

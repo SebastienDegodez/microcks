@@ -22,6 +22,7 @@ import io.github.microcks.domain.ResourceType;
 import io.github.microcks.domain.Service;
 import io.github.microcks.repository.ResourceRepository;
 import io.github.microcks.repository.ServiceRepository;
+import io.github.microcks.service.ArazzoSessionFailures;
 import io.github.microcks.util.ParameterConstraintUtil;
 import io.github.microcks.util.SafeLogger;
 import io.github.microcks.util.delay.DelaySpec;
@@ -71,6 +72,7 @@ public class RestController {
    private final ResourceRepository resourceRepository;
    private final RestInvocationProcessor invocationProcessor;
    private final ArazzoSessionRecorder arazzoSessionRecorder;
+   private final ArazzoSessionFailures arazzoSessionFailures;
 
    @Value("${mocks.rest.enable-cors-policy}")
    private Boolean enableCorsPolicy;
@@ -88,13 +90,16 @@ public class RestController {
     * @param resourceRepository    The repository to access resources definitions
     * @param invocationProcessor   The invocation processor to apply REST mocks dispatching logic
     * @param arazzoSessionRecorder The recorder of the invocations naming an Arazzo verification session
+    * @param arazzoSessionFailures The failures the Arazzo verification sessions inject in the mocks
     */
    public RestController(ServiceRepository serviceRepository, ResourceRepository resourceRepository,
-         RestInvocationProcessor invocationProcessor, ArazzoSessionRecorder arazzoSessionRecorder) {
+         RestInvocationProcessor invocationProcessor, ArazzoSessionRecorder arazzoSessionRecorder,
+         ArazzoSessionFailures arazzoSessionFailures) {
       this.serviceRepository = serviceRepository;
       this.resourceRepository = resourceRepository;
       this.invocationProcessor = invocationProcessor;
       this.arazzoSessionRecorder = arazzoSessionRecorder;
+      this.arazzoSessionFailures = arazzoSessionFailures;
    }
 
    @SuppressWarnings("java:S3752")
@@ -292,8 +297,13 @@ public class RestController {
                HttpStatus.BAD_REQUEST);
       }
 
-      ResponseResult response = invocationProcessor.processInvocation(ic, startTime, delay, body,
-            headers.asMultiValueMap(), request);
+      // In the Arazzo verification session the invocation names, a step set to fail answers with its chosen example.
+      ResponseResult response = arazzoSessionFailures
+            .injectedFailure(MockControllerCommons.getArazzoSessionId(request).orElse(null), ic.service(),
+                  ic.operation())
+            .map(example -> invocationProcessor.processInjectedFailure(ic, startTime, delay, body, request, example))
+            .orElseGet(() -> invocationProcessor.processInvocation(ic, startTime, delay, body,
+                  headers.asMultiValueMap(), request));
       // Record the invocation in the Arazzo verification session it names, if any.
       arazzoSessionRecorder.recordRest(ic, request, body, response);
       return new ResponseEntity<>(response.content(), response.headers(), response.status());

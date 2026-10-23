@@ -39,6 +39,7 @@
         <ul class="workflow-run-unmet">
           <li *ngIf="run.message">{{ run.message }}</li>
           <li *ngFor="let step of failedSteps(run)">Step {{ step.index + 1 }}, {{ step.stepId }}: {{ step.message }}</li>
+          <li *ngFor="let call of unexpectedCalls(run)">Call #{{ call.index + 1 }}, {{ call.method }} {{ call.path }}: {{ call.failure }}</li>
         </ul>
       </div>
     </div>
@@ -91,8 +92,9 @@
           <ol class="workflow-run-session-calls">
             <li *ngFor="let call of session.calls" class="workflow-run-session-call"
                 [class.workflow-run-session-call-unmatched]="!call.stepId"
-                [attr.title]="call.stepId ? call.apiName + ' ' + call.apiVersion : call.apiName + ' ' + call.apiVersion + ': this call matches no step of the workflow'">
-              <span class="workflow-run-session-call-index">#{{ call.index + 1 }}</span>&ngsp;<code class="workflow-run-chip">{{ call.method }} {{ call.path }}</code>&ngsp;→&ngsp;<ng-container *ngIf="call.stepId; else noStep"><code class="workflow-run-chip">{{ call.stepId }}</code></ng-container><ng-template #noStep><span class="workflow-run-muted">no step</span></ng-template>
+                [class.workflow-run-session-call-unexpected]="call.failure"
+                [attr.title]="call.failure ? call.apiName + ' ' + call.apiVersion + ': ' + call.failure : call.stepId ? call.apiName + ' ' + call.apiVersion : call.apiName + ' ' + call.apiVersion + ': this call matches no step of the workflow'">
+              <span class="workflow-run-session-call-index">#{{ call.index + 1 }}</span>&ngsp;<code class="workflow-run-chip">{{ call.method }} {{ call.path }}</code>&ngsp;→&ngsp;<ng-container *ngIf="call.stepId; else noStep"><code class="workflow-run-chip">{{ call.stepId }}</code></ng-container><ng-template #noStep><span *ngIf="call.failure; else unmatched" class="workflow-run-session-call-unexpected-label"><span class="pficon pficon-error-circle-o" aria-hidden="true"></span>&ngsp;unexpected</span><ng-template #unmatched><span class="workflow-run-muted">no step</span></ng-template></ng-template>
             </li>
           </ol>
           <span *ngIf="!session.calls.length" class="workflow-run-muted">None</span>

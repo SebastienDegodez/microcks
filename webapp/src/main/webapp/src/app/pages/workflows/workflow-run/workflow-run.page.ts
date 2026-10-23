@@ -115,6 +115,11 @@ export class WorkflowRunPageComponent implements OnInit {
     return run.steps.filter(step => step.status === 'FAILED');
   }
 
+  /** The calls of a verification that no remaining step of the workflow expected: each one tells why it fails. */
+  unexpectedCalls(run: WorkflowResult): WorkflowSessionCall[] {
+    return run.session?.calls.filter(call => call.failure) ?? [];
+  }
+
   /** The call a session received for a step of its verification; null for a run, or a step that received none. */
   callOf(run: WorkflowResult, step: WorkflowStepResult): WorkflowSessionCall | null {
     return run.session?.calls.find(call => call.stepId === step.stepId) ?? null;

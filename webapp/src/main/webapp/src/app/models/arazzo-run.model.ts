@@ -128,6 +128,8 @@ export type WorkflowSessionCall = {
   path: string;
   /** The step the call was matched to; absent when it matches none. */
   stepId?: string;
+  /** Why the call fails the verification, such as a call no remaining step expects; absent when it does not. */
+  failure?: string;
 };
 
 /** The verification session a result verifies: the calls it received, in their order of receipt. */

@@ -17,6 +17,7 @@ package io.github.microcks.web;
 
 import io.github.microcks.repository.ResourceRepository;
 import io.github.microcks.repository.ServiceRepository;
+import io.github.microcks.service.ArazzoSessionFailures;
 import io.github.microcks.util.tracing.CommonEvents;
 
 import io.opentelemetry.api.common.Attributes;
@@ -79,7 +80,8 @@ class RestControllerLiveTracesTest {
       }
    }).build();
    private final RestController controller = new RestController(mock(ServiceRepository.class),
-         mock(ResourceRepository.class), mock(RestInvocationProcessor.class), mock(ArazzoSessionRecorder.class));
+         mock(ResourceRepository.class), mock(RestInvocationProcessor.class), mock(ArazzoSessionRecorder.class),
+         mock(ArazzoSessionFailures.class));
 
    @AfterEach
    void closeTracerProvider() {
