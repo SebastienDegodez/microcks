@@ -73,7 +73,7 @@
                 example&ngsp;<code class="workflow-runs-chip">{{ run.example }}</code><ng-container *ngIf="run.exampleVerdict">&ngsp;·&ngsp;<span class="pficon" aria-hidden="true" [class.pficon-ok]="run.exampleVerdict === 'MATCHES'" [class.pficon-error-circle-o]="run.exampleVerdict === 'DOES_NOT_MATCH'"></span>&ngsp;{{ run.exampleVerdict === 'MATCHES' ? 'Matches' : 'Does not match' }}</ng-container>
               </div>
             </td>
-            <td>{{ targetLabels[run.target] }}<span *ngIf="run.origin === 'MOCK_URL'" class="arazzo-run-origin" title="Played by an application posting its inputs to the Mock URL of the workflow">Mock URL</span></td>
+            <td>{{ targetLabels[run.target] }}<span *ngIf="run.origin === 'MOCK_URL'" class="arazzo-run-origin" title="Played by an application posting its inputs to the Mock URL of the workflow">Mock URL</span><span *ngIf="run.origin === 'SESSION'" class="arazzo-run-origin" title="Verification of the calls an application made to the mocks in a session">Session</span></td>
             <td [ngSwitch]="run.status">
               <span *ngSwitchCase="'SUCCESS'" class="workflow-runs-passed">
                 <span class="pficon pficon-ok arazzo-run-passed" aria-hidden="true"></span>&ngsp;Passed
@@ -87,7 +87,7 @@
             </td>
             <td>{{ run.failedStepId ?? '—' }}</td>
             <td class="workflow-runs-muted">{{ startedOn(run) | timeAgo }}</td>
-            <td class="workflow-runs-duration">{{ run.elapsedTime }} ms</td>
+            <td class="workflow-runs-duration">{{ run.origin === 'SESSION' ? '—' : run.elapsedTime + ' ms' }}</td>
           </tr>
         </tbody>
       </table>

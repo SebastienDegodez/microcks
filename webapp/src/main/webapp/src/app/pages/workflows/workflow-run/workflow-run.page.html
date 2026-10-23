@@ -6,7 +6,7 @@
         <ng-container *ngIf="state.run as run">
           <li><a [routerLink]="['/workflows', run.documentId, run.workflowId]">{{ run.documentTitle }} - {{ run.documentVersion }}</a></li>
           <li><a [routerLink]="['/workflows/documents', run.documentId, 'runs']">Runs</a></li>
-          <li>Run<ng-container *ngIf="run.number"> #{{ run.number }}</ng-container></li>
+          <li>{{ isSession(run) ? 'Verification' : 'Run' }}<ng-container *ngIf="run.number"> #{{ run.number }}</ng-container></li>
         </ng-container>
       </ol>
     </div>
@@ -22,16 +22,28 @@
         <h1 class="workflow-run-title">
           <span class="workflow-run-status-icon" aria-hidden="true"
                 [ngClass]="{ 'pficon pficon-ok': run.status === 'SUCCESS', 'pficon pficon-error-circle-o': run.status === 'FAILURE', 'spinner spinner-inline': run.status === 'IN_PROGRESS' }"></span>
-          Run<ng-container *ngIf="run.number">&ngsp;#{{ run.number }}</ng-container>&ngsp;·&ngsp;<code class="workflow-run-title-id">{{ run.workflowId }}</code>&ngsp;{{ outcome(run) }}
+          {{ isSession(run) ? 'Verification' : 'Run' }}<ng-container *ngIf="run.number">&ngsp;#{{ run.number }}</ng-container>&ngsp;·&ngsp;<code class="workflow-run-title-id">{{ run.workflowId }}</code>&ngsp;{{ outcome(run) }}
         </h1>
-        <p class="workflow-run-subtitle">Ran {{ startedOn(run) | timeAgo }} against {{ run.target === 'IMPLEMENTATIONS' ? 'implementations' : 'Microcks mocks' }} · {{ run.elapsedTime }} ms<span *ngIf="run.origin === 'MOCK_URL'" class="arazzo-run-origin" title="Played by an application posting its inputs to the Mock URL of the workflow">Mock URL</span></p>
+        <p *ngIf="!isSession(run)" class="workflow-run-subtitle">Ran {{ startedOn(run) | timeAgo }} against {{ run.target === 'IMPLEMENTATIONS' ? 'implementations' : 'Microcks mocks' }} · {{ run.elapsedTime }} ms<span *ngIf="run.origin === 'MOCK_URL'" class="arazzo-run-origin" title="Played by an application posting its inputs to the Mock URL of the workflow">Mock URL</span></p>
+        <p *ngIf="isSession(run)" class="workflow-run-subtitle">Verified {{ startedOn(run) | timeAgo }} against Microcks mocks<span class="arazzo-run-origin" title="Verification of the calls an application made to the mocks in a session">Session</span></p>
       </div>
-      <div class="workflow-run-actions">
+      <div *ngIf="!isSession(run)" class="workflow-run-actions">
         <button type="button" class="btn btn-default workflow-run-again" (click)="runAgain(run)">Run again</button>
       </div>
     </div>
 
-    <div *ngIf="failure(run) as failure" class="workflow-run-failure" role="alert">
+    <div *ngIf="isSession(run) && run.status === 'FAILURE'" class="workflow-run-failure workflow-run-session-failure" role="alert">
+      <span class="pficon pficon-error-circle-o" aria-hidden="true"></span>
+      <div>
+        <p><strong>The calls of the session do not follow the workflow</strong></p>
+        <ul class="workflow-run-unmet">
+          <li *ngIf="run.message">{{ run.message }}</li>
+          <li *ngFor="let step of failedSteps(run)">Step {{ step.index + 1 }}, {{ step.stepId }}: {{ step.message }}</li>
+        </ul>
+      </div>
+    </div>
+
+    <div *ngIf="!isSession(run) && failure(run) as failure" class="workflow-run-failure" role="alert">
       <span class="pficon pficon-error-circle-o" aria-hidden="true"></span>
       <p>
         <ng-container *ngIf="failure.step as step">
@@ -71,13 +83,28 @@
       <div *ngIf="run.secretRef" class="workflow-run-property">
         <dt>Secret</dt>&ngsp;<dd>{{ run.secretRef.name }}</dd>
       </div>
-      <div class="workflow-run-property">
+      <div *ngIf="run.session as session" class="workflow-run-property workflow-run-session">
+        <dt>Session</dt>&ngsp;<dd><code class="workflow-run-chip">{{ session.sessionId }}</code></dd>
+      </div>
+      <div *ngIf="run.session as session" class="workflow-run-property">
+        <dt>Received calls</dt>&ngsp;<dd>
+          <ol class="workflow-run-session-calls">
+            <li *ngFor="let call of session.calls" class="workflow-run-session-call"
+                [class.workflow-run-session-call-unmatched]="!call.stepId"
+                [attr.title]="call.stepId ? call.apiName + ' ' + call.apiVersion : call.apiName + ' ' + call.apiVersion + ': this call matches no step of the workflow'">
+              <span class="workflow-run-session-call-index">#{{ call.index + 1 }}</span>&ngsp;<code class="workflow-run-chip">{{ call.method }} {{ call.path }}</code>&ngsp;→&ngsp;<ng-container *ngIf="call.stepId; else noStep"><code class="workflow-run-chip">{{ call.stepId }}</code></ng-container><ng-template #noStep><span class="workflow-run-muted">no step</span></ng-template>
+            </li>
+          </ol>
+          <span *ngIf="!session.calls.length" class="workflow-run-muted">None</span>
+        </dd>
+      </div>
+      <div *ngIf="!isSession(run) || entries(run.inputs).length" class="workflow-run-property workflow-run-inputs">
         <dt>Inputs</dt>&ngsp;<dd>
           <span *ngFor="let input of entries(run.inputs)" class="workflow-run-value"><code class="workflow-run-chip">{{ input.name }}</code> = <code class="workflow-run-chip">{{ input.value }}</code>&ngsp;</span>
           <span *ngIf="!entries(run.inputs).length" class="workflow-run-muted">None declared</span>
         </dd>
       </div>
-      <div class="workflow-run-property">
+      <div *ngIf="!isSession(run)" class="workflow-run-property workflow-run-schema-validation">
         <dt>Schema validation</dt>&ngsp;<dd>{{ run.validateSchema ? 'On' : 'Off' }}</dd>
       </div>
       <div *ngIf="run.status === 'SUCCESS'" class="workflow-run-property">
@@ -121,9 +148,11 @@
           <span *ngIf="step.status === 'NOT_RUN'" class="workflow-run-step-toggle-space"></span>
           <span class="workflow-run-step-status" aria-hidden="true"
                 [ngClass]="{ 'pficon pficon-ok': step.status === 'PASSED', 'pficon pficon-error-circle-o': step.status === 'FAILED', 'fa fa-circle-o': step.status === 'NOT_RUN' }"></span>
-          <span class="workflow-run-step-title">{{ step.index + 1 }} · {{ step.stepId }}</span>&ngsp;<span *ngIf="attemptOf(run, step) as attempt" class="workflow-run-step-attempt">attempt {{ attempt.attempt }} of {{ attempt.attempts }}<ng-container *ngIf="attempt.retried">, retried</ng-container></span>&ngsp;<span class="workflow-run-protocol-chip">REST</span>&ngsp;<code class="workflow-run-endpoint">{{ step.operation.method }} {{ step.operation.path }}</code>&ngsp;<span class="workflow-run-operation">{{ step.operation.operationId }}</span>&ngsp;<span class="workflow-run-step-result">
+          <span class="workflow-run-step-title">{{ step.index + 1 }} · {{ step.stepId }}</span>&ngsp;<span *ngIf="callOf(run, step) as call" class="workflow-run-step-call" title="The order in which the session received this call">call #{{ call.index + 1 }}</span>&ngsp;<span *ngIf="attemptOf(run, step) as attempt" class="workflow-run-step-attempt">attempt {{ attempt.attempt }} of {{ attempt.attempts }}<ng-container *ngIf="attempt.retried">, retried</ng-container></span>&ngsp;<span class="workflow-run-protocol-chip">REST</span>&ngsp;<code class="workflow-run-endpoint">{{ step.operation.method }} {{ step.operation.path }}</code>&ngsp;<span class="workflow-run-operation">{{ step.operation.operationId }}</span>&ngsp;<span class="workflow-run-step-result">
             <ng-container *ngIf="step.status === 'NOT_RUN'">Not run</ng-container>
-            <ng-container *ngIf="step.status !== 'NOT_RUN'">{{ step.statusCode ?? 'No response' }} · {{ step.elapsedTime }} ms</ng-container>
+            <ng-container *ngIf="step.status !== 'NOT_RUN' && !isSession(run)">{{ step.statusCode ?? 'No response' }} · {{ step.elapsedTime }} ms</ng-container>
+            <ng-container *ngIf="isSession(run) && callOf(run, step)">{{ step.statusCode }}</ng-container>
+            <ng-container *ngIf="isSession(run) && !callOf(run, step)">No call received</ng-container>
           </span>
         </div>
 

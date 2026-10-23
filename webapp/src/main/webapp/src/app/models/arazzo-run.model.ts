@@ -108,10 +108,33 @@ export type WorkflowResult = {
   example?: WorkflowExampleCheck;
   /** Where the run was launched from; absent when it was launched from the Microcks UI or API. */
   origin?: WorkflowRunOrigin;
+  /** The verification session the result verifies, when its origin is SESSION. */
+  session?: WorkflowSessionCheck;
 };
 
-/** Where a run was launched from, when not from the Microcks UI or API: MOCK_URL, the Mock URL of its workflow. */
-export type WorkflowRunOrigin = 'MOCK_URL';
+/**
+ * Where a run was launched from, when not from the Microcks UI or API: MOCK_URL, the Mock URL of its workflow;
+ * SESSION is not a run but the verification of the calls an application made to the mocks in a session.
+ */
+export type WorkflowRunOrigin = 'MOCK_URL' | 'SESSION';
+
+/** A call the mocks recorded in a verification session, with the step it was matched to. */
+export type WorkflowSessionCall = {
+  /** The place of the call in the order the session received its calls, from 0. */
+  index: number;
+  apiName?: string;
+  apiVersion?: string;
+  method: string;
+  path: string;
+  /** The step the call was matched to; absent when it matches none. */
+  stepId?: string;
+};
+
+/** The verification session a result verifies: the calls it received, in their order of receipt. */
+export type WorkflowSessionCheck = {
+  sessionId: string;
+  calls: WorkflowSessionCall[];
+};
 
 /** Whether a run matches the recorded example it played, apart from its own result. */
 export type WorkflowExampleVerdict = 'MATCHES' | 'DOES_NOT_MATCH';
