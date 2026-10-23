@@ -153,6 +153,20 @@ class ArazzoSagaCompensationIT extends AbstractBaseIT {
                   .getStatusCode().value());
    }
 
+   /** Once the test closes its session, chargePayment is charged as usual again, even when a call names the session. */
+   @Test
+   void aClosedSessionInjectsNothingAnyMore() throws Exception {
+      String sessionId = openSession(CARD_REFUSED);
+      assertEquals(402, chargePayment(sessionId).getStatusCode().value());
+
+      ResponseEntity<String> closed = restTemplate.exchange("/api/arazzo/sessions/{sessionId}", HttpMethod.DELETE,
+            new HttpEntity<>(jsonHeaders()), String.class, sessionId);
+      MICROCKS_API.assertResponseConforms("DELETE", "/arazzo/sessions/{sessionId}", closed);
+      assertEquals(204, closed.getStatusCode().value());
+
+      assertEquals(201, chargePayment(sessionId).getStatusCode().value());
+   }
+
    /** A failure naming an example the operation of its step does not have is refused, and no session is opened. */
    @Test
    void aFailureOnAnUnknownExampleIsRefused() throws Exception {

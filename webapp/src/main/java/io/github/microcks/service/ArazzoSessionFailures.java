@@ -87,7 +87,8 @@ public class ArazzoSessionFailures {
    }
 
    /**
-    * The example the mocks answer a call with when the session the call names set the operation it calls to fail.
+    * The example the mocks answer a call with when the session the call names set the operation it calls to fail. A
+    * closed session injects nothing any more, as it records no more calls: the mocks answer as usual.
     * @param sessionId The id of the session the call names; null when it names none
     * @param api       The API whose mocks received the call
     * @param operation The operation the call was dispatched to
@@ -97,7 +98,7 @@ public class ArazzoSessionFailures {
       if (sessionId == null) {
          return Optional.empty();
       }
-      return arazzoSessionRepository.findById(sessionId)
+      return arazzoSessionRepository.findById(sessionId).filter(session -> session.getClosedDate() == null)
             .flatMap(session -> exampleToInject(session.getInjectedFailures(), api, operation))
             .flatMap(exampleName -> example(api, operation.getName(), exampleName));
    }

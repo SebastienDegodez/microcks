@@ -180,6 +180,16 @@ class ArazzoSagaCompensationTest {
       assertEquals(Optional.empty(), injectedFailure(withoutFailure, "Payment API", "POST /payments"));
    }
 
+   /** Once its session is closed, a step set to fail answers as usual again, as the session records no more calls. */
+   @Test
+   void aClosedSessionInjectsNothingAnyMore() throws Exception {
+      ArazzoSession session = sessionOnTheCompensation(CARD_REFUSED);
+
+      arazzoSessionService.closeSession(session.getId());
+
+      assertEquals(Optional.empty(), injectedFailure(session, "Payment API", "POST /payments"));
+   }
+
    /** Outside any session, or naming a session that does not exist, nothing is injected: the mocks answer as today. */
    @Test
    void nothingIsInjectedOutsideASession() throws Exception {
