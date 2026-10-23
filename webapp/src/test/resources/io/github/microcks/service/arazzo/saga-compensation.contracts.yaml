@@ -217,6 +217,10 @@ paths:
                 value:
                   orderId: o-42
                   amount: 25.0
+              card refused:
+                value:
+                  orderId: o-42
+                  amount: 25.0
       responses:
         "201":
           description: The payment charged

@@ -167,6 +167,28 @@ class ArazzoSagaCompensationIT extends AbstractBaseIT {
       assertEquals(201, chargePayment(sessionId).getStatusCode().value());
    }
 
+   /**
+    * The injected example wins over the consistent answer of the session: the service charges order o-7, which a
+    * session reflects in its answer, but the injected card refused answers as written, for o-42.
+    */
+   @Test
+   void anInjectedExampleIsNeverFilledWithTheValuesOfTheSession() throws Exception {
+      String withFailure = openSession(CARD_REFUSED);
+      String withoutFailure = openSession(null);
+      String chargeO7 = "{\"orderId\": \"o-7\", \"amount\": 25.0}";
+
+      ResponseEntity<String> charged = callMocks(withoutFailure, HttpMethod.POST, "Payment+API", "/payments", chargeO7);
+      ResponseEntity<String> refused = callMocks(withFailure, HttpMethod.POST, "Payment+API", "/payments", chargeO7);
+
+      // The control: without failure, the session fills the answer with the order the service sent.
+      assertEquals("201 o-7",
+            charged.getStatusCode().value() + " " + JSON.readTree(charged.getBody()).get("orderId").asText(),
+            charged.getBody());
+      assertEquals(402, refused.getStatusCode().value(), refused.getBody());
+      assertEquals(JSON.readTree("{\"orderId\": \"o-42\", \"status\": \"REFUSED\", \"reason\": \"Card refused\"}"),
+            JSON.readTree(refused.getBody()));
+   }
+
    /** A failure naming an example the operation of its step does not have is refused, and no session is opened. */
    @Test
    void aFailureOnAnUnknownExampleIsRefused() throws Exception {
