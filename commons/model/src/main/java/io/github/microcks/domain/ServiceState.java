@@ -16,6 +16,7 @@
 package io.github.microcks.domain;
 
 import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
@@ -26,6 +27,7 @@ import java.util.Date;
  * @author laurent
  */
 @Document
+@CompoundIndex(name = "serviceId_key", def = "{'serviceId': 1, 'key': 1}", unique = true)
 public class ServiceState {
 
    @Id

@@ -26,9 +26,11 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.event.ContextRefreshedEvent;
 import org.springframework.context.event.EventListener;
+import org.springframework.dao.DataAccessException;
 import org.springframework.data.mapping.context.MappingContext;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.WriteConcernResolver;
+import org.springframework.data.mongodb.core.index.IndexDefinition;
 import org.springframework.data.mongodb.core.index.IndexOperations;
 import org.springframework.data.mongodb.core.index.IndexResolver;
 import org.springframework.data.mongodb.core.index.MongoPersistentEntityIndexResolver;
@@ -60,14 +62,14 @@ public class MongoConfiguration {
       // Ensure indices in a background thread: this requires a Mongo roundtrip that doesn't
       // need to block or delay the application startup completion.
       Thread.ofVirtual().name("mongo-indices-initializer").start(() -> {
-         log.info("Ensuring TTL index for ServiceState");
+         log.info("Ensuring TTL and unique indexes for ServiceState");
          MappingContext<? extends MongoPersistentEntity<?>, MongoPersistentProperty> mappingContext = mongoTemplate
                .getConverter().getMappingContext();
 
          IndexResolver resolver = new MongoPersistentEntityIndexResolver(mappingContext);
          IndexOperations indexOps = mongoTemplate.indexOps(ServiceState.class);
 
-         resolver.resolveIndexFor(ServiceState.class).forEach(indexOps::createIndex);
+         ensureIndexes(indexOps, resolver.resolveIndexFor(ServiceState.class));
 
          // The Arazzo verification sessions and their calls expire, so that their collections stay bounded.
          log.info("Ensuring TTL indexes for ArazzoSession and ArazzoSessionCall");
@@ -76,6 +78,22 @@ public class MongoConfiguration {
          IndexOperations callIndexOps = mongoTemplate.indexOps(ArazzoSessionCall.class);
          resolver.resolveIndexFor(ArazzoSessionCall.class).forEach(callIndexOps::createIndex);
       });
+   }
+
+   /**
+    * Ensure indexes one by one: an index the data does not allow, as the unique index of the states over two states of
+    * one key written before it existed, is reported and the other indexes are still ensured.
+    * @param indexOps The operations on the indexes of a collection
+    * @param indexes  The indexes to ensure on it
+    */
+   static void ensureIndexes(IndexOperations indexOps, Iterable<? extends IndexDefinition> indexes) {
+      for (IndexDefinition index : indexes) {
+         try {
+            indexOps.createIndex(index);
+         } catch (DataAccessException dae) {
+            log.warn("Index {} could not be ensured: {}", index.getIndexKeys(), dae.getMessage());
+         }
+      }
    }
 
    @Bean

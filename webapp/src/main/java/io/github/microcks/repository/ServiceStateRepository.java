@@ -24,7 +24,7 @@ import org.springframework.data.mongodb.repository.MongoRepository;
  * Repository interface for ServiceState domain objects.
  * @author laurent
  */
-public interface ServiceStateRepository extends MongoRepository<ServiceState, String> {
+public interface ServiceStateRepository extends MongoRepository<ServiceState, String>, CustomServiceStateRepository {
 
    ServiceState findByServiceIdAndKey(String serviceId, String key);
 }
